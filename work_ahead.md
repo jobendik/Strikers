@@ -217,11 +217,13 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 
 ### P0 — launch-critical & headline
 - [x] **A1** Refactor harness match loop into importable `simulateMatch(home, away, diff)` (shared by sim + in-game tournament). → `src/game/simulate.ts`; harness now drives it. Behaviour-preserving (sim numbers unchanged). NOTE for A2: in-browser use needs mesh/UI isolation (createGameState adds meshes to the live scene; `flow.fullTime` fires UI) — handle in `game/worldcup.ts`.
-- [ ] **A2** World Cup data model: field/groups/bracket/matchday in player save (`worldcup`), resume across sessions.
-- [ ] **A3** Group stage: standings table + sim all other fixtures per matchday; advance per real 2026 format.
-- [ ] **A4** Knockout bracket tree (R32→…→Final) screen + "road to the final".
-- [ ] **A5** Real-calendar mapping: matchdays → real dates; menu surfaces "your nation plays today" (honest sim framing).
-- [ ] **A6** Tournament UI: your fixtures, results ticker, bracket, group table, persistent resume.
+- [x] **A2** World Cup data model: field/groups/bracket/matchday in player save (`worldcup`), resume across sessions. → `src/game/worldcup.ts` engine: 16-team field, pot-based draw into 4 groups of 4, round-robin fixtures, knockout ties, champion/userOut; serialised into the `worldcup` save slot (`saveRun`/`loadRun`), resumes mid-tournament. 69-case headless lifecycle test.
+- [~] **A3** Group stage: standings table + sim all other fixtures per matchday; advance per real 2026 format. → **engine done** (`resolveMatchday` strength-based AI-vs-AI resolver, `groupStandings` with pts/GD/GF sort, advance per matchday). **Standings-table UI pending (PR B).**
+- [~] **A4** Knockout bracket tree (R32→…→Final) screen + "road to the final". → **engine done** (QF→SF→Final seeding with the standard cross-group pattern, `tieWinner` w/ penalty decider, auto-completes if user is knocked out). **Bracket-tree UI pending (PR B).**
+- [~] **A5** Real-calendar mapping: matchdays → real dates; menu surfaces "your nation plays today" (honest sim framing). → **calendar data done** (`CALENDAR`: 6 matchdays → real 2026 dates, group MD1–3 + QF/SF/Final). **Menu hook pending (PR B).** Note: matchdays are not hard-gated on the real date (don't gate core play); the date is flavour + the daily hook.
+- [~] **A6** Tournament UI: your fixtures, results ticker, bracket, group table, persistent resume. → persistence done; **screens pending (PR B).**
+
+> **World Cup scope note:** mirrors the real *structure* (group stage → knockout bracket) with the curated 16-team field — 4 groups of 4 → QF → SF → Final. The engine (`worldcup.ts`) is field/group-count-driven, so expanding toward 32/48 is a data change. AI-vs-AI fixtures use a calibrated strength-based statistical resolver (instant, football-realistic tables); swapping in the full physics `simulateMatch` (A1) awaits in-browser headless isolation (see A1 note). PR A = engine (logic, headless-tested). PR B = live integration + screens.
 - [ ] **B1** `platform/crazygames.ts` wrapper; SDK init + branded loading handshake; env detection; no-op in local dev.
 - [ ] **B2** `gameplayStart/Stop` wired to match start/pause/full-time.
 - [ ] **B3** Interstitial ad between World Cup matches (never mid-match); auto-mute + pause sim during ads.

@@ -97,6 +97,10 @@ export interface WorldCupState {
   matchday: number;
   yourNation: string;
   yourPath: unknown[];
+  /** Winner's team key once the Final is decided (else null). */
+  champion: string | null;
+  /** The user's nation has been knocked out (the run plays on, simulated). */
+  userOut: boolean;
 }
 
 /** Accessibility/effects prefs scoped to the player save (mirrors §3 guardrails). */
@@ -166,7 +170,7 @@ export function defaultPlayerData(nation: string = DEFAULT_TEAM): PlayerData {
     achievements: {},
     medals: {},
     mastery: {},
-    worldcup: { active: false, field: [], groups: [], bracket: [], matchday: 0, yourNation: nation, yourPath: [] },
+    worldcup: { active: false, field: [], groups: [], bracket: [], matchday: 0, yourNation: nation, yourPath: [], champion: null, userOut: false },
     settings: { reducedMotion: false, effects: 'full' },
   };
 }
@@ -260,6 +264,8 @@ export function migratePlayerData(raw: unknown): PlayerData {
       matchday: Math.max(0, num(rWC.matchday, 0)),
       yourNation: str(rWC.yourNation, d.worldcup.yourNation),
       yourPath: arr<unknown>(rWC.yourPath, []),
+      champion: typeof rWC.champion === 'string' ? rWC.champion : null,
+      userOut: bool(rWC.userOut, false),
     },
     settings: {
       reducedMotion: bool(rPrefs.reducedMotion, false),
