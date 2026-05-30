@@ -3,6 +3,7 @@ import { clamp } from '../core/math';
 import { Haptics } from '../core/haptics';
 import { switchPlayer, userPass, userShoot } from './humanActions';
 import { penaltyAction } from './penalty';
+import { skipReplay } from './replay';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
@@ -57,6 +58,9 @@ export function initInput(): void {
       switchPlayer();
       Haptics.tap();
     }
+  });
+  bindButton('skipReplay', (down) => {
+    if (down) skipReplay();
   });
 
   addEventListener('keydown', (e) => {

@@ -108,6 +108,22 @@ h1 .accent{background:linear-gradient(180deg,#ffe79a,var(--amber));-webkit-backg
 #goalFx .g{font-family:'Teko';font-weight:700;font-size:clamp(90px,28vw,240px);letter-spacing:.04em;
   color:#fff;text-shadow:0 0 40px var(--c,#fff),0 0 90px var(--c,#fff);}
 @keyframes goalpop{0%{opacity:0;transform:scale(.4)}15%{opacity:1;transform:scale(1.08)}80%{opacity:1;transform:scale(1)}100%{opacity:0;transform:scale(1.2)}}
+/* ---------- instant replay ---------- */
+#replay{position:fixed;inset:0;z-index:36;display:none;pointer-events:none;}
+#replay.show{display:block;}
+#replay .rep-tag{position:absolute;left:max(env(safe-area-inset-left),20px);top:max(env(safe-area-inset-top),64px);
+  display:flex;align-items:center;gap:9px;font-family:'Teko';font-size:30px;letter-spacing:.06em;color:#fff;
+  text-shadow:0 2px 10px rgba(0,0,0,.6);}
+#replay .rep-tag .rec{width:14px;height:14px;border-radius:50%;background:var(--home);box-shadow:0 0 12px var(--home);
+  animation:blink 1s steps(1) infinite;}
+@keyframes blink{50%{opacity:.25}}
+#replay #skipReplay{position:absolute;right:max(env(safe-area-inset-right),20px);bottom:max(env(safe-area-inset-bottom),26px);
+  pointer-events:auto;font-family:'Teko';font-size:24px;letter-spacing:.06em;color:#06140a;cursor:pointer;
+  background:linear-gradient(180deg,#ffe79a,var(--amber));border:none;padding:9px 26px 6px;border-radius:12px;
+  box-shadow:0 6px 20px rgba(0,0,0,.45);}
+.cinebar{position:fixed;left:0;right:0;height:7vh;background:#000;z-index:35;display:none;pointer-events:none;}
+.cinebar.top{top:0;} .cinebar.bottom{bottom:0;}
+#replay.show ~ .cinebar{display:block;}
 #rotate{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;
   background:var(--ink);gap:18px;text-align:center;padding:30px;}
 #rotate .ph{font-size:54px;animation:tilt 1.4s ease-in-out infinite;}

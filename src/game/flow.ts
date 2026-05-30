@@ -4,6 +4,7 @@ import { Haptics } from '../core/haptics';
 import { ball, freshStats, match, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
 import { startShootout } from './penalty';
+import { resetReplayBuffer } from './replay';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
 import { addShake, clearTrail } from './render';
@@ -98,6 +99,7 @@ export function resetPositions(): void {
 /** Kick off for `team`. */
 export function kickOff(team: (typeof match.teams)[number]): void {
   resetPositions();
+  resetReplayBuffer(); // a new clip starts from the kickoff
   const taker = team.players[3];
   taker.position.set(team.side * -1.4, 0, 0);
   taker.heading = attackHeading(team.side);

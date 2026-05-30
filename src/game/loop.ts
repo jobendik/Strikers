@@ -10,6 +10,7 @@ import { movePlayers, selectUserPlayer } from './movement';
 import { updateBall } from './physics';
 import { kickOff, tickClock } from './flow';
 import { updateShootout } from './penalty';
+import { hasReplay, isReplaying, recordFrame, startReplay, updateReplay } from './replay';
 import { syncMeshes, updateCamera } from './render';
 import { updateHUD, updateToast } from '../ui/hud';
 
@@ -42,17 +43,26 @@ function frame(): void {
     resolveSlides(sdt);
     updatePressure(sdt);
     updateBall(sdt);
+    recordFrame(); // capture transforms for a possible goal replay
   } else if (match.state === 'celebrate') {
-    // let the ball keep flying into the net in slow motion for a cinematic beat
     if (match.celebrateBallT > 0) {
+      // let the ball keep flying into the net in slow motion for a cinematic beat
       match.celebrateBallT -= dt;
       updateBall(sdt);
+      match.celebrateT -= dt;
+    } else if (hasReplay()) {
+      // then roll an instant replay of the goal before kicking off
+      if (!isReplaying()) startReplay(match.scoredBy);
+      if (updateReplay(dt)) kickOff(match.teams[1 - match.scoredBy]);
+    } else {
+      match.celebrateT -= dt;
+      if (match.celebrateT <= 0) kickOff(match.teams[1 - match.scoredBy]);
     }
-    match.celebrateT -= dt;
-    if (match.celebrateT <= 0) kickOff(match.teams[1 - match.scoredBy]);
   } else if (match.state === 'shootout') {
     updateShootout(sdt);
   }
+
+  const replaying = match.state === 'celebrate' && isReplaying();
 
   // crowd ambience swells as the ball approaches either goal
   if (match.state === 'play' || match.state === 'celebrate') {
@@ -65,8 +75,11 @@ function frame(): void {
   }
 
   updateToast(dt);
-  syncMeshes(dt);
-  updateCamera(dt);
+  if (!replaying) {
+    // the replay drives the meshes + camera itself from recorded transforms
+    syncMeshes(dt);
+    updateCamera(dt);
+  }
   updateHUD();
   renderer.render(scene, camera);
 }

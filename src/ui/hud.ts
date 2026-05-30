@@ -83,6 +83,11 @@ export function showShootout(v: boolean): void {
   el('shootout').classList.toggle('hidden', !v);
 }
 
+/** Show/hide the instant-replay label + skip control. */
+export function showReplayUI(v: boolean): void {
+  el('replay').classList.toggle('show', v);
+}
+
 /** Render the kick-by-kick shootout board (two rows of goal/miss marks + scores). */
 export function updateShootoutBoard(
   goals: [number, number],
