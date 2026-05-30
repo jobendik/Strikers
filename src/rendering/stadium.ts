@@ -157,11 +157,11 @@ function buildGoal(sx: number): void {
   bar.castShadow = true;
   grp.add(bar);
 
-  // The net drapes from the crossbar back and DOWN to the ground — the classic
-  // goal profile. No full-height vertical back posts (those read as two poles
-  // standing out of the goal); the back is held by angled struts to the turf.
+  // The net slopes from the crossbar back and DOWN to the ground — the classic
+  // self-supporting goal profile. No full-height vertical back posts (those read
+  // as two poles standing out of the goal); the back is held by ONE thin angled
+  // support per side, run subtly behind the net.
   const bx = gx + sx * d; // back of the goal (outward, away from the pitch)
-  const netMat = new THREE.MeshBasicMaterial({ color: '#dfe8f5', wireframe: true, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
 
   // corner points: front-top (crossbar ends), front-bottom (post feet), back-bottom (on ground)
   const FTL = new THREE.Vector3(gx, h, -w);
@@ -171,33 +171,38 @@ function buildGoal(sx: number): void {
   const BBL = new THREE.Vector3(bx, 0, -w);
   const BBR = new THREE.Vector3(bx, 0, w);
 
-  // angled back struts (crossbar end → back-ground corner) + a ground bar across the back
+  // a thin tubular strut between two points
   const strut = (a: THREE.Vector3, b: THREE.Vector3, rad: number): void => {
     const dir = new THREE.Vector3().subVectors(b, a);
     const len = dir.length() || 1e-3;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 8), postMat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 6), postMat);
     m.position.copy(a).addScaledVector(dir, 0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
-    m.castShadow = true;
     grp.add(m);
   };
-  strut(FTL, BBL, r * 0.6);
-  strut(FTR, BBR, r * 0.6);
-  strut(BBL, BBR, r * 0.6);
+  // one slim back-stay per side (crossbar end → back-ground corner) + a ground bar
+  strut(FTL, BBL, r * 0.32);
+  strut(FTR, BBR, r * 0.32);
+  strut(BBL, BBR, r * 0.32);
 
-  // wireframe net: sloping roof/back panel + two triangular sides (goal mouth open)
-  const panel = (pts: THREE.Vector3[]): void => {
+  // Net as a visible wireframe GRID (line segments), so it reads as netting rather
+  // than a flat pane. `quad` lays an n×m grid over four corners (pass a repeated
+  // corner for a triangular face). Lerp helper keeps it readable.
+  const netMat = new THREE.LineBasicMaterial({ color: '#eaf2ff', transparent: true, opacity: 0.4 });
+  const lerp = (a: THREE.Vector3, b: THREE.Vector3, t: number): THREE.Vector3 => a.clone().lerp(b, t);
+  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, dd: THREE.Vector3, nu = 6, nv = 6): void => {
+    const at = (u: number, v: number): THREE.Vector3 => lerp(lerp(a, b, u), lerp(dd, c, u), v);
     const pos: number[] = [];
-    for (let i = 1; i < pts.length - 1; i++) {
-      pos.push(pts[0].x, pts[0].y, pts[0].z, pts[i].x, pts[i].y, pts[i].z, pts[i + 1].x, pts[i + 1].y, pts[i + 1].z);
-    }
+    const seg = (p: THREE.Vector3, q: THREE.Vector3): void => void pos.push(p.x, p.y, p.z, q.x, q.y, q.z);
+    for (let i = 0; i <= nu; i++) for (let j = 0; j < nv; j++) seg(at(i / nu, j / nv), at(i / nu, (j + 1) / nv));
+    for (let j = 0; j <= nv; j++) for (let i = 0; i < nu; i++) seg(at(i / nu, j / nv), at((i + 1) / nu, j / nv));
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    grp.add(new THREE.Mesh(geo, netMat));
+    grp.add(new THREE.LineSegments(geo, netMat));
   };
-  panel([FTL, FTR, BBR, BBL]); // roof sloping down to the back
-  panel([FTL, FBL, BBL]); // left side triangle
-  panel([FTR, FBR, BBR]); // right side triangle
+  quad(FTL, FTR, BBR, BBL); // sloping roof/back of the net
+  quad(FTL, FBL, BBL, BBL); // left side (triangle: BBL repeated)
+  quad(FTR, FBR, BBR, BBR); // right side (triangle: BBR repeated)
 
   world.add(grp);
 }
