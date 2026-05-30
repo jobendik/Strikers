@@ -78,6 +78,34 @@ export function showHalfTime(h: number, a: number, stats: string): void {
   setHalfTimeVisible(true);
 }
 
+/** Show/hide the shootout scoreboard banner. */
+export function showShootout(v: boolean): void {
+  el('shootout').classList.toggle('hidden', !v);
+}
+
+/** Render the kick-by-kick shootout board (two rows of goal/miss marks + scores). */
+export function updateShootoutBoard(
+  goals: [number, number],
+  taken: [number, number],
+  marks: Array<Array<'goal' | 'miss'>>,
+  _starter: number,
+  current: number,
+  suddenDeath: boolean,
+): void {
+  el('soHead').textContent = suddenDeath ? 'SUDDEN DEATH' : 'PENALTIES';
+  const slots = Math.max(CFG.pen.bestOf, taken[0], taken[1]);
+  for (let i = 0; i < 2; i++) {
+    const row = el(`soRow${i}`);
+    let dots = '';
+    for (let j = 0; j < slots; j++) {
+      const m = marks[i][j];
+      dots += `<span class="so-dot ${m ?? 'empty'}"></span>`;
+    }
+    row.className = `so-row${i === current ? ' current' : ''}`;
+    row.innerHTML = `<span class="so-tag">${match.teams[i].name}</span>${dots}<span class="so-score">${goals[i]}</span>`;
+  }
+}
+
 export function setMenuVisible(v: boolean): void {
   el('menu').classList.toggle('hidden', !v);
 }
@@ -102,6 +130,8 @@ export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onS
   };
   seg('segDiff', (v) => (CFG.diff = v));
   seg('segLen', (v) => (CFG.matchSeconds = v));
+  // KNOCKOUT settles a drawn match from the penalty spot; FRIENDLY just ends level
+  seg('segMode', (v) => (match.settleDraws = v === 1));
 
   el('btnPlay').addEventListener('click', callbacks.onPlay);
   el('btnAgain').addEventListener('click', callbacks.onAgain);

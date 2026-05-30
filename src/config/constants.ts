@@ -107,6 +107,20 @@ export const CFG = {
   // --- game-feel juice ---
   goalSlowmo: 0.32, // time scale at the instant of a goal
   slowmoRecover: 1.7, // how fast time returns to normal (units/s of time-scale)
+
+  // --- penalty shootout (settles drawn knockout ties; reuses the diving keeper) ---
+  pen: {
+    spotOut: 9, // penalty spot distance from the goal line
+    power: 25, // base shot speed (scaled up by charge)
+    keeperReach: 1.45, // planar catch radius of the diving keeper at the ball
+    keeperSpeed: 13.5, // dive speed (u/s) — reaches a corner in time *if* he reads it
+    setupTime: 0.9, // pause before each kick can be taken
+    resultTime: 1.7, // how long a kick result is shown
+    flightTimeout: 2.4, // failsafe: an unresolved kick is recorded as a miss
+    aiKeeperRead: [0.42, 0.52, 0.62], // chance the AI keeper picks the right side, by diff
+    aiOnTarget: [0.78, 0.84, 0.9], // chance an AI penalty is on target, by diff
+    bestOf: 5, // kicks each before sudden death
+  },
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */

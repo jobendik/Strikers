@@ -12,6 +12,8 @@ export interface MatchState {
   teams: [Team, Team];
   state: MatchStateName;
   timeLeft: number;
+  /** A drawn match must be settled by a penalty shootout (knockout / cup tie). */
+  settleDraws: boolean;
   /** Current half (1 or 2). */
   half: number;
   /** Added time accrued for the current half (seconds); played once timeLeft hits 0. */
@@ -78,6 +80,7 @@ export function createGameState(): void {
     teams: [home, away],
     state: 'menu',
     timeLeft: CFG.matchSeconds,
+    settleDraws: false,
     half: 1,
     stoppageAccrued: 0,
     stoppageLeft: 0,

@@ -2,6 +2,7 @@ import { match } from './state';
 import { clamp } from '../core/math';
 import { Haptics } from '../core/haptics';
 import { switchPlayer, userPass, userShoot } from './humanActions';
+import { penaltyAction } from './penalty';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
@@ -23,7 +24,8 @@ function shootUp(): void {
   if (!shooting) return;
   const charge = clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1);
   shooting = false;
-  userShoot(charge);
+  if (match.state === 'shootout') penaltyAction(charge);
+  else userShoot(charge);
 }
 function passDown(): void {
   passing = true;

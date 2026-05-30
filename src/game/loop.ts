@@ -9,6 +9,7 @@ import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './c
 import { movePlayers, selectUserPlayer } from './movement';
 import { updateBall } from './physics';
 import { kickOff, tickClock } from './flow';
+import { updateShootout } from './penalty';
 import { syncMeshes, updateCamera } from './render';
 import { updateHUD, updateToast } from '../ui/hud';
 
@@ -49,12 +50,16 @@ function frame(): void {
     }
     match.celebrateT -= dt;
     if (match.celebrateT <= 0) kickOff(match.teams[1 - match.scoredBy]);
+  } else if (match.state === 'shootout') {
+    updateShootout(sdt);
   }
 
   // crowd ambience swells as the ball approaches either goal
   if (match.state === 'play' || match.state === 'celebrate') {
     const prox = Math.min(1, Math.abs(ball.position.x) / CFG.halfL);
     Audio.setCrowd(0.18 + prox * prox * 0.82);
+  } else if (match.state === 'shootout') {
+    Audio.setCrowd(0.5); // a tense shootout hum
   } else {
     Audio.setCrowd(0.12);
   }

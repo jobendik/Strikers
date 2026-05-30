@@ -52,6 +52,13 @@
   <!-- Goal FX -->
   <div id="goalFx"><div class="g">GOAL!</div></div>
 
+  <!-- Penalty shootout scoreboard -->
+  <div id="shootout" class="hidden">
+    <div class="so-head" id="soHead">PENALTIES</div>
+    <div class="so-row0" id="soRow0"></div>
+    <div class="so-row1" id="soRow1"></div>
+  </div>
+
   <!-- Start menu -->
   <div class="overlay" id="menu">
     <div class="card">
@@ -67,6 +74,11 @@
         <div class="opt-row"><div class="label">Half length</div>
           <div class="seg" id="segLen">
             <button data-v="120">2 MIN</button><button data-v="180" class="on">3 MIN</button><button data-v="300">5 MIN</button>
+          </div>
+        </div>
+        <div class="opt-row"><div class="label">Match type</div>
+          <div class="seg" id="segMode">
+            <button data-v="0" class="on">FRIENDLY</button><button data-v="1">KNOCKOUT</button>
           </div>
         </div>
       </div>

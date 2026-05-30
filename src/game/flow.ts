@@ -3,6 +3,7 @@ import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
 import { ball, freshStats, match, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
+import { startShootout } from './penalty';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
 import { addShake, clearTrail } from './render';
@@ -216,8 +217,13 @@ function motmLine(): string {
   return `★ MOTM  ${best.name} · ${best.team.name} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
 }
 
-/** End the match and show the result card. */
+/** End the match and show the result card (or a shootout, if a knockout is level). */
 export function fullTime(): void {
+  if (match.score[0] === match.score[1] && match.settleDraws) {
+    Audio.whistle();
+    startShootout(); // a drawn knockout is settled from the spot
+    return;
+  }
   match.state = 'fulltime';
   Audio.whistle();
   setTimeout(() => Audio.whistle(), 220);
@@ -225,6 +231,15 @@ export function fullTime(): void {
   const [home, away] = match.teams;
   const result = h > a ? `${home.name} WIN` : a > h ? `${away.name} WIN` : 'DRAW';
   showFullTime(h, a, result, fullStatsLine(), motmLine());
+}
+
+/** Resolve a tie decided on penalties — show the result card with the shootout score. */
+export function finishShootout(winner: number, penScore: [number, number]): void {
+  match.state = 'fulltime';
+  Audio.whistle();
+  const result = `${match.teams[winner].name} WIN`;
+  const line = `On penalties ${penScore[0]}–${penScore[1]}  ·  ${fullStatsLine()}`;
+  showFullTime(match.score[0], match.score[1], result, line, motmLine());
 }
 
 /** Start a fresh match from the menu. */

@@ -7,7 +7,7 @@ export type RoleType = 'GK' | 'DEF' | 'ATT';
 export type PlayerRole = 'POSITION' | 'CHASER' | 'CARRIER' | 'SUPPORT' | 'RECEIVE' | 'GK';
 
 /** High-level match flow state. */
-export type MatchStateName = 'menu' | 'play' | 'celebrate' | 'halftime' | 'fulltime';
+export type MatchStateName = 'menu' | 'play' | 'celebrate' | 'halftime' | 'shootout' | 'fulltime';
 
 /** One slot in a team formation: a defensive and an attacking home position. */
 export interface FormationEntry {
