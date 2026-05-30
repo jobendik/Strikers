@@ -34,6 +34,12 @@
   <button id="muteBtn" aria-label="Toggle sound">🔊</button>
   <div class="toast" id="toast"></div>
 
+  <!-- Controlled player badge -->
+  <div id="pname"><span class="num" id="pnum">9</span><span class="nm" id="pnm">SOLA</span></div>
+
+  <!-- Shot power meter -->
+  <div id="power"><div class="fill" id="powerFill"></div></div>
+
   <!-- Touch controls -->
   <div id="joy"><div class="ring"></div><div class="nub" id="nub"></div></div>
   <div id="pad">
@@ -51,7 +57,7 @@
     <div class="card">
       <div class="kicker">Yuka · Three.js · Agent AI</div>
       <h1>YUKA <span class="accent">STRIKERS</span></h1>
-      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Crimson Strikers</b>.<br>Steering, perception &amp; fuzzy-logic agents power every player.</div>
+      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Crimson Strikers</b>.<br>Steering, perception, fuzzy-logic &amp; named, attribute-driven agents power every player — with real aerial ball physics, chips, crosses, through-balls &amp; slide tackles.</div>
       <div class="opts">
         <div class="opt-row"><div class="label">Difficulty</div>
           <div class="seg" id="segDiff">
@@ -65,7 +71,12 @@
         </div>
       </div>
       <button class="cta" id="btnPlay">KICK OFF ▸</button>
-      <div class="sub" style="margin-top:18px;opacity:.65;font-size:12px">Joystick to move · SHOOT · PASS · SPRINT · SWITCH player<br>Keyboard: WASD/Arrows · J pass · K shoot · Shift sprint · Space switch</div>
+      <div class="sub" style="margin-top:18px;opacity:.65;font-size:12px">
+        Move with the joystick. <b>Hold SHOOT</b> to power up a strike — a soft tap dinks it over a rushing keeper.
+        <b>Hold PASS</b> to loft a cross; flick PASS forward to slide a <b>through-ball</b> in behind.
+        Defending? <b>SHOOT</b> launches a slide tackle and heads high balls clear.<br>
+        Keyboard: WASD/Arrows · J pass (hold = lob) · K shoot (hold = power) · Shift sprint · Space switch
+      </div>
     </div>
   </div>
 

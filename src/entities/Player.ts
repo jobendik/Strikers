@@ -11,12 +11,13 @@ import {
 } from 'yuka';
 import type { Group } from 'three';
 import { CFG } from '../config/constants';
+import { attrMul, SQUADS } from '../config/players';
 import { V3 } from '../core/math';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
 import { initPerception } from '../ai/perception';
 import { makePlayerMesh } from '../rendering/meshes';
-import type { FormationEntry, PlayerRole, RoleType } from '../config/types';
+import type { FormationEntry, PlayerAttributes, PlayerRole, RoleType, SquadPlayer } from '../config/types';
 import type { Team } from './Team';
 
 /** An outfield player or goalkeeper — a Yuka Vehicle driven by steering + an FSM. */
@@ -26,6 +27,16 @@ export class Player extends Vehicle {
   entry: FormationEntry;
   roleType: RoleType;
   baseSpeed: number;
+
+  /** Squad identity + attributes (pace, shooting, passing, tackling, composure). */
+  override name: string;
+  num: number;
+  attr: PlayerAttributes;
+
+  /** Slide-tackle timer: >0 while committed to a slide (cannot steer). */
+  slide = 0;
+  /** Cooldown before this player can slide again. */
+  slideCd = 0;
 
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
@@ -58,7 +69,21 @@ export class Player extends Vehicle {
     this.idx = idx;
     this.entry = entry;
     this.roleType = entry.role;
-    this.baseSpeed = this.roleType === 'GK' ? CFG.spd.gk : CFG.spd.out;
+
+    // resolve squad identity, with a safe fallback if a roster slot is missing
+    const roster = SQUADS[team.name] ?? SQUADS.STRIKERS;
+    const squad: SquadPlayer = roster[idx] ?? {
+      name: `P${idx + 1}`,
+      num: idx + 1,
+      attr: { pace: 70, shooting: 70, passing: 70, tackling: 70, composure: 70 },
+    };
+    this.name = squad.name;
+    this.num = squad.num;
+    this.attr = squad.attr;
+
+    // pace scales the base running speed; keepers stay on the GK baseline.
+    const raw = this.roleType === 'GK' ? CFG.spd.gk : CFG.spd.out;
+    this.baseSpeed = this.roleType === 'GK' ? raw : raw * attrMul(this.attr.pace);
     this.maxSpeed = this.baseSpeed;
     this.maxForce = CFG.force;
     this.mass = 1;

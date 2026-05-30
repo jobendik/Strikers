@@ -3,7 +3,7 @@ import { advanceTime } from '../core/time';
 import { camera, renderer, scene } from '../rendering/scene';
 import { match } from './state';
 import { pollInput } from './input';
-import { resolveControl, updateGkHold, updatePressure } from './control';
+import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
 import { movePlayers, selectUserPlayer } from './movement';
 import { updateBall } from './physics';
 import { fullTime, kickOff } from './flow';
@@ -30,6 +30,7 @@ function frame(): void {
     match.teams[0].update(dt);
     match.teams[1].update(dt);
     movePlayers(dt);
+    resolveSlides(dt);
     updatePressure(dt);
     updateBall(dt);
   } else if (match.state === 'celebrate') {

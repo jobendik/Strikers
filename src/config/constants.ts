@@ -43,6 +43,26 @@ export const CFG = {
   foulChance: 0.07,
   matchSeconds: 180,
   diff: 1, // 0 easy · 1 pro · 2 legend
+
+  // --- aerial ball physics (Notblox-inspired 3D ball) ---
+  gravity: 24, // world units / s² — tuned for snappy arcade arcs
+  ballRest: 0.52, // vertical restitution on bounce
+  bounceFric: 0.78, // horizontal velocity retained per bounce
+  controlHeight: 1.25, // a ground player can only collect a ball below this height
+  crossbarH: 4.0, // ball must be under this to count as a goal
+  headLow: 0.9, // ball heights a player can head/volley
+  headHigh: 2.5,
+  headReach: 1.7, // planar range for contesting an aerial ball
+
+  // --- new actions (footballSimulationEngine action set) ---
+  throughPow: 22, // through-ball power, played into space behind the line
+  crossPow: 21, // lofted cross power
+  chipPow: 17, // delicate chip to lob the keeper
+  slideSpeed: 1.9, // slide-tackle lunge speed multiplier
+  slideTime: 0.42, // how long a slide commits the player
+  slideReach: 2.2, // slide-tackle ball-win range
+  slideCooldown: 1.1, // recovery before sliding again
+  slideFoulBase: 0.18, // base foul chance from a slide (scaled by tackling)
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */

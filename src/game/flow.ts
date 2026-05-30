@@ -35,10 +35,12 @@ export function resetPositions(): void {
       p.heading = attackHeading(t.side);
       p.deact();
       p.pressure = 0;
+      p.slide = 0;
+      p.slideCd = 0;
       p.fsm.currentState = null; // force a fresh state on next tick
     }
   }
-  ball.position.set(0, 0, 0);
+  ball.position.set(0, CFG.ballR, 0);
   ball.velocity.set(0, 0, 0);
   ball.lastTouch = null;
 }

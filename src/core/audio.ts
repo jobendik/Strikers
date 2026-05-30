@@ -90,6 +90,19 @@ function createAudio() {
     post(): void {
       tone(900, 0.08, 'square', 0.3, 300);
     },
+    bounce(): void {
+      tone(rand(120, 160), 0.06, 'sine', 0.22, 70);
+    },
+    header(): void {
+      tone(rand(180, 230), 0.07, 'triangle', 0.4, 120);
+      noise(0.04, 0.18, 1600);
+    },
+    chip(): void {
+      tone(rand(420, 500), 0.1, 'sine', 0.3, 260);
+    },
+    slide(): void {
+      noise(0.22, 0.4, 600);
+    },
     setMute(m: boolean): void {
       muted = m;
     },

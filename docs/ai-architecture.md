@@ -116,6 +116,86 @@ local perception**: each player decides from its own vision/memory of the ball
 rather than reading a global oracle, which is the spirit of the RoboCup 2D league
 (noisy, relative sensor data) distilled to an arcade scale.
 
+## Second wave — what we pulled in from the four newer engines
+
+The four newer references (Notblox, footballSimulationEngine, Openfoot Manager,
+open-football) pushed the game from a flat 2D pass-and-shoot prototype into a
+3D-feeling arcade match with distinct characters. Here is the evaluation and
+exactly what was implemented from each.
+
+| Capability | Before | Now | Source |
+| --- | --- | --- | --- |
+| 3D / aerial ball | ❌ flat `y=0` | ✅ gravity + bounce + height | **Notblox** |
+| Chips over the keeper | ❌ | ✅ AI + human | Notblox (aerial) |
+| Crosses / lofted passes | ❌ | ✅ | Notblox (aerial) |
+| Headers & volleys | ❌ | ✅ AI + human | Notblox (aerial) |
+| Through-balls | ❌ | ✅ AI + human | **footballSimulationEngine** |
+| Slide tackles | hard-coded human "lunge" | ✅ first-class, risk/reward, AI + human | footballSimulationEngine |
+| Per-player attributes | ❌ identical clones | ✅ pace/shooting/passing/tackling/composure | **Openfoot Manager** |
+| Named squads / identity | ❌ | ✅ named, numbered players | **open-football** |
+
+### 6. Notblox — real, physics-driven ball motion
+
+Notblox runs server-authoritative Rapier physics so the ball has true 3D
+motion. We don't need multiplayer or a full rigid-body engine, but we adopted
+its essential idea: **the ball now lives in 3D**. `src/game/physics.ts`
+integrates gravity, a ground bounce (restitution + horizontal friction) and
+separate rolling-vs-air drag, while `src/game/aerial.ts` provides the
+projectile primitive `launchLob(target, peak)` that solves the launch velocity
+to land the ball on a target at a chosen apex. This single primitive unlocks
+three new, genuinely exciting actions:
+
+- **Chip the keeper** (`canChipKeeper`) — when the goalkeeper rushes off his
+  line, the carrier (AI) or the player (a *soft tap* of SHOOT) dinks the ball
+  over him into the net. Numerically validated to clear a 2.5 m keeper and drop
+  under the 4.0 m bar.
+- **Crosses / lofted balls** — wide, advanced carriers loft the ball into the
+  box; the human holds PASS to do the same.
+- **Headers & volleys** — an airborne ball can no longer be collected on the
+  ground; it must be **headed**. AI defenders head clear, attackers head on
+  goal, and the human heads with SHOOT. Control is height-gated in
+  `resolveControl` so aerial play is meaningfully different from ground play.
+
+The ball mesh carries a fake contact shadow that shrinks as it climbs, selling
+the height on a top-down arcade camera.
+
+### 7. footballSimulationEngine — an explicit action set
+
+Its lesson is the **vocabulary of actions** (shoot / through-ball / intercept /
+slide) and the discipline of *separating movement decisions from ball physics*.
+We added the two we were missing:
+
+- **Through-ball** (`findThroughBall` in `src/ai/analysis.ts`) — a driven pass
+  into space *behind* the defensive line, ahead of a forward-running teammate.
+  The AI carrier prefers it from midfield; the human triggers it by flicking the
+  joystick forward as they pass.
+- **Slide tackle** (`startSlide` / `resolveSlides` in `src/game/control.ts`) —
+  a committed lunge with real risk/reward: it can win the ball cleanly or
+  concede a free kick, with the foul chance scaled by the slider's `tackling`
+  attribute. AI chasers slide situationally (more often on higher difficulty);
+  the human slides with SHOOT when off the ball. Movement during a slide is
+  resolved in its own branch of `movePlayers`, keeping it cleanly separated from
+  steering — exactly the engine's movement-vs-physics separation principle.
+
+### 8. Openfoot Manager — attribute-driven squads
+
+The manager engines model players as bundles of attributes. We distilled that to
+five arcade-relevant ratings per player — **pace, shooting, passing, tackling,
+composure** (`src/config/players.ts`) — and wired them through the whole sim:
+pace scales running speed; shooting scales shot power and (with composure)
+aiming noise; passing scales pass accuracy and through-ball willingness;
+tackling drives tackle success and foul avoidance; composure lets a carrier
+shield the ball longer and back himself to shoot. The two squads are
+deliberately asymmetric in character (quick/clinical Strikers vs.
+physical/solid United) so matches read differently.
+
+### 9. open-football — named identities
+
+We don't simulate decades of a football world, but we borrowed its spark:
+**every player is named and numbered**. The HUD shows who you're controlling,
+and the asymmetric attribute profiles give those names personalities — SOLA and
+FÈNX up top feel quick and clinical; United's MARS and KOLT feel like a wall.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```
@@ -123,9 +203,9 @@ Team.update
  ├─ updatePerception(player)        # MemorySystem: sense ball within vision cone
  ├─ assign dynamic role             # CARRIER / SUPPORT / CHASER / POSITION / GK
  └─ StateMachine.changeTo(role) → State.execute
-      ├─ CarryState  → aiCarry      # Regulator-throttled fuzzy shoot/pass/clear
-      ├─ ChaseState  → pursue ball if visible, else last-known position
-      ├─ SupportState→ arrive at best support spot (SupportSpotCalculator)
-      ├─ PositionState→ hold shape / mark / shuffle to perceived ball
+      ├─ CarryState  → aiCarry      # fuzzy: chip / shoot / through-ball / cross / pass / clear
+      ├─ ChaseState  → header if airborne, else slide-tackle chance, else pursue/last-known
+      ├─ SupportState→ arrive at best support spot (header if airborne)
+      ├─ PositionState→ hold shape / mark / shuffle (header if airborne)
       └─ GkState     → intercept or rear-interpose
 ```

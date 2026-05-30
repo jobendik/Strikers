@@ -19,7 +19,6 @@ export interface MatchState {
   gkHold: number;
   userPlayer: Player | null;
   switchLock: number;
-  lunge: number;
   scoredBy: number;
   celebrateT: number;
   input: InputState;
@@ -49,7 +48,6 @@ export function createGameState(): void {
     gkHold: 0,
     userPlayer: null,
     switchLock: 0,
-    lunge: 0,
     scoredBy: 0,
     celebrateT: 0,
     input: { x: 0, z: 0, sprint: false },
