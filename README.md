@@ -36,6 +36,11 @@ attribute-driven players**.
   and roars for shots, saves and goals (every sound synthesised at runtime).
 - 🧬 **Named squads with attributes** — pace, shooting, passing, tackling and
   composure give every player a distinct identity.
+- 🏆 **Cup Run + 6 teams** — pick your club and win a single-elimination cup
+  (Round 1 → Semi-Final → Final); a drawn tie goes to penalties. Titles are saved.
+- ⚡ **Knock-on burst** — double-tap sprint to push the ball into space and
+  explode past a defender.
+- 🚩 **Corners** — a defender's touch over his own byline is a corner, not a let-off.
 - ⏱️ **Two halves, half-time & stoppage** — added time accrues from goals and
   fouls; the second half is kicked off by the other side.
 - 🥅 **Penalty shootouts** — settle a drawn knockout from the spot: best-of-five
@@ -68,6 +73,7 @@ maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
 | Through-ball | ➤ while flicking joystick forward | `J` + forward |
 | Slide tackle / header (off the ball) | ⚽ button | `K` |
 | Sprint | » button | `Shift` |
+| Knock-on burst | double-tap » | double-tap `Shift` |
 | Switch player | ⇄ button | `Space` |
 | Pause | ⏸ button | `Esc` / `P` |
 | Penalty (take) | aim joystick + ⚽ | aim + `K` |
@@ -80,8 +86,12 @@ Best played in **landscape** on a phone — it's installable as a PWA.
 
 ### Modes & options
 
-- **Match type** — *Friendly* (a draw ends level) or *Knockout* (a draw is
-  settled by a penalty shootout).
+- **Your team** — pick one of **six clubs**, each with a distinct attribute
+  identity and kit; the scoreboard and player kits follow your choice.
+- **Match type** — *Friendly* (a draw ends level), *Knockout* (a draw is settled
+  by a penalty shootout), or *Cup Run* (a single-elimination Round 1 → Semi-Final
+  → Final; win to advance, a level tie goes to penalties, win the final to be
+  crowned — your cups-won total is saved).
 - **Rules** — *Arcade* (default) or *Sim* (offside + yellow/red cards).
 - **Mentality** — Defensive / Balanced / Attacking for your team.
 - **Difficulty** — Easy / Pro / Legend, and a 2/3/5-minute half length.
@@ -160,6 +170,7 @@ src/
 │   ├── humanActions.ts    # user shoot/chip · pass/cross/through-ball · slide/header
 │   ├── flow.ts            # scoring, halves/half-time/stoppage, MOTM, pause, kickoff
 │   ├── penalty.ts         # penalty shootout mini-game (take + keep vs diving keeper)
+│   ├── modes.ts           # team selection, friendly/knockout, Cup Run resolution
 │   ├── replay.ts          # goal replay ring buffer + dramatic playback
 │   ├── rules.ts           # opt-in Sim rules: offside + yellow/red cards
 │   ├── render.ts          # mesh + camera sync

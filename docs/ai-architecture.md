@@ -364,6 +364,36 @@ offside runner who reaches it concedes a free kick — and fouls can be **booked
 with a second yellow or a rare straight red reducing a side to a man down. When
 `simRules` is off, none of this code path runs.
 
+## Sixth wave — unifying the two development lines
+
+Two parallel branches had independently pushed the game toward completion from the
+same fourth-wave ancestor: one (merged as the fifth wave above) added the penalty
+**shootout**, goal **replay**, **offside/cards**, **MOTM** and the settings/UX
+layer; the other added **six teams + a team picker + a Cup Run**, **corner kicks**
+and a **knock-on burst** skill move. This wave ports the *unique* features of the
+second line onto the first so nothing is lost:
+
+- **Six teams + re-skinnable identity** ([`players.ts`](../src/config/players.ts),
+  `Team.setIdentity` / `Player.applyIdentity`) — a `TEAMS` registry of named clubs
+  with kits; a team's roster + kit colour can be re-applied at runtime, which is
+  what makes team selection and per-round cup fixtures possible without rebuilding
+  the scene.
+- **Cup Run** ([`modes.ts`](../src/game/modes.ts)) — single-elimination
+  Round 1 → Semi-Final → Final against random opponents, with cups-won persisted.
+  Crucially, a **drawn cup tie is settled by the fifth wave's shootout**, whose
+  winner is routed back to the cup to advance — this is the union the original
+  brief described ("settle drawn *Cup* ties from the spot").
+- **Corner kicks** ([`physics.ts`](../src/game/physics.ts)) — a defender's own
+  touch over his byline is now a corner, not a goal kick.
+- **Knock-on burst** ([`humanActions.ts`](../src/game/humanActions.ts)) — a
+  double-tap-sprint skill move that knocks the ball ahead and grants a brief speed
+  explosion to beat a defender.
+
+The second line's *overlapping* features (halves, mentality, pause, radar) were
+kept in the first line's already-merged form rather than re-merged, and its
+in-match penalty-kick variant (box fouls) was intentionally left out to avoid
+clashing with the shootout's `penalty.ts`.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```
