@@ -69,6 +69,7 @@ export function aiCarry(p: Player, _dt: number): void {
   if (composure > 0.55 && canChipKeeper(ball.position, team, opp, _chip) && Math.random() < 0.35 + composure * 0.45) {
     addNoise(_chip, shootAcc); // target already sits just beyond the line; keep its arc
     lobKick(p, _chip, 3.1, 'kick');
+    ball.shot = true;
     match.stats.shots[idx]++;
     return;
   }
@@ -85,9 +86,13 @@ export function aiCarry(p: Player, _dt: number): void {
     addNoise(_shot, shootAcc);
     clampShot(_shot, team);
     // a clinical striker bends the shot back toward goal centre (in-swinging),
-    // so the curl keeps it on frame while making the keeper's life harder.
-    const curl = CFG.curlAI * (0.4 + shootAcc) * -Math.sign(_shot.z || 1);
+    // so the curl keeps it on frame while making the keeper's life harder. The
+    // `team.side` factor is essential: Magnus deflection follows the ball's
+    // travel direction, so without it the spin that in-swings for the +X team
+    // would out-swing (curl wide) for the −X team.
+    const curl = CFG.curlAI * (0.4 + shootAcc) * -Math.sign(_shot.z || 1) * team.side;
     kick(p, V3(_shot.x - ball.position.x, 0, _shot.z - ball.position.z), power, 'kick', curl);
+    ball.shot = true;
     match.stats.shots[idx]++;
     return;
   }
@@ -136,7 +141,7 @@ export function aiCarry(p: Player, _dt: number): void {
       }
     }
     if (mate && Math.random() < 0.5) {
-      const swing = CFG.curlCross * -Math.sign(p.position.z || 1); // whip it back into the middle
+      const swing = CFG.curlCross * -Math.sign(p.position.z || 1) * team.side; // whip it back into the middle
       lobKick(p, V3(mate.position.x + team.side, 0, mate.position.z), 2.6, 'pass', swing);
       setReceiver(mate);
       return;

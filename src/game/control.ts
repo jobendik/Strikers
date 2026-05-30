@@ -6,7 +6,7 @@ import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
 import { ball, match, oppOf, setPassRequest, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
-import { findBestPass, nearestOpp, passWeight } from '../ai/analysis';
+import { findBestPass, nearestOpp, ownGoalX, passWeight } from '../ai/analysis';
 import { addStoppage } from './flow';
 import { foulCard, resolveOffside } from './rules';
 import { addShake } from './render';
@@ -30,11 +30,28 @@ function creditSave(gk: Player): void {
   match.stats.onTarget[teamIndex(oppOf(gk.team))]++;
 }
 
+/**
+ * Was the fast ball a keeper just gathered actually a shot heading into his goal?
+ * Gates the save / shot-on-target credit so a hard clearance, back-pass or stray
+ * ball the keeper simply collects is not miscounted as a save — which previously
+ * inflated "on target" past the number of shots actually taken.
+ */
+function wasShotOnTarget(gk: Player): boolean {
+  const ownX = ownGoalX(gk.team);
+  const vx = ball.velocity.x;
+  if ((ownX - ball.position.x) * vx <= 0) return false; // ball isn't travelling toward our line
+  const t = (ownX - ball.position.x) / vx;
+  if (t < 0 || t > 1.5) return false;
+  const predZ = ball.position.z + ball.velocity.z * t;
+  return Math.abs(predZ) < CFG.goalHalf + 0.6; // would have reached the goal mouth
+}
+
 /** Give (or clear) ball possession. */
 export function setControl(p: Player | null): void {
   match.controlPlayer = p;
   match.controlTeam = p ? p.team : null;
   setPassRequest(null);
+  ball.shot = false; // once gathered/cleared, no longer a live shot
   if (p) {
     p.kickCooldown = 0;
     ball.lastTouch = p.team;
@@ -53,6 +70,7 @@ export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pas
   d.normalize();
   ball.velocity.set(d.x * power, 0, d.z * power); // mass=1 -> speed=power (Buckland kick)
   ball.spin = spin;
+  ball.shot = false; // a deliberate shot re-flags this immediately after the kick
   ball.lastTouch = p.team;
   ball.lastKicker = p;
   if (type === 'pass') ball.passer = p; // a shot/clearance leaves the assist setter intact
@@ -82,6 +100,7 @@ export function lobKick(p: Player, target: Vector3, peak: number, type: 'kick' |
   ball.position.set(p.position.x + h.x * 0.4, GROUND_Y, p.position.z + h.z * 0.4);
   launchLob(target, peak);
   ball.spin = spin;
+  ball.shot = false; // a chip-shot re-flags this immediately after the lob
   ball.lastTouch = p.team;
   ball.lastKicker = p;
   if (type === 'pass') ball.passer = p;
@@ -107,6 +126,7 @@ export function headBall(p: Player, dir: Vector3, power: number): void {
   d.normalize();
   ball.velocity.set(d.x * power, Math.max(2, ball.velocity.y * 0.3 + 3.5), d.z * power);
   ball.spin = 0;
+  ball.shot = false; // an on-goal header re-flags this immediately after
   ball.lastTouch = p.team;
   ball.lastKicker = p;
   p.kickCooldown = 0.3;
@@ -234,10 +254,10 @@ export function resolveControl(dt: number): void {
       flashToast(near.team.isUser ? 'BALL WON' : 'INTERCEPTED');
     }
   } else if (!blocked && near) {
-    if (near.roleType === 'GK' && ball.velocity.length() > 10) {
+    if (near.roleType === 'GK' && ball.shot && ball.velocity.length() > 10 && wasShotOnTarget(near)) {
       const diving = near.dive > 0;
       const speed = ball.velocity.length();
-      creditSave(near); // a gathered fast ball was a shot on target
+      creditSave(near); // a gathered on-target shot is a save
       // a screamer reached at full stretch may be parried rather than held —
       // the keeper paws it away from his near post for a dramatic rebound.
       if (diving && speed > CFG.gkParrySpeed && Math.random() < 0.5) {

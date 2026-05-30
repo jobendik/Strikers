@@ -46,6 +46,9 @@ export function addStoppage(seconds: number): void {
 export function scoreGoal(i: number): void {
   match.score[i]++;
   addStoppage(CFG.stoppagePerGoal);
+  // every goal is on target; if it wasn't a struck shot (walked in / deflected) still
+  // count it as one so "on target" can never exceed the shots-taken tally.
+  if (!ball.shot) match.stats.shots[i]++;
   match.stats.onTarget[i]++;
   // credit the scorer (last toucher of the scoring team) and, if the prior pass
   // came from a team-mate, the assist — both feed the Man-of-the-Match rating.
