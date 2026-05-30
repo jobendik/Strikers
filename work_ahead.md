@@ -216,7 +216,7 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 ## 8. MASTER CHECKLIST  ✅ (tick across sessions — this is the durable to-do)
 
 ### P0 — launch-critical & headline
-- [ ] **A1** Refactor harness match loop into importable `simulateMatch(home, away, diff)` (shared by sim + in-game tournament).
+- [x] **A1** Refactor harness match loop into importable `simulateMatch(home, away, diff)` (shared by sim + in-game tournament). → `src/game/simulate.ts`; harness now drives it. Behaviour-preserving (sim numbers unchanged). NOTE for A2: in-browser use needs mesh/UI isolation (createGameState adds meshes to the live scene; `flow.fullTime` fires UI) — handle in `game/worldcup.ts`.
 - [ ] **A2** World Cup data model: field/groups/bracket/matchday in player save (`worldcup`), resume across sessions.
 - [ ] **A3** Group stage: standings table + sim all other fixtures per matchday; advance per real 2026 format.
 - [ ] **A4** Knockout bracket tree (R32→…→Final) screen + "road to the final".
