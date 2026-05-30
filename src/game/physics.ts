@@ -64,11 +64,21 @@ function integrateFreeBall(dt: number): void {
     ball.position.y = GROUND_Y;
     if (ball.velocity.y < 0) {
       const impact = -ball.velocity.y;
-      ball.velocity.y = impact * CFG.ballRest;
-      ball.velocity.x *= CFG.bounceFric;
-      ball.velocity.z *= CFG.bounceFric;
-      if (impact > 6) Audio.bounce();
-      if (ball.velocity.y < 1.6) ball.velocity.y = 0; // settle into a roll
+      // Only a genuine fall rebounds. A ball that is merely rolling still dips a
+      // hair below the turf every frame (gravity integrates onto vy just above,
+      // before this clamp), so without this threshold the bounce path would fire
+      // on every frame and scrub the ball's *horizontal* speed by bounceFric
+      // continuously — killing every ground pass and shot within a metre. Below
+      // the threshold we just settle the vertical velocity and leave the roll
+      // (and its rolling friction, applied below) untouched.
+      if (impact > CFG.bounceMin) {
+        ball.velocity.y = impact * CFG.ballRest;
+        ball.velocity.x *= CFG.bounceFric;
+        ball.velocity.z *= CFG.bounceFric;
+        if (impact > 6) Audio.bounce();
+      } else {
+        ball.velocity.y = 0; // settle into a roll
+      }
     }
   }
 

@@ -53,6 +53,8 @@ export const CFG = {
   gravity: 24, // world units / s² — tuned for snappy arcade arcs
   ballRest: 0.52, // vertical restitution on bounce
   bounceFric: 0.78, // horizontal velocity retained per bounce
+  bounceMin: 1.5, // min downward impact speed (u/s) that counts as a real bounce —
+  // below this a grounded ball is just rolling, so it must NOT be scrubbed by bounceFric
   controlHeight: 1.25, // a ground player can only collect a ball below this height
   crossbarH: 4.0, // ball must be under this to count as a goal
   headLow: 0.9, // ball heights a player can head/volley
