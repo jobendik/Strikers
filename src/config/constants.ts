@@ -117,7 +117,10 @@ export const CFG = {
 
   // --- game-feel juice ---
   goalSlowmo: 0.32, // time scale at the instant of a goal
+  goalSlowmoBig: 0.2, // deeper slow-mo for a *big* goal (knockout / last-gasp / lead-changer)
   slowmoRecover: 1.7, // how fast time returns to normal (units/s of time-scale)
+  celebrateBall: 0.7, // seconds the ball keeps flying into the net in slow-mo (normal goal)
+  celebrateBallBig: 1.05, // ...longer, more cinematic beat for a big goal (H2)
 
   // --- penalty shootout (settles drawn knockout ties; reuses the diving keeper) ---
   pen: {

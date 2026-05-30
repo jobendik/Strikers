@@ -20,6 +20,7 @@ import {
   setPauseVisible,
   showHalfTime,
   showGoalFx,
+  showScorerFlash,
   updateHUD,
 } from '../ui/hud';
 
@@ -60,33 +61,36 @@ export function scoreGoal(i: number): void {
     scorer.statGoals++;
     if (ball.passer && ball.passer !== scorer && teamIndex(ball.passer.team) === i) ball.passer.statAssists++;
   }
+  // A *big* goal (H2): a do-or-die knockout tie, a last-gasp winner in second-half
+  // added time, or a lead-changing strike — these earn a punchier celebration.
+  const forGoals = match.score[i];
+  const againstGoals = match.score[1 - i];
+  const lastGasp = match.half >= 2 && match.stoppageLeft > 0 && forGoals > againstGoals;
+  const leadChanger = forGoals - againstGoals === 1; // just edged in front
+  const big = match.settleDraws || lastGasp || leadChanger;
+
   updateHUD();
   Audio.whistle();
   Audio.goal();
   Audio.roar(true);
+  if (big) setTimeout(() => Audio.roar(true), 260); // a second swell for the big one
   Haptics.goal();
   showGoalFx(i);
-  addShake(1.2); // the net ripples — punch the camera
+  showScorerFlash(scorer ? scorer.name : `${match.teams[i].short} SCORE`, match.teams[i].color, big);
+  addShake(big ? 1.9 : 1.2); // the net ripples — punch the camera (harder for a big goal)
   match.controlPlayer = null;
   match.controlTeam = null;
   setReceiver(null);
   setPassRequest(null);
   match.state = 'celebrate';
-  match.celebrateT = 2.2;
-  match.celebrateBallT = 0.7; // keep the ball flying into the net in slow motion
-  match.timeScale = CFG.goalSlowmo;
+  match.celebrateT = big ? 2.8 : 2.2;
+  match.celebrateBallT = big ? CFG.celebrateBallBig : CFG.celebrateBall; // slow-mo net flight
+  match.timeScale = big ? CFG.goalSlowmoBig : CFG.goalSlowmo;
   match.scoredBy = i;
   updateAwayMentality(); // the away side re-reads the game after every goal
   flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].short} SCORE!`);
   // broadcast commentary (H1): contextual shout complementing the scorer toast
-  const forGoals = match.score[i];
-  const againstGoals = match.score[1 - i];
-  goalCommentary({
-    forGoals,
-    againstGoals,
-    isUser: match.teams[i].isUser,
-    lastGasp: match.half >= 2 && match.stoppageLeft > 0 && forGoals > againstGoals,
-  });
+  goalCommentary({ forGoals, againstGoals, isUser: match.teams[i].isUser, lastGasp });
 }
 
 /** Reset all entities to their home positions for a restart. */

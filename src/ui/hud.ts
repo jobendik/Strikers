@@ -74,6 +74,20 @@ export function showGoalFx(i: number): void {
   fx.classList.add('show');
 }
 
+/**
+ * Flash the scorer's name across the goal celebration (H2). Tinted to the scoring
+ * team's kit; `big` goals get a louder, longer treatment. Re-triggers cleanly.
+ */
+export function showScorerFlash(name: string, color: string, big = false): void {
+  const node = el('scorerFlash');
+  node.textContent = name;
+  node.style.setProperty('--sc', color);
+  node.classList.toggle('big', big);
+  node.classList.remove('show');
+  void node.offsetWidth; // reflow to restart the animation
+  node.classList.add('show');
+}
+
 /** Show the half-time interval card with the running score + stats. */
 export function showHalfTime(h: number, a: number, stats: string): void {
   el('htH').textContent = String(h);
