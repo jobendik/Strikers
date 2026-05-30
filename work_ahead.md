@@ -228,8 +228,8 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 - [ ] **B4** Rewarded ads (opt-in): continue-after-loss, double XP, reroll daily order. Honest UI.
 - [x] **B5** Save abstraction: CrazyGames data module when present, `localStorage` fallback. → `src/platform/storage.ts` (KV backend, swappable via `setStorageBackend`, in-memory fallback for blocked storage/Node). CrazyGames data module slots in during B1.
 - [x] **C1** `core/playerData.ts` with versioned schema (§5), migration + self-healing. → full §5 schema, `migratePlayerData` heals partial/corrupt/old saves (clamps, truncates name, heals unknown team keys), persists via B5. Loads on boot; fresh profile's nation aligns with chosen team. Verified with an 18-case headless self-test.
-- [ ] **C2** Account XP + level curve + first-match-of-day bonus + good-play bonus.
-- [ ] **C3** Titles (Rookie→Legend, football-flavoured).
+- [x] **C2** Account XP + level curve + first-match-of-day bonus + good-play bonus. → `core/progression.ts` (xpToNext curve per §3.1, `grantXp` roll-up) + `game/rewards.ts` pipeline (`applyMatchRewards`): base win>draw>loss, first-match-of-day bonus, +XP for goals/clean sheet/big-win margin, coins, lifetime-stats update. Hooked in `modes.presentResult` (stubbed out of the sim harness, so balance runs are unaffected). 27-case headless self-test.
+- [x] **C3** Titles (Rookie→Legend, football-flavoured). → `TITLES` ladder Rookie→Pro→Star→Captain→Maestro→Icon→Legend by level; `titleForLevel`; applied on every XP grant; level-up/new-title surfaced on the result card (`#ftReward`).
 - [ ] **C4** Profile card UI (flag avatar, name, tier badge, XP bar, 3 stat tiles).
 - [ ] **D1** Rebuild full-time `#ft` into the Result Screen: headline + stars + stat grid.
 - [ ] **D2** Animated progress stack (XP, season, daily order, daily chest, achievement).

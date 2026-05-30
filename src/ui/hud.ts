@@ -78,11 +78,15 @@ export function showFullTime(
   motm = '',
   kicker = 'Full Time',
   buttonLabel = 'PLAY AGAIN ▸',
+  reward = '',
 ): void {
   el('ftH').textContent = String(h);
   el('ftA').textContent = String(a);
   el('ftResult').textContent = result;
   el('ftStats').textContent = stats;
+  const rw = el('ftReward');
+  rw.textContent = reward;
+  rw.classList.toggle('hidden', !reward);
   el('ftMotm').textContent = motm;
   el('ftKicker').textContent = kicker;
   el('btnAgain').textContent = buttonLabel;
