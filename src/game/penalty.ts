@@ -55,6 +55,15 @@ export function inShootout(): boolean {
   return SO !== null;
 }
 
+/** Tear down a shootout in progress (e.g. on quit to menu). */
+export function abortShootout(): void {
+  if (!SO) return;
+  SO.keeper.dive = 0;
+  SO.keeper.mesh.rotation.x = 0;
+  SO = null;
+  showShootout(false);
+}
+
 /** Begin a shootout between the two teams (called from `fullTime` on a drawn tie). */
 export function startShootout(): void {
   const starter = Math.random() < 0.5 ? 0 : 1;
@@ -181,7 +190,7 @@ function keeperDive(side: number): void {
  * the joystick, `charge` → power); when the user is keeping it commits the dive.
  */
 export function penaltyAction(charge = 1): void {
-  if (!SO || SO.phase !== 'aim') return;
+  if (match.paused || !SO || SO.phase !== 'aim') return;
   const takeTeam = match.teams[SO.current];
   const keepTeam = match.teams[1 - SO.current];
 

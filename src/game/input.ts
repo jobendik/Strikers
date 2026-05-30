@@ -4,6 +4,7 @@ import { Haptics } from '../core/haptics';
 import { switchPlayer, userPass, userShoot } from './humanActions';
 import { penaltyAction } from './penalty';
 import { skipReplay } from './replay';
+import { quitToMenu, restartMatch, resumeGame, togglePause } from './flow';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
@@ -62,6 +63,10 @@ export function initInput(): void {
   bindButton('skipReplay', (down) => {
     if (down) skipReplay();
   });
+  bindButton('pauseBtn', (down) => down && togglePause());
+  bindButton('btnResume', (down) => down && resumeGame());
+  bindButton('btnRestart', (down) => down && restartMatch());
+  bindButton('btnQuit', (down) => down && quitToMenu());
 
   addEventListener('keydown', (e) => {
     const repeat = keys[e.code];
@@ -72,6 +77,10 @@ export function initInput(): void {
     if (e.code === 'Space') {
       e.preventDefault();
       switchPlayer();
+    }
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      e.preventDefault();
+      togglePause();
     }
   });
   addEventListener('keyup', (e) => {

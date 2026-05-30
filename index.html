@@ -32,6 +32,7 @@
     </div>
   </div>
   <button id="muteBtn" aria-label="Toggle sound">🔊</button>
+  <button id="pauseBtn" aria-label="Pause">⏸</button>
   <div class="toast" id="toast"></div>
 
   <!-- Controlled player badge -->
@@ -140,6 +141,19 @@
       </div>
       <div class="sub" style="font-size:12px;opacity:.7">LITE graphics turns off replays and lowers resolution on weaker phones. Left-hand swaps the joystick and buttons.</div>
       <button class="cta small" id="btnSettingsDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Pause menu -->
+  <div class="overlay hidden" id="pause">
+    <div class="card">
+      <div class="kicker">Paused</div>
+      <h2 class="panel-title">MATCH PAUSED</h2>
+      <div class="pause-btns">
+        <button class="cta" id="btnResume">RESUME ▸</button>
+        <button class="link" id="btnRestart">↻ RESTART</button>
+        <button class="link" id="btnQuit">✕ QUIT TO MENU</button>
+      </div>
     </div>
   </div>
 

@@ -3,7 +3,7 @@ import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
 import { ball, freshStats, match, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
-import { startShootout } from './penalty';
+import { abortShootout, startShootout } from './penalty';
 import { resetReplayBuffer } from './replay';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
@@ -13,6 +13,7 @@ import {
   setFullTimeVisible,
   setHalfTimeVisible,
   setMenuVisible,
+  setPauseVisible,
   showFullTime,
   showHalfTime,
   showGoalFx,
@@ -277,4 +278,38 @@ export function returnToMenu(): void {
   setMenuVisible(true);
   match.state = 'menu';
   resetPositions();
+}
+
+/** The live match states a pause menu can be summoned from. */
+function isLive(): boolean {
+  return match.state === 'play' || match.state === 'celebrate' || match.state === 'shootout';
+}
+
+/** Toggle the pause menu (Esc / P / pause button) during a live match. */
+export function togglePause(): void {
+  if (!match.paused && !isLive()) return;
+  match.paused = !match.paused;
+  setPauseVisible(match.paused);
+}
+
+/** Resume from the pause menu. */
+export function resumeGame(): void {
+  match.paused = false;
+  setPauseVisible(false);
+}
+
+/** Restart the current match from the pause menu. */
+export function restartMatch(): void {
+  match.paused = false;
+  setPauseVisible(false);
+  abortShootout();
+  startMatch();
+}
+
+/** Quit to the main menu from the pause menu. */
+export function quitToMenu(): void {
+  match.paused = false;
+  setPauseVisible(false);
+  abortShootout();
+  returnToMenu();
 }

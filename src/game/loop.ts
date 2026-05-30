@@ -23,8 +23,14 @@ function frame(): void {
   // ease the global time-scale back toward normal (goal slow-motion recovers here)
   if (match.timeScale < 1) match.timeScale = Math.min(1, match.timeScale + CFG.slowmoRecover * dt);
   const sdt = dt * match.timeScale; // simulation step (dilated); rendering still uses real dt
-  advanceTime(sdt);
   pollInput();
+
+  // paused: freeze the simulation but keep presenting the (static) scene
+  if (match.paused) {
+    renderer.render(scene, camera);
+    return;
+  }
+  advanceTime(sdt);
 
   if (match.state === 'play') {
     tickClock(dt); // the match clock runs in real time, not slow-mo

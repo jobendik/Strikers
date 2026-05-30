@@ -17,6 +17,8 @@ export interface MatchState {
   settleDraws: boolean;
   /** Sim rules on: offside + yellow/red cards (default off = pure arcade). */
   simRules: boolean;
+  /** Match paused (pause menu open) — the loop freezes the simulation. */
+  paused: boolean;
   /** Current half (1 or 2). */
   half: number;
   /** Added time accrued for the current half (seconds); played once timeLeft hits 0. */
@@ -85,6 +87,7 @@ export function createGameState(): void {
     timeLeft: CFG.matchSeconds,
     settleDraws: false,
     simRules: false,
+    paused: false,
     half: 1,
     stoppageAccrued: 0,
     stoppageLeft: 0,

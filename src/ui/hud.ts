@@ -118,6 +118,9 @@ export function setFullTimeVisible(v: boolean): void {
 export function setHalfTimeVisible(v: boolean): void {
   el('ht').classList.toggle('hidden', !v);
 }
+export function setPauseVisible(v: boolean): void {
+  el('pause').classList.toggle('hidden', !v);
+}
 
 /**
  * Wire the primary flow buttons. The menu's option controls (difficulty, length,

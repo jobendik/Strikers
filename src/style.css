@@ -148,6 +148,9 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 .toast.show{opacity:1;}
 #muteBtn{position:fixed;top:max(env(safe-area-inset-top),12px);right:14px;z-index:30;width:40px;height:40px;border-radius:10px;
   background:var(--panel);border:1px solid rgba(255,255,255,.12);color:#cfe0f5;font-size:18px;cursor:pointer;}
+#pauseBtn{position:fixed;top:max(env(safe-area-inset-top),12px);right:60px;z-index:30;width:40px;height:40px;border-radius:10px;
+  background:var(--panel);border:1px solid rgba(255,255,255,.12);color:#cfe0f5;font-size:16px;cursor:pointer;}
+.pause-btns{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:8px;}
 
 /* ---------- penalty shootout scoreboard ---------- */
 #shootout{position:fixed;left:50%;top:calc(max(env(safe-area-inset-top),10px) + 64px);transform:translateX(-50%);z-index:30;
