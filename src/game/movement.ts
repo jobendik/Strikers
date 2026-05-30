@@ -30,6 +30,7 @@ export function movePlayers(dt: number): void {
   const D = DIFF[CFG.diff];
   for (const t of match.teams)
     for (const p of t.players) {
+      if (p.sentOff) continue; // a sent-off player takes no further part (Sim rules)
       if (p.slideCd > 0) p.slideCd = Math.max(0, p.slideCd - dt);
       if (p.diveCd > 0) p.diveCd = Math.max(0, p.diveCd - dt);
 

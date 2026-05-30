@@ -68,6 +68,7 @@ export function resetPositions(): void {
     t.inAttack = false;
     t.bestSpot = null;
     for (const p of t.players) {
+      if (p.sentOff) continue; // a dismissed player stays off the pitch
       const h = p.homePos();
       p.position.set(h.x, 0, h.z);
       p.velocity.set(0, 0, 0);
@@ -257,6 +258,9 @@ export function startMatch(): void {
     for (const p of t.players) {
       p.stamina = 1;
       p.statGoals = p.statAssists = p.statTackles = p.statSaves = 0;
+      p.yellows = 0;
+      p.sentOff = false;
+      p.mesh.visible = true; // restore anyone dismissed in a previous match
     }
   setMenuVisible(false);
   setFullTimeVisible(false);

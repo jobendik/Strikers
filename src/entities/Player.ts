@@ -64,6 +64,10 @@ export class Player extends Vehicle {
   statTackles = 0;
   statSaves = 0;
 
+  /** Disciplinary state (Sim rules only): bookings, and whether sent off. */
+  yellows = 0;
+  sentOff = false;
+
   // steering behaviors
   arrive: ArriveBehavior;
   seek: SeekBehavior;

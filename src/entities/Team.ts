@@ -38,7 +38,7 @@ export class Team {
   }
 
   outfield(): Player[] {
-    return this.players.filter((p) => p.roleType !== 'GK');
+    return this.players.filter((p) => p.roleType !== 'GK' && !p.sentOff);
   }
 
   /** Buckland-style SupportSpotCalculator: scores candidate spots for the off-ball attacker. */
@@ -97,7 +97,7 @@ export class Team {
 
   update(_dt: number): void {
     // refresh perception for all players before any decision-making
-    for (const p of this.players) updatePerception(p);
+    for (const p of this.players) if (!p.sentOff) updatePerception(p);
 
     this.inAttack = match.controlTeam === this;
     const of = this.outfield();
@@ -129,6 +129,7 @@ export class Team {
     if (rcv && rcv.team === this && rcv.roleType !== 'GK') rcv.role = 'RECEIVE';
 
     for (const p of this.players) {
+      if (p.sentOff) continue;
       const role: PlayerRole = p.role;
       if (!p.fsm.in(role)) p.fsm.changeTo(role);
       p.fsm.update();

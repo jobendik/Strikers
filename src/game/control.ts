@@ -8,6 +8,7 @@ import { ball, match, oppOf, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
 import { findBestPass, nearestOpp } from '../ai/analysis';
 import { addStoppage } from './flow';
+import { foulCard, resolveOffside } from './rules';
 import { addShake } from './render';
 import { flashToast } from '../ui/hud';
 import { setPiece } from './physics';
@@ -40,6 +41,7 @@ export function setControl(p: Player | null): void {
     if (ball.passer && ball.passer.team !== p.team) ball.passer = null; // assist void on a turnover
     if (p.roleType === 'GK') match.gkHold = 0.9;
     setReceiver(null); // the pass has arrived (or possession changed) — receiver assignment is done
+    if (resolveOffside(p)) return; // Sim rules: an offside runner is flagged on first touch
   }
 }
 
@@ -139,6 +141,7 @@ export function resolveSlides(_dt: number): void {
           Audio.whistle();
           Haptics.whistle();
           addStoppage(CFG.stoppagePerFoul);
+          foulCard(p, true); // a slide is a reckless challenge — more likely to be carded
           setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FOUL — FREE KICK', false);
           flashToast(p.team.isUser ? 'FOUL GIVEN AWAY' : 'FREE KICK WON');
           return;
@@ -284,6 +287,7 @@ export function updatePressure(dt: number): void {
       Audio.whistle();
       Haptics.whistle();
       addStoppage(CFG.stoppagePerFoul);
+      if (o) foulCard(o, false);
       setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FREE KICK', false);
       return;
     }

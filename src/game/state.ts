@@ -2,6 +2,7 @@ import { CFG } from '../config/constants';
 import { Ball } from '../entities/Ball';
 import { Team } from '../entities/Team';
 import type { Player } from '../entities/Player';
+import { flagOffside } from './rules';
 import type { InputState, MatchStateName } from '../config/types';
 
 /**
@@ -14,6 +15,8 @@ export interface MatchState {
   timeLeft: number;
   /** A drawn match must be settled by a penalty shootout (knockout / cup tie). */
   settleDraws: boolean;
+  /** Sim rules on: offside + yellow/red cards (default off = pure arcade). */
+  simRules: boolean;
   /** Current half (1 or 2). */
   half: number;
   /** Added time accrued for the current half (seconds); played once timeLeft hits 0. */
@@ -81,6 +84,7 @@ export function createGameState(): void {
     state: 'menu',
     timeLeft: CFG.matchSeconds,
     settleDraws: false,
+    simRules: false,
     half: 1,
     stoppageAccrued: 0,
     stoppageLeft: 0,
@@ -112,6 +116,7 @@ export function createGameState(): void {
 export function setReceiver(p: Player | null): void {
   match.receivingPlayer = p;
   match.receiveTimer = p ? CFG.receiveSpan : 0;
+  flagOffside(p); // Sim rules: judge the receiver's offside position at the pass
 }
 
 /** Returns the opposing team. */

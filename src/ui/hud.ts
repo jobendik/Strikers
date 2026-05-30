@@ -137,6 +137,8 @@ export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onS
   seg('segLen', (v) => (CFG.matchSeconds = v));
   // KNOCKOUT settles a drawn match from the penalty spot; FRIENDLY just ends level
   seg('segMode', (v) => (match.settleDraws = v === 1));
+  // SIM enables offside + cards; ARCADE (default) keeps it frustration-free
+  seg('segRules', (v) => (match.simRules = v === 1));
 
   el('btnPlay').addEventListener('click', callbacks.onPlay);
   el('btnAgain').addEventListener('click', callbacks.onAgain);
