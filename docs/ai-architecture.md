@@ -247,6 +247,64 @@ cinematic push-in; and a lightweight additive **ball trail** streaks behind fast
 or airborne balls. None of these touch the simulation's correctness — they make
 it *feel* like an arcade game on a phone.
 
+## Fourth wave — the last unused Yuka behaviour, a keeper with reflexes & a living stadium
+
+A final sweep of the sources turned up three things still on the table: the one
+Yuka group-steering behaviour the earlier waves had explicitly deferred, a
+goalkeeper that was still essentially static, and a match that was visually juicy
+but sonically dead between the big moments.
+
+| Capability | Before | Now | Source |
+| --- | --- | --- | --- |
+| Off-ball players spread into space | ❌ cheap collision push only | ✅ `SeparationBehavior` group steering | **Yuka** (the deferred behaviour) |
+| Goalkeeper diving saves / parries | ❌ static interpose | ✅ predicts the shot, flings himself, parries screamers | **Simple Soccer** keeper, deepened + Notblox aerial |
+| Living-stadium atmosphere | ❌ silent between events | ✅ procedural crowd bed that swells near goal + roars | **open-football** (living world) |
+
+### Off-ball spacing — Yuka's `SeparationBehavior` (the deferred behaviour)
+
+The first architecture pass listed `SeparationBehavior` under *"Deliberately not
+used"*, noting it "requires an `EntityManager`-populated neighborhood" and was "a
+natural future addition if the squad size grows." We've now wired it in **without**
+the `EntityManager` coupling that prompted deferring it: Yuka's
+`SeparationBehavior.calculate()` only reads `vehicle.neighbors`, so
+[`movement.ts`](../src/game/movement.ts) populates that array directly each frame
+(same-team outfielders within `spreadRadius`) and toggles the behaviour for
+off-ball roles. It is added to the steering manager **last**, so the
+move-to-target force (`arrive`/`pursuit`) is satisfied first and separation nudges
+with the remaining force budget. The result: the two supporters and the marking
+defenders no longer stack on the same blade of grass — the attack fans out and
+offers genuine passing options, and two defenders stop diving onto the same spot.
+This is Reynolds/Buckland flocking applied to soccer team shape.
+
+### Goalkeeper diving saves — Simple Soccer's keeper, using the aerial model
+
+The keeper used to be a rear-interpose slider — he only ever saved balls that
+happened to roll inside his standing reach. He now **reads the shot**
+([`goalkeeper.ts`](../src/ai/goalkeeper.ts)): when a fast ball is travelling
+toward goal he projects its trajectory (including the aerial `y` term from the
+Notblox ball model) to his goal line, and if it will arrive in a corner beyond a
+standing save he commits a full-stretch **dive** (`startGkDive`) toward the
+predicted crossing point. The lunge is a committed lateral skate
+([`movement.ts`](../src/game/movement.ts), mirroring the slide-tackle branch) with
+an extended catch radius while airborne ([`resolveControl`](../src/game/control.ts)),
+and the keeper mesh pitches forward so it *reads* as a dive. Crucially the lunge
+is **distance-capped** so a keeper cannot cover both corners — placement, curl and
+wrong-footing still beat him — and his read carries a difficulty-scaled error, so
+weaker keepers misjudge the corner. A screamer reached at full stretch may be
+**parried** rather than held, popping out a dramatic rebound. Saves swell the
+crowd and flash *WHAT A SAVE!*. This turns a whole band of former tap-ins into
+spectacular saves while keeping the game high-scoring and beatable.
+
+### Living stadium — procedural crowd ambience (open-football's living world)
+
+open-football's spark is an autonomous, living football world. Distilled to an
+arcade beat, [`audio.ts`](../src/core/audio.ts) now runs a continuous,
+procedurally-synthesised **crowd bed** (looped, low-passed brown noise) whose
+level is driven by the play: [`loop.ts`](../src/game/loop.ts) swells it as the
+ball approaches either goal, and `roar()` punches a short excitement spike on
+shots, saves and goals. Like every other sound in the game it's generated at
+runtime — zero audio assets — and respects the mute toggle.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```
@@ -259,5 +317,10 @@ Team.update
       ├─ ReceiveState→ run onto the ball (pursue while it travels) — Simple Soccer's ReceiveBall
       ├─ SupportState→ arrive at best support spot (header if airborne)
       ├─ PositionState→ hold shape / mark / shuffle (header if airborne)
-      └─ GkState     → intercept or rear-interpose
+      └─ GkState     → read shot → dive, else intercept, else rear-interpose
+
+movePlayers (after the FSM runs)
+ ├─ updateSpacing(player)           # populate Yuka neighbors → SeparationBehavior spreads off-ball roles
+ ├─ keeper dive lunge / slide lunge # committed actions override steering
+ └─ integrate steering + stamina + soft body-collision
 ```

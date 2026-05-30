@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { CFG } from '../config/constants';
 import { advanceTime } from '../core/time';
+import { Audio } from '../core/audio';
 import { camera, renderer, scene } from '../rendering/scene';
-import { match, setReceiver } from './state';
+import { ball, match, setReceiver } from './state';
 import { pollInput } from './input';
 import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
 import { movePlayers, selectUserPlayer } from './movement';
@@ -51,6 +52,14 @@ function frame(): void {
     }
     match.celebrateT -= dt;
     if (match.celebrateT <= 0) kickOff(match.teams[1 - match.scoredBy]);
+  }
+
+  // crowd ambience swells as the ball approaches either goal
+  if (match.state === 'play' || match.state === 'celebrate') {
+    const prox = Math.min(1, Math.abs(ball.position.x) / CFG.halfL);
+    Audio.setCrowd(0.18 + prox * prox * 0.82);
+  } else {
+    Audio.setCrowd(0.12);
   }
 
   updateToast(dt);

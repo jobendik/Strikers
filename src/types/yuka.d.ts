@@ -40,6 +40,9 @@ declare module 'yuka' {
     forward: Vector3;
     boundingRadius: number;
     active: boolean;
+    /** Neighbouring entities used by group steering (Separation/Alignment/Cohesion). */
+    neighbors: GameEntity[];
+    neighborhoodRadius: number;
     manager: EntityManager | null;
     constructor();
     update(delta: number): this;

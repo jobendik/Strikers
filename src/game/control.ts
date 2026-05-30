@@ -151,6 +151,20 @@ export function startSlide(p: Player): boolean {
   return true;
 }
 
+/**
+ * Commit the keeper to a full-stretch dive toward a predicted shot. `tx`/`tz`
+ * is the crossing point he flings himself at; while diving his reach is extended
+ * (see {@link resolveControl}) so a well-read shot is plucked out of the air.
+ */
+export function startGkDive(p: Player, tx: number, tz: number): boolean {
+  if (p.dive > 0 || p.diveCd > 0 || p.roleType !== 'GK') return false;
+  p.dive = CFG.gkDiveTime;
+  p.diveCd = CFG.gkDiveCooldown;
+  p.diveTarget.set(tx, 0, tz);
+  Audio.slide(); // the dive whoosh
+  return true;
+}
+
 /** Resolve who is in possession: gain, lose, or steal the ball. */
 export function resolveControl(dt: number): void {
   if (match.controlCooldown > 0) match.controlCooldown -= dt;
@@ -165,7 +179,8 @@ export function resolveControl(dt: number): void {
       if (p.slide > 0) continue; // committed sliders win the ball via resolveSlides
       const maxH = p.roleType === 'GK' ? CFG.headHigh : CFG.controlHeight;
       if (ball.position.y > maxH) continue;
-      const reach = p.roleType === 'GK' ? CFG.controlR * 1.7 * DIFF[CFG.diff].keeper : CFG.controlR;
+      let reach = p.roleType === 'GK' ? CFG.controlR * 1.7 * DIFF[CFG.diff].keeper : CFG.controlR;
+      if (p.dive > 0) reach *= CFG.gkDiveReach; // a full-stretch keeper reaches further
       const d = planarToBall(p);
       if (d < reach && d < nd) {
         nd = d;
@@ -186,8 +201,28 @@ export function resolveControl(dt: number): void {
     }
   } else if (!blocked && near) {
     if (near.roleType === 'GK' && ball.velocity.length() > 10) {
+      const diving = near.dive > 0;
+      const speed = ball.velocity.length();
+      // a screamer reached at full stretch may be parried rather than held —
+      // the keeper paws it away from his near post for a dramatic rebound.
+      if (diving && speed > CFG.gkParrySpeed && Math.random() < 0.5) {
+        const awayZ = Math.sign(ball.position.z || near.diveTarget.z || 1);
+        ball.velocity.set(near.team.side * 6, 3.5, awayZ * 9);
+        ball.lastTouch = near.team;
+        ball.spin = 0;
+        match.controlCooldown = 0.18;
+        Audio.save();
+        Audio.roar();
+        addShake(0.5);
+        flashToast(near.team.isUser ? 'PARRIED!' : 'GREAT SAVE!');
+        return;
+      }
       Audio.save();
-      addShake(0.35); // a smothered screamer thuds into the keeper
+      addShake(diving ? 0.55 : 0.35); // a smothered screamer thuds into the keeper
+      if (diving) {
+        Audio.roar();
+        flashToast(near.team.isUser ? 'KEEPER SAVES!' : 'WHAT A SAVE!');
+      }
     }
     setControl(near);
   }
