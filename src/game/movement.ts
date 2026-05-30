@@ -1,0 +1,104 @@
+import { CFG, DIFF } from '../config/constants';
+import { clamp, distSq } from '../core/math';
+import { ball, match } from './state';
+import type { Player } from '../entities/Player';
+
+/** Integrate every player: human input or AI steering, plus stamina + collisions. */
+export function movePlayers(dt: number): void {
+  const D = DIFF[CFG.diff];
+  for (const t of match.teams)
+    for (const p of t.players) {
+      const staF = 0.8 + 0.2 * p.stamina;
+      let hard = false;
+      if (p.isHuman) {
+        let vx: number;
+        let vz: number;
+        let speed: number;
+        if (match.lunge > 0) {
+          match.lunge -= dt;
+          const dx = ball.position.x - p.position.x;
+          const dz = ball.position.z - p.position.z;
+          const d = Math.hypot(dx, dz) || 1;
+          vx = dx / d;
+          vz = dz / d;
+          speed = p.baseSpeed * CFG.spd.sprint * staF;
+          hard = true;
+        } else {
+          vx = match.input.x;
+          vz = match.input.z;
+          const l = Math.hypot(vx, vz);
+          if (l > 1) {
+            vx /= l;
+            vz /= l;
+          }
+          const spr = match.input.sprint && l > 0.1;
+          speed = p.baseSpeed * (spr ? CFG.spd.sprint : 1) * staF;
+          hard = spr;
+        }
+        p.velocity.set(vx * speed, 0, vz * speed);
+        p.position.x += p.velocity.x * dt;
+        p.position.z += p.velocity.z * dt;
+        if (Math.hypot(vx, vz) > 0.15) p.heading = Math.atan2(vx, vz);
+      } else {
+        p.maxSpeed = p.baseSpeed * (p.roleType === 'GK' ? 1 : D.aiSpd) * staF;
+        p.update(dt);
+        if (p.getSpeed() > 0.4) p.heading = Math.atan2(p.velocity.x, p.velocity.z);
+        hard = p.getSpeed() > p.baseSpeed * 0.7;
+      }
+      if (p.roleType !== 'GK') {
+        p.stamina = clamp(p.stamina + (hard ? -CFG.staminaDrain : CFG.staminaRegen) * dt, 0.55, 1);
+      }
+      p.position.x = clamp(p.position.x, -CFG.halfL - 3, CFG.halfL + 3);
+      p.position.z = clamp(p.position.z, -CFG.halfW - 2, CFG.halfW + 2);
+      p.kickCooldown = Math.max(0, p.kickCooldown - dt);
+    }
+
+  // soft body-collision resolution
+  const all = [...match.teams[0].players, ...match.teams[1].players];
+  for (let i = 0; i < all.length; i++)
+    for (let j = i + 1; j < all.length; j++) {
+      const a = all[i];
+      const b = all[j];
+      const dx = b.position.x - a.position.x;
+      const dz = b.position.z - a.position.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.95 && d > 1e-4) {
+        const push = (0.95 - d) / 2;
+        const nx = dx / d;
+        const nz = dz / d;
+        a.position.x -= nx * push;
+        a.position.z -= nz * push;
+        b.position.x += nx * push;
+        b.position.z += nz * push;
+      }
+    }
+}
+
+/** Pick which user-team player is human-controlled (closest to the ball / carrier). */
+export function selectUserPlayer(dt: number): void {
+  const h = match.teams[0];
+  if (match.switchLock > 0) match.switchLock -= dt;
+  if (match.controlTeam === h && match.controlPlayer && match.controlPlayer.roleType !== 'GK') {
+    setUser(match.controlPlayer);
+    match.switchLock = 0;
+    return;
+  }
+  if (match.switchLock > 0) return;
+  let best: Player | null = null;
+  let bd = Infinity;
+  for (const p of h.outfield()) {
+    const d = distSq(p.position, ball.position);
+    if (d < bd) {
+      bd = d;
+      best = p;
+    }
+  }
+  if (best) setUser(best);
+}
+
+export function setUser(p: Player): void {
+  if (match.userPlayer === p) return;
+  if (match.userPlayer) match.userPlayer.isHuman = false;
+  match.userPlayer = p;
+  p.isHuman = true;
+}

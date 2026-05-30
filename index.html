@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="theme-color" content="#05080d" />
+  <meta name="description" content="YUKA STRIKERS — AI-driven 5-a-side arcade soccer for mobile. Steering behaviors, perception, fuzzy logic and team state machines power every player." />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="apple-touch-icon" href="icon.svg" />
+  <title>YUKA STRIKERS — AI Soccer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="rotate"><div class="ph">📱</div><div style="font-family:'Teko';font-size:34px;letter-spacing:.04em">ROTATE YOUR DEVICE</div><div class="sub">Best played in landscape</div></div>
+
+  <!-- Scoreboard -->
+  <div id="hud">
+    <div class="board">
+      <div class="team-tag home-tag"><span class="dot"></span>STR</div>
+      <div class="score"><span id="scoreH">0</span></div>
+      <div class="clock"><span id="clock">3:00</span><span class="lbl">1ST HALF</span></div>
+      <div class="score"><span id="scoreA">0</span></div>
+      <div class="team-tag away-tag">UTD<span class="dot"></span></div>
+    </div>
+  </div>
+  <button id="muteBtn" aria-label="Toggle sound">🔊</button>
+  <div class="toast" id="toast"></div>
+
+  <!-- Touch controls -->
+  <div id="joy"><div class="ring"></div><div class="nub" id="nub"></div></div>
+  <div id="pad">
+    <button class="btn switch" id="bSwitch">⇄<span>SWITCH</span></button>
+    <button class="btn shoot"  id="bShoot">⚽<span>SHOOT</span></button>
+    <button class="btn pass"   id="bPass">➤<span>PASS</span></button>
+    <button class="btn sprint" id="bSprint">»<span>SPRINT</span></button>
+  </div>
+
+  <!-- Goal FX -->
+  <div id="goalFx"><div class="g">GOAL!</div></div>
+
+  <!-- Start menu -->
+  <div class="overlay" id="menu">
+    <div class="card">
+      <div class="kicker">Yuka · Three.js · Agent AI</div>
+      <h1>YUKA <span class="accent">STRIKERS</span></h1>
+      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Crimson Strikers</b>.<br>Steering, perception &amp; fuzzy-logic agents power every player.</div>
+      <div class="opts">
+        <div class="opt-row"><div class="label">Difficulty</div>
+          <div class="seg" id="segDiff">
+            <button data-v="0">EASY</button><button data-v="1" class="on">PRO</button><button data-v="2">LEGEND</button>
+          </div>
+        </div>
+        <div class="opt-row"><div class="label">Half length</div>
+          <div class="seg" id="segLen">
+            <button data-v="120">2 MIN</button><button data-v="180" class="on">3 MIN</button><button data-v="300">5 MIN</button>
+          </div>
+        </div>
+      </div>
+      <button class="cta" id="btnPlay">KICK OFF ▸</button>
+      <div class="sub" style="margin-top:18px;opacity:.65;font-size:12px">Joystick to move · SHOOT · PASS · SPRINT · SWITCH player<br>Keyboard: WASD/Arrows · J pass · K shoot · Shift sprint · Space switch</div>
+    </div>
+  </div>
+
+  <!-- Full time -->
+  <div class="overlay hidden" id="ft">
+    <div class="card">
+      <div class="kicker" id="ftKicker">Full Time</div>
+      <div class="resultword" id="ftResult">DRAW</div>
+      <div class="scoreline"><span class="h" id="ftH">0</span> <span style="color:#fff">–</span> <span class="a" id="ftA">0</span></div>
+      <div class="sub" id="ftStats"></div>
+      <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
+    </div>
+  </div>
+
+  <div class="credit">CRIMSON STRIKERS vs AZURE UNITED — Yuka steering · perception · fuzzy logic · FSM agents</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
