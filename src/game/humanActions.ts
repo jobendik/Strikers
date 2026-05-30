@@ -38,6 +38,7 @@ export function userShoot(charge = 1): void {
     // dink it over an advancing keeper on a soft tap (target sits just beyond the line)
     if (charge < 0.4 && canChipKeeper(ball.position, p.team, opp, _tmp)) {
       lobKick(p, _tmp, 3.1, 'kick');
+      ball.shot = true;
       match.stats.shots[0]++;
       flashToast('CHEEKY CHIP!');
       return;
@@ -64,6 +65,7 @@ export function userShoot(charge = 1): void {
       curl = CFG.curlHuman * clamp(cross, -1, 1) * (0.6 + 0.4 * attr01(p.attr.shooting));
     }
     kick(p, V3(dx, 0, dz), power, 'kick', curl);
+    ball.shot = true;
     match.stats.shots[0]++;
     flashToast(Math.abs(curl) > 0.8 ? 'CURLER!' : charge > 0.8 ? 'SHOOT!' : 'PLACED');
     return;
@@ -73,6 +75,7 @@ export function userShoot(charge = 1): void {
   if (canHead(p)) {
     const tz = clamp(ball.position.z * 0.4, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
     headBall(p, V3(goalX(p.team) - ball.position.x, 0, tz - ball.position.z), CFG.passShort);
+    ball.shot = true;
     match.stats.shots[0]++;
     flashToast('HEADER!');
   } else {
@@ -162,7 +165,7 @@ export function userPass(lob = false): void {
       if (mate) target = V3(mate.position.x + team.side, 0, mate.position.z);
     }
     if (target) {
-      const swing = CFG.curlCross * -Math.sign(p.position.z || 1);
+      const swing = CFG.curlCross * -Math.sign(p.position.z || 1) * p.team.side;
       lobKick(p, target, 2.7, 'pass', swing);
       if (mate) setReceiver(mate);
       flashToast(mate ? `LOFTED TO ${mate.name}` : 'LOFTED BALL');

@@ -19,6 +19,8 @@ export class Ball extends MovingEntity {
    * "real, physics-driven ball motion" idea from Notblox taken a step further.
    */
   spin = 0;
+  /** True while the ball is a live, deliberately-struck shot — gates save / shot-on-target stats. */
+  shot = false;
   mesh: THREE.Mesh;
 
   constructor() {

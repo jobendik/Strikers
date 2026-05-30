@@ -26,6 +26,7 @@ function aiHeader(p: Player): void {
   if (p.position.x * team.side > 4 && distGoal < 16) {
     const tz = clamp(ball.position.z * 0.4, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
     headBall(p, V3(gx - ball.position.x, 0, tz - ball.position.z), CFG.passShort);
+    ball.shot = true;
     match.stats.shots[teamIndex(team)]++;
   } else {
     headBall(p, V3(team.side, 0, Math.sign(ball.position.z || 1) * 0.7), CFG.clearPow * 0.7);
