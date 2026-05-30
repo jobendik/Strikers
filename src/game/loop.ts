@@ -13,6 +13,7 @@ import { updateShootout } from './penalty';
 import { hasReplay, isReplaying, recordFrame, startReplay, updateReplay } from './replay';
 import { syncMeshes, updateCamera } from './render';
 import { updateHUD, updateToast } from '../ui/hud';
+import { updateRadar } from '../ui/radar';
 
 const clock = new THREE.Clock();
 
@@ -87,6 +88,7 @@ function frame(): void {
     updateCamera(dt);
   }
   updateHUD();
+  updateRadar();
   renderer.render(scene, camera);
 }
 
