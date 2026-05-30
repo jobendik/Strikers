@@ -226,8 +226,8 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 - [ ] **B2** `gameplayStart/Stop` wired to match start/pause/full-time.
 - [ ] **B3** Interstitial ad between World Cup matches (never mid-match); auto-mute + pause sim during ads.
 - [ ] **B4** Rewarded ads (opt-in): continue-after-loss, double XP, reroll daily order. Honest UI.
-- [ ] **B5** Save abstraction: CrazyGames data module when present, `localStorage` fallback.
-- [ ] **C1** `core/playerData.ts` with versioned schema (§5), migration + self-healing.
+- [x] **B5** Save abstraction: CrazyGames data module when present, `localStorage` fallback. → `src/platform/storage.ts` (KV backend, swappable via `setStorageBackend`, in-memory fallback for blocked storage/Node). CrazyGames data module slots in during B1.
+- [x] **C1** `core/playerData.ts` with versioned schema (§5), migration + self-healing. → full §5 schema, `migratePlayerData` heals partial/corrupt/old saves (clamps, truncates name, heals unknown team keys), persists via B5. Loads on boot; fresh profile's nation aligns with chosen team. Verified with an 18-case headless self-test.
 - [ ] **C2** Account XP + level curve + first-match-of-day bonus + good-play bonus.
 - [ ] **C3** Titles (Rookie→Legend, football-flavoured).
 - [ ] **C4** Profile card UI (flag avatar, name, tier badge, XP bar, 3 stat tiles).
