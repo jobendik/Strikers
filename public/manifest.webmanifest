@@ -1,0 +1,20 @@
+{
+  "name": "Yuka Strikers — AI Soccer",
+  "short_name": "Strikers",
+  "description": "AI-driven 5-a-side arcade soccer for mobile. Steering, perception and fuzzy-logic agents power every player.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#05080d",
+  "theme_color": "#05080d",
+  "categories": ["games", "sports"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

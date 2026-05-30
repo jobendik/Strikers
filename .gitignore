@@ -1,0 +1,12 @@
+node_modules/
+dist/
+dist-ssr/
+*.local
+.DS_Store
+.vite/
+*.tgz
+npm-debug.log*
+yarn-error.log*
+.env
+.env.*
+!.env.example
