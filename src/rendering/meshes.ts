@@ -55,7 +55,19 @@ export function makePlayerMesh(jersey: string): THREE.Group {
   ring.visible = false;
   g.add(ring);
 
+  // pass-request cue: a pulsing lane ring around a teammate actively calling
+  // for the ball. Kept as geometry so it stays readable on mobile screens.
+  const call = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.08, 30),
+    new THREE.MeshBasicMaterial({ color: '#39ff14', transparent: true, opacity: 0.0, side: THREE.DoubleSide }),
+  );
+  call.rotation.x = -Math.PI / 2;
+  call.position.y = 0.075;
+  call.visible = false;
+  g.add(call);
+
   g.userData.ring = ring;
+  g.userData.call = call;
   g.userData.body = body;
   world.add(g);
   return g;

@@ -1,7 +1,7 @@
 import { CFG } from '../config/constants';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, freshStats, match, setReceiver, teamIndex } from './state';
+import { ball, freshStats, match, setPassRequest, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
 import { abortShootout, startShootout } from './penalty';
 import { presentResult } from './modes';
@@ -64,6 +64,7 @@ export function scoreGoal(i: number): void {
   match.controlPlayer = null;
   match.controlTeam = null;
   setReceiver(null);
+  setPassRequest(null);
   match.state = 'celebrate';
   match.celebrateT = 2.2;
   match.celebrateBallT = 0.7; // keep the ball flying into the net in slow motion
@@ -103,6 +104,7 @@ export function resetPositions(): void {
   ball.lastKicker = null;
   ball.passer = null;
   setReceiver(null);
+  setPassRequest(null);
   match.timeScale = 1;
   match.celebrateBallT = 0;
   clearTrail();
@@ -112,7 +114,9 @@ export function resetPositions(): void {
 export function kickOff(team: (typeof match.teams)[number]): void {
   resetPositions();
   resetReplayBuffer(); // a new clip starts from the kickoff
-  const taker = team.players[3];
+  // the usual taker is an attacker, but guard against a red card (Sim rules) having
+  // removed them — never hand the kickoff to a sent-off (parked, invisible) player
+  const taker = team.outfield().find((p) => p.roleType === 'ATT') ?? team.outfield()[0] ?? team.players[3];
   taker.position.set(team.side * -1.4, 0, 0);
   taker.heading = attackHeading(team.side);
   match.controlPlayer = null;
@@ -161,6 +165,7 @@ function halfTime(): void {
   match.state = 'halftime';
   Audio.whistle();
   setReceiver(null);
+  setPassRequest(null);
   match.controlPlayer = null;
   match.controlTeam = null;
   const [h, a] = match.score;

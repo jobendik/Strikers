@@ -53,6 +53,8 @@ export const CFG = {
   gravity: 24, // world units / s² — tuned for snappy arcade arcs
   ballRest: 0.52, // vertical restitution on bounce
   bounceFric: 0.78, // horizontal velocity retained per bounce
+  bounceMin: 1.5, // min downward impact speed (u/s) that counts as a real bounce —
+  // below this a grounded ball is just rolling, so it must NOT be scrubbed by bounceFric
   controlHeight: 1.25, // a ground player can only collect a ball below this height
   crossbarH: 4.0, // ball must be under this to count as a goal
   headLow: 0.9, // ball heights a player can head/volley
@@ -84,6 +86,15 @@ export const CFG = {
 
   // --- pass reception (Simple Soccer's intended-receiver model) ---
   receiveSpan: 2.6, // seconds an assigned receiver chases the pass before giving up
+  passRequestSpan: 1.35, // seconds a teammate keeps calling for a pass
+  passRequestMinScore: 7.8, // minimum lane score before a run is worth advertising
+  passRequestBoost: 1.12, // small pace burst for the caller making the run
+
+  // --- ground-pass weighting (scale strike power to distance so a short pass is
+  // a crisp roll, not a full-power blast that overruns its target by 30 units) ---
+  passOverrun: 1.25, // aim the ball this factor past the target so a runner can chase it
+  passOverMin: 2.0, // ...with at least this many world units of overrun
+  passMinPow: 12, // floor so even the shortest pass keeps some zip
 
   // --- off-ball spacing (Yuka SeparationBehavior — the flagged-unused Yuka group
   // steering behaviour). A push-away force keeps team-mates from clumping so the

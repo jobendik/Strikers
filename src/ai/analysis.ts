@@ -193,6 +193,19 @@ export function addNoise(t: Vector3, accuracy = 0.5): void {
 }
 
 /**
+ * Strike power for a ground pass that should *arrive* at `dist` rather than be
+ * blasted at a fixed speed. Inverts the rolling-friction range model
+ * (range = v²/2a ⇒ v = √(2·a·range)) and aims a little past the target so a
+ * runner can chase it, clamped to a floor and the caller's budget `maxPow`. A
+ * 5-unit pass becomes a crisp ~12 u/s roll instead of a 24 u/s missile.
+ */
+export function passWeight(dist: number, maxPow: number): number {
+  const reach = dist * CFG.passOverrun + CFG.passOverMin;
+  const v = Math.sqrt(2 * CFG.ballDecel * reach);
+  return clamp(v, Math.min(CFG.passMinPow, maxPow), maxPow);
+}
+
+/**
  * A driven through-ball into space ahead of a forward-running teammate, behind
  * the defensive line — a first-class action from the footballSimulationEngine
  * set. Returns the runner and the space to play them into, or null.

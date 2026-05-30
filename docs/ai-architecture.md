@@ -394,14 +394,49 @@ kept in the first line's already-merged form rather than re-merged, and its
 in-match penalty-kick variant (box fouls) was intentionally left out to avoid
 clashing with the shootout's `penalty.ts`.
 
+## Seventh wave — teammates that ask for the ball
+
+The latest pass re-read the sources for remaining lightweight ideas that would
+improve mobile gamefeel without turning the project into a larger engine. The
+most useful missing Simple Soccer concept was **`RequestPass`**: in Buckland's
+model, off-ball players do not merely wait to be selected by the carrier; they
+notice when they are open and ask for the ball. Yuka's docs also highlight
+message dispatch and global coordination primitives, but the full telegram
+system would add ceremony for one local arcade decision, so this implements the
+same idea as a short-lived tactical signal in match state.
+
+| Capability | Before | Now | Source |
+| --- | --- | --- | --- |
+| Off-ball player asks for pass | ❌ carrier-only pass choice | ✅ pass request scan + visible call cue | **Simple Soccer** |
+| Requested runner attacks space | partial support spots | ✅ caller runs into a scored target pocket | Simple Soccer support/request loop |
+| Human mobile targeting | safest/aimed pass only | ✅ no-aim PASS prefers the calling runner | gamefeel |
+| AI carrier coordination | fuzzy pass/shoot only | ✅ can honor the teammate's call | Yuka/FSM team AI |
+
+`src/ai/passRequests.ts` scores every off-ball runner while a team is in
+possession. A request only appears when the lane is safe (`isPassSafe` /
+`getBestPassToReceiver`), the target advances play, the runner has enough space
+from defenders, and the carrier's passing quality can reasonably execute it.
+The chosen runner is stored via `setPassRequest()` in `src/game/state.ts`, gets a
+small pace burst while the request is active, and has their `SUPPORT` target
+overridden to the advertised pocket by `Team.update`.
+
+For the human player, the request becomes a readable mobile affordance: the
+calling teammate has a pulsing green ring on the pitch and a radar ring; tapping
+PASS with no strong joystick aim plays to that run, while a deliberate aim still
+wins. For AI carriers, `aiCarry` checks the same request after shot evaluation
+and can hit it when fuzzy pass desirability, pressure, or chance says the pass is
+right. This closes the loop between Buckland-style support intelligence and the
+thumb-friendly arcade controls.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```
 Team.update
  ├─ updatePerception(player)        # MemorySystem: sense ball within vision cone
  ├─ assign dynamic role             # CARRIER / SUPPORT / CHASER / RECEIVE / POSITION / GK
+ ├─ updatePassRequest(carrier)      # Simple Soccer RequestPass: open runner advertises a lane
  └─ StateMachine.changeTo(role) → State.execute
-      ├─ CarryState  → aiCarry      # fuzzy: chip / shoot(curl) / through-ball / cross(swerve) / pass / clear
+      ├─ CarryState  → aiCarry      # fuzzy: chip / shoot(curl) / requested pass / through-ball / cross / clear
       ├─ ChaseState  → header if airborne, else slide-tackle chance, else pursue/last-known
       ├─ ReceiveState→ run onto the ball (pursue while it travels) — Simple Soccer's ReceiveBall
       ├─ SupportState→ arrive at best support spot (header if airborne)

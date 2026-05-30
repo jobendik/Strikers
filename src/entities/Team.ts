@@ -5,6 +5,7 @@ import { V3, clamp, distSq } from '../core/math';
 import { ball, match, oppOf } from '../game/state';
 import { updatePerception } from '../ai/perception';
 import { canShoot, isPassSafe, ownGoalX, supportSpot } from '../ai/analysis';
+import { updatePassRequest } from '../ai/passRequests';
 import { Player } from './Player';
 import type { PlayerRole } from '../config/types';
 
@@ -31,6 +32,8 @@ export class Team {
 
   /** Throttles the (relatively expensive) support-spot solver to ~4 Hz. */
   private supportRegulator = new Regulator(4);
+  /** Throttles Buckland-style pass-request scans to keep mobile AI cheap. */
+  private passRequestRegulator = new Regulator(3.5);
 
   constructor(side: number, key: string, isUser: boolean) {
     this.side = side;
@@ -131,6 +134,7 @@ export class Team {
 
     if (this.inAttack && match.controlPlayer && match.controlPlayer.team === this) {
       const carrier = match.controlPlayer;
+      if (this.passRequestRegulator.ready()) updatePassRequest(carrier);
       if (carrier.roleType !== 'GK') carrier.role = 'CARRIER';
       const others = of.filter((p) => p !== carrier).sort((a, b) => b.position.x * side - a.position.x * side);
       if (others[0]) {
@@ -141,6 +145,14 @@ export class Team {
       if (others[1]) {
         others[1].role = 'SUPPORT';
         others[1].supportTarget.copy(supportSpot(this, carrier, -1));
+      }
+
+      // A teammate who has actively requested the pass makes the visible run
+      // into their advertised target instead of passively holding a generic spot.
+      const caller = match.callingPlayer;
+      if (caller && caller.team === this && caller !== carrier && !caller.sentOff && match.callTarget) {
+        caller.role = 'SUPPORT';
+        caller.supportTarget.copy(match.callTarget);
       }
     } else {
       const sorted = of.slice().sort((a, b) => distSq(a.position, ball.position) - distSq(b.position, ball.position));

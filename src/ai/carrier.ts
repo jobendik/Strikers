@@ -14,6 +14,7 @@ import {
   goalX,
   isOppWithin,
   nearestOpp,
+  passWeight,
 } from './analysis';
 import type { Player } from '../entities/Player';
 
@@ -39,7 +40,7 @@ export function aiCarry(p: Player, _dt: number): void {
     t.z += (az / al) * 4;
   }
   t.x = clamp(t.x, -CFG.halfL + 2, CFG.halfL - 2);
-  t.z = clamp(t.z, -CFG.halfW + 2, CFG.halfW + 2);
+  t.z = clamp(t.z, -CFG.halfW + 2, CFG.halfW - 2);
   p.goArrive(t);
 
   // --- decision (throttled) ---
@@ -91,7 +92,26 @@ export function aiCarry(p: Player, _dt: number): void {
     return;
   }
 
-  // 2) THROUGH-BALL — slide a runner in behind when we're not yet in shooting range
+  // 2) REQUESTED PASS — honour a teammate who has actively found a safe lane
+  const caller = match.callingPlayer;
+  if (
+    caller &&
+    caller.team === team &&
+    caller !== p &&
+    !caller.sentOff &&
+    match.callTarget &&
+    (desire.pass >= 48 || isOppWithin(p, CFG.comfortZone * 0.85) || Math.random() < 0.22 + passAcc * 0.26)
+  ) {
+    const target = match.callTarget.clone();
+    addNoise(target, passAcc);
+    const dx = target.x - ball.position.x;
+    const dz = target.z - ball.position.z;
+    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.passLong * 0.9), 'pass');
+    setReceiver(caller);
+    return;
+  }
+
+  // 3) THROUGH-BALL — slide a runner in behind when we're not yet in shooting range
   if (distToGoal > 10 && Math.random() < 0.4 + passAcc * 0.4) {
     const thr = findThroughBall(p, opp);
     if (thr) {
@@ -102,7 +122,7 @@ export function aiCarry(p: Player, _dt: number): void {
     }
   }
 
-  // 3) CROSS — lofted ball into the box from a wide, advanced position
+  // 4) CROSS — lofted ball into the box from a wide, advanced position
   if (Math.abs(p.position.z) > 8 && p.position.x * team.side > 6) {
     let mate: Player | null = null;
     let bestD = Infinity;
@@ -123,18 +143,20 @@ export function aiCarry(p: Player, _dt: number): void {
     }
   }
 
-  // 4) PASS — when fuzzy says so or when threatened, and a safe lane exists
+  // 5) PASS — when fuzzy says so or when threatened, and a safe lane exists
   power = CFG.passLong * (0.6 + 0.4 * dot);
   if (desire.pass >= 55 || isOppWithin(p, CFG.comfortZone)) {
     const pass = findBestPass(p, power, CFG.minPassDist, opp);
     if (pass) {
       addNoise(pass.target, passAcc);
-      kick(p, V3(pass.target.x - ball.position.x, 0, pass.target.z - ball.position.z), power, 'pass');
+      const dx = pass.target.x - ball.position.x;
+      const dz = pass.target.z - ball.position.z;
+      kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), power), 'pass');
       setReceiver(pass.receiver);
       return;
     }
   }
 
-  // 5) cornered deep in our own half under pressure -> clear it
+  // 6) cornered deep in our own half under pressure -> clear it
   if (isOppWithin(p, 1.7) && p.position.x * team.side < -6) clearBall(p);
 }

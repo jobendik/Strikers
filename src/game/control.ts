@@ -4,9 +4,9 @@ import { attr01 } from '../config/players';
 import { V3, distSq, headingVec, rand } from '../core/math';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, match, oppOf, setReceiver, teamIndex } from './state';
+import { ball, match, oppOf, setPassRequest, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
-import { findBestPass, nearestOpp } from '../ai/analysis';
+import { findBestPass, nearestOpp, passWeight } from '../ai/analysis';
 import { addStoppage } from './flow';
 import { foulCard, resolveOffside } from './rules';
 import { addShake } from './render';
@@ -34,6 +34,7 @@ function creditSave(gk: Player): void {
 export function setControl(p: Player | null): void {
   match.controlPlayer = p;
   match.controlTeam = p ? p.team : null;
+  setPassRequest(null);
   if (p) {
     p.kickCooldown = 0;
     ball.lastTouch = p.team;
@@ -60,6 +61,7 @@ export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pas
   match.controlTeam = null;
   match.controlCooldown = 0.22;
   match.gkHold = 0;
+  setPassRequest(null);
   if (type === 'pass') {
     Audio.pass();
     match.stats.passes[teamIndex(p.team)]++;
@@ -88,6 +90,7 @@ export function lobKick(p: Player, target: Vector3, peak: number, type: 'kick' |
   match.controlTeam = null;
   match.controlCooldown = 0.22;
   match.gkHold = 0;
+  setPassRequest(null);
   if (type === 'pass') {
     Audio.chip();
     match.stats.passes[teamIndex(p.team)]++;
@@ -110,6 +113,7 @@ export function headBall(p: Player, dir: Vector3, power: number): void {
   match.controlPlayer = null;
   match.controlTeam = null;
   match.controlCooldown = 0.2;
+  setPassRequest(null);
   Audio.header();
   if (p.isHuman) Haptics.kick();
 }
@@ -313,7 +317,9 @@ export function updateGkHold(dt: number): void {
       const opp = oppOf(gk.team);
       const pass = findBestPass(gk, CFG.passLong, CFG.minPassDist, opp);
       if (pass) {
-        kick(gk, V3(pass.target.x - ball.position.x, 0, pass.target.z - ball.position.z), CFG.passLong, 'pass');
+        const dx = pass.target.x - ball.position.x;
+        const dz = pass.target.z - ball.position.z;
+        kick(gk, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.passLong), 'pass');
         setReceiver(pass.receiver);
       } else clearBall(gk);
     }

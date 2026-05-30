@@ -90,7 +90,8 @@ export function movePlayers(dt: number): void {
         p.position.z += p.velocity.z * dt;
         if (Math.hypot(vx, vz) > 0.15) p.heading = Math.atan2(vx, vz);
       } else {
-        p.maxSpeed = p.baseSpeed * (p.roleType === 'GK' ? 1 : D.aiSpd) * staF;
+        const callBurst = p === match.callingPlayer ? CFG.passRequestBoost : 1;
+        p.maxSpeed = p.baseSpeed * (p.roleType === 'GK' ? 1 : D.aiSpd * callBurst) * staF;
         updateSpacing(p); // refresh separation neighbours before steering integrates
         p.update(dt);
         if (p.getSpeed() > 0.4) p.heading = Math.atan2(p.velocity.x, p.velocity.z);

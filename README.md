@@ -25,6 +25,8 @@ attribute-driven players**.
 - 🦵 **Slide tackles** — a committed lunge with real risk/reward and fouls.
 - 🤝 **Give-and-go AI** — a passed-to teammate *runs onto the ball* instead of
   waiting to be found (Simple Soccer's intended-receiver model).
+- 📣 **Pass calls** — open teammates actively signal safe lanes with a glowing
+  run cue; tap PASS with no strong aim to hit the player asking for it.
 - 🧤 **Diving keepers** — the goalkeeper reads your shot and flings himself at
   the corner; beat him by placing it, curling it round him or wrong-footing him,
   and watch screamers get parried out for a rebound.
