@@ -110,6 +110,11 @@
           </div>
         </div>
       </div>
+      <div class="wc-banner hidden" id="wcBanner">
+        <div class="wc-banner-l1" id="wcBannerL1">WORLD CUP 2026</div>
+        <div class="wc-banner-l2" id="wcBannerL2"></div>
+        <button class="link wc-view" id="btnWcTable">📋 TOURNAMENT TABLE</button>
+      </div>
       <button class="cta" id="btnPlay">KICK OFF ▸</button>
       <div class="menu-links">
         <button class="link" id="btnHowto">❔ HOW TO PLAY</button>
@@ -191,6 +196,21 @@
       <div class="reward" id="ftReward"></div>
       <div class="motm" id="ftMotm"></div>
       <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
+    </div>
+  </div>
+
+  <!-- World Cup tournament (group tables · bracket · your road) -->
+  <div class="overlay hidden" id="tournament">
+    <div class="card wc-card">
+      <div class="kicker" id="wcKicker">World Cup 2026</div>
+      <h2 class="panel-title" id="wcTitle">WORLD CUP 2026</h2>
+      <div class="wc-tabs">
+        <button class="wc-tab on" id="wcTabGroups" data-tab="groups">GROUPS</button>
+        <button class="wc-tab" id="wcTabBracket" data-tab="bracket">BRACKET</button>
+        <button class="wc-tab" id="wcTabYou" data-tab="you">YOUR ROAD</button>
+      </div>
+      <div class="wc-body" id="wcBody"></div>
+      <button class="cta small" id="btnWcDone">DONE ▸</button>
     </div>
   </div>
 

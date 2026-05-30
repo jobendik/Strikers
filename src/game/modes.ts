@@ -14,6 +14,7 @@ import {
   type WorldCupRun,
   type MatchdayOutcome,
 } from './worldcup';
+import { refreshWorldCupUI } from '../ui/worldcup';
 
 /*
  * Game-mode controller: team selection, the friendly/knockout one-off, and the
@@ -111,6 +112,7 @@ export function onFullTimeButton(): void {
     if (startWorldCupFixture(wcRun)) return;
   }
   pendingContinue = false;
+  refreshWorldCupUI(); // freshen the menu banner / tournament screen on the way back
   returnToMenu();
 }
 
@@ -172,6 +174,7 @@ function presentWorldCupResult(
   }
 
   showFullTime(h, a, headline, stat, motm, ctx, pendingContinue ? nextBtn : 'BACK TO MENU ▸', reward);
+  refreshWorldCupUI(); // run has advanced — keep the banner/screen in sync
 }
 
 /**

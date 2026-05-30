@@ -10,6 +10,7 @@ import { initUI, refreshTeamTags, updateHUD } from './ui/hud';
 import { initRadar } from './ui/radar';
 import { initSettings, getSettings } from './core/settings';
 import { getPlayerData, savePlayerData } from './core/playerData';
+import { initWorldCupUI, refreshWorldCupUI } from './ui/worldcup';
 
 /* ============================================================================
    YUKA STRIKERS — AI Soccer
@@ -32,6 +33,14 @@ if (player.stats.played === 0 && player.name === 'PLAYER') {
   player.flag = getSettings().team;
   player.worldcup.yourNation = getSettings().team;
   savePlayerData();
+}
+
+initWorldCupUI(); // World Cup menu banner + tournament screens (A5/A6)
+// keep the menu's World Cup banner current when the team or match-type changes
+for (const id of ['teamPick', 'segMode']) {
+  document.getElementById(id)?.querySelectorAll('button').forEach((b) =>
+    b.addEventListener('click', () => refreshWorldCupUI()),
+  );
 }
 
 initRadar();
