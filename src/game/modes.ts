@@ -17,6 +17,7 @@ import {
 } from './worldcup';
 import { refreshWorldCupUI } from '../ui/worldcup';
 import { refreshDailyCard } from '../ui/daily';
+import { refreshProfileCard } from '../ui/profile';
 
 /*
  * Game-mode controller: team selection, the friendly/knockout one-off, and the
@@ -323,6 +324,7 @@ export function presentResult(
 
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}` : undefined;
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
+  refreshProfileCard(); // XP/level/title/stats moved — keep the menu profile fresh (C4)
 
   // World Cup tournament — feed the result into the engine and advance the bracket
   if (getSettings().mode === 'cup' && wcRun) {

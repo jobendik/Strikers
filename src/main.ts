@@ -13,6 +13,7 @@ import { initSettings, getSettings } from './core/settings';
 import { getPlayerData, savePlayerData } from './core/playerData';
 import { initWorldCupUI, refreshWorldCupUI } from './ui/worldcup';
 import { initDailyCard } from './ui/daily';
+import { initProfileCard, refreshProfileCard } from './ui/profile';
 
 /* ============================================================================
    YUKA STRIKERS — AI Soccer
@@ -40,10 +41,14 @@ if (player.stats.played === 0 && player.name === 'PLAYER') {
 
 initWorldCupUI(); // World Cup menu banner + tournament screens (A5/A6)
 initDailyCard(); // daily orders + chest meter on the menu (E2/E3)
-// keep the menu's World Cup banner current when the team or match-type changes
+initProfileCard(); // profile card: flag avatar, name, tier, XP, stat tiles (C4)
+// keep the menu's World Cup banner + profile current when the team changes
 for (const id of ['teamPick', 'segMode']) {
   document.getElementById(id)?.querySelectorAll('button').forEach((b) =>
-    b.addEventListener('click', () => refreshWorldCupUI()),
+    b.addEventListener('click', () => {
+      refreshWorldCupUI();
+      refreshProfileCard(); // a new nation changes the profile flag avatar
+    }),
   );
 }
 
