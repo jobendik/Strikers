@@ -24,6 +24,15 @@ import {
 let firstHalfKicker = 0;
 
 /**
+ * The away side reads the scoreline: it throws caution to the wind when behind
+ * and protects a two-goal lead, so the match swings tactically as it unfolds.
+ */
+export function updateAwayMentality(): void {
+  const diff = match.score[1] - match.score[0];
+  match.teams[1].mentality = diff <= -1 ? 2 : diff >= 2 ? 0 : 1;
+}
+
+/**
  * Accrue added time for the current half (a goal or stoppage in play). Capped at
  * `CFG.stoppageMax`. If we're already playing added time, extend it a little too.
  */
@@ -60,6 +69,7 @@ export function scoreGoal(i: number): void {
   match.celebrateBallT = 0.7; // keep the ball flying into the net in slow motion
   match.timeScale = CFG.goalSlowmo;
   match.scoredBy = i;
+  updateAwayMentality(); // the away side re-reads the game after every goal
   flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].name} SCORE!`);
 }
 
@@ -267,6 +277,7 @@ export function startMatch(): void {
   setFullTimeVisible(false);
   setHalfTimeVisible(false);
   firstHalfKicker = Math.random() < 0.5 ? 0 : 1;
+  updateAwayMentality();
   kickOff(match.teams[firstHalfKicker]);
   updateHUD();
 }

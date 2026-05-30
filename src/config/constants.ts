@@ -130,6 +130,18 @@ export const DIFF: DiffSetting[] = [
   { label: 'LEGEND', aiSpd: 1.05, react: 0.12, passSafe: 1.7, shootBias: 0.95, keeper: 0.82 },
 ];
 
+/**
+ * Team mentality — shifts the whole resting shape up or down the pitch. The user
+ * picks theirs in the menu; the away side adapts to the scoreline (chases when
+ * behind, sits on a lead). `push` is the depth bias in world units along the
+ * team's attacking direction.
+ */
+export const MENTALITY = [
+  { label: 'DEFENSIVE', push: -3.4 },
+  { label: 'BALANCED', push: 0 },
+  { label: 'ATTACKING', push: 3.8 },
+];
+
 /** Formation: GK + 2 DEF + 2 ATT. Home attacks +X; away is mirrored at build time. */
 export const FORMATION: FormationEntry[] = [
   { role: 'GK', def: V3(-27, 0, 0), att: V3(-25, 0, 0) },

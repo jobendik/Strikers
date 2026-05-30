@@ -21,6 +21,7 @@ export interface Settings {
   half: number;
   knockout: boolean;
   sim: boolean;
+  mentality: number;
 }
 
 const KEY = 'yuka-strikers/settings';
@@ -34,6 +35,7 @@ const DEFAULTS: Settings = {
   half: 180,
   knockout: false,
   sim: false,
+  mentality: 1,
 };
 
 const S: Settings = load();
@@ -89,6 +91,7 @@ export function applySettings(): void {
   CFG.matchSeconds = S.half;
   match.settleDraws = S.knockout;
   match.simRules = S.sim;
+  match.teams[0].mentality = S.mentality; // the user team's chosen approach
 
   const mute = el('muteBtn');
   if (mute) mute.textContent = S.sound ? '🔊' : '🔇';
@@ -96,6 +99,7 @@ export function applySettings(): void {
   setSeg('segLen', S.half);
   setSeg('segMode', S.knockout ? 1 : 0);
   setSeg('segRules', S.sim ? 1 : 0);
+  setSeg('segMentality', S.mentality);
   setSeg('segHaptics', S.haptics ? 1 : 0);
   setSeg('segQuality', S.quality === 'high' ? 1 : 0);
   setSeg('segLayout', S.lefty ? 1 : 0);
@@ -119,6 +123,7 @@ export function initSettings(): void {
   seg('segLen', (v) => (S.half = v));
   seg('segMode', (v) => (S.knockout = v === 1));
   seg('segRules', (v) => (S.sim = v === 1));
+  seg('segMentality', (v) => (S.mentality = v));
   seg('segHaptics', (v) => (S.haptics = v === 1));
   seg('segQuality', (v) => (S.quality = v === 1 ? 'high' : 'lite'));
   seg('segLayout', (v) => (S.lefty = v === 1));
