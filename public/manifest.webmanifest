@@ -1,7 +1,7 @@
 {
-  "name": "Yuka Strikers — AI Soccer",
-  "short_name": "Strikers",
-  "description": "AI-driven 5-a-side arcade soccer for mobile. Steering, perception and fuzzy-logic agents power every player.",
+  "name": "Strikers '26 — World Soccer Championship",
+  "short_name": "Strikers '26",
+  "description": "Pick your nation and win the World Championship 2026 — fast arcade soccer with curling shots, diving keepers and penalty shootouts.",
   "start_url": ".",
   "scope": ".",
   "display": "fullscreen",

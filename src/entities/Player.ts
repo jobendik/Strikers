@@ -12,7 +12,7 @@ import {
 } from 'yuka';
 import type { Group } from 'three';
 import { CFG } from '../config/constants';
-import { attrMul, SQUADS } from '../config/players';
+import { attrMul, DEFAULT_TEAM, SQUADS } from '../config/players';
 import { V3, clamp } from '../core/math';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
@@ -140,7 +140,7 @@ export class Player extends Vehicle {
    * changes (team selection / cup fixtures).
    */
   applyIdentity(): void {
-    const roster = SQUADS[this.team.name] ?? SQUADS.STRIKERS;
+    const roster = SQUADS[this.team.name] ?? SQUADS[DEFAULT_TEAM];
     const squad: SquadPlayer = roster[this.idx] ?? {
       name: `P${this.idx + 1}`,
       num: this.idx + 1,

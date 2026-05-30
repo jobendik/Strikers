@@ -4,7 +4,7 @@ import { Haptics } from './haptics';
 import { renderer } from '../rendering/scene';
 import { setReplayEnabled } from '../game/replay';
 import { match } from '../game/state';
-import { TEAMS, teamMeta } from '../config/players';
+import { DEFAULT_TEAM, TEAMS, teamMeta } from '../config/players';
 import type { GameMode } from '../config/types';
 
 /*
@@ -41,7 +41,7 @@ const DEFAULTS: Settings = {
   mode: 'friendly',
   sim: false,
   mentality: 1,
-  team: 'STRIKERS',
+  team: DEFAULT_TEAM,
   titles: 0,
 };
 
@@ -50,7 +50,12 @@ const S: Settings = load();
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) {
+      const s: Settings = { ...DEFAULTS, ...JSON.parse(raw) };
+      // a saved team key from an older build may no longer exist — heal it
+      if (!TEAMS.some((t) => t.key === s.team)) s.team = DEFAULT_TEAM;
+      return s;
+    }
   } catch {
     /* ignore — storage may be blocked (private mode) */
   }

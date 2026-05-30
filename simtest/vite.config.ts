@@ -20,7 +20,7 @@ const STUBS: Record<string, string> = {
   'game/replay': `export const setReplayEnabled=()=>{};export const recordFrame=()=>{};export const resetReplayBuffer=()=>{};export const hasReplay=()=>false;export const isReplaying=()=>false;export const startReplay=()=>{};export const skipReplay=()=>{};export const updateReplay=()=>true;`,
   'game/penalty': `export const inShootout=()=>false;export const abortShootout=()=>{};export const startShootout=()=>{};export const penaltyAction=()=>{};export const updateShootout=()=>{};`,
   'game/modes': `export const startGame=()=>{};export const onFullTimeButton=()=>{};export const presentResult=()=>{};`,
-  'core/settings': `export const getSettings=()=>({team:'STRIKERS',mentality:1,diff:1,half:180,mode:'friendly',sim:false,sound:false,haptics:false,quality:'lite',lefty:false,titles:0});export const saveSettings=()=>{};export const applySettings=()=>{};export const initSettings=()=>{};`,
+  'core/settings': `export const getSettings=()=>({team:'USA',mentality:1,diff:1,half:180,mode:'friendly',sim:false,sound:false,haptics:false,quality:'lite',lefty:false,titles:0});export const saveSettings=()=>{};export const applySettings=()=>{};export const initSettings=()=>{};`,
 };
 
 function stubPlugin() {

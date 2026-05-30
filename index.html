@@ -7,11 +7,11 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#05080d" />
-  <meta name="description" content="YUKA STRIKERS — AI-driven 5-a-side arcade soccer for mobile. Steering behaviors, perception, fuzzy logic and team state machines power every player." />
+  <meta name="description" content="Strikers '26 — fast, fun arcade soccer. Pick your nation and win the World Championship 2026 in the USA: curling shots, diving keepers, give-and-go runs and penalty shootouts. Free online, plays on mobile and desktop." />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
-  <title>YUKA STRIKERS — AI Soccer</title>
+  <title>Strikers '26 — World Soccer Championship</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Teko:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
@@ -74,13 +74,13 @@
   <!-- Start menu -->
   <div class="overlay" id="menu">
     <div class="card">
-      <div class="kicker">Yuka · Three.js · Agent AI</div>
-      <h1>YUKA <span class="accent">STRIKERS</span></h1>
-      <div class="sub">5-a-side AI football. Pick your club and win the cup; every other player is driven by steering, perception, fuzzy-logic &amp; named, attribute-driven agents — with real aerial physics, curling shots, give-and-go runs, diving keepers and penalty shootouts.</div>
+      <div class="kicker">★ World Championship · USA 2026 ★</div>
+      <h1>STRIKERS <span class="accent">'26</span></h1>
+      <div class="sub">Pick your nation and chase glory at the World Championship. Fast 5-a-side football with curling shots, give-and-go runs, diving keepers, last-gasp deciders and penalty shootouts — every rival driven by sharp, attribute-led AI.</div>
       <div class="opts">
-        <div class="opt-row"><div class="label">Your team — <b id="teamName">CRIMSON STRIKERS</b></div>
+        <div class="opt-row"><div class="label">Your nation — <b id="teamName">UNITED STATES</b></div>
           <div class="teampick" id="teamPick">
-            <button data-team="STRIKERS" class="on" style="--kit:#ff2d55">STR</button><button data-team="UNITED" style="--kit:#1e90ff">UTD</button><button data-team="GALAXY" style="--kit:#a855f7">GLX</button><button data-team="IRONSIDE" style="--kit:#ff7a18">IRN</button><button data-team="ROVERS" style="--kit:#22c55e">RVR</button><button data-team="FROST" style="--kit:#38e0d0">FRS</button>
+            <button data-team="USA" class="on" style="--kit:#2c3fd6">USA</button><button data-team="BRAZIL" style="--kit:#ffd400">BRA</button><button data-team="ARGENTINA" style="--kit:#75aadb">ARG</button><button data-team="FRANCE" style="--kit:#1e3a8a">FRA</button><button data-team="ENGLAND" style="--kit:#e9eef5">ENG</button><button data-team="SPAIN" style="--kit:#d7182a">ESP</button><button data-team="GERMANY" style="--kit:#9aa0a6">GER</button><button data-team="PORTUGAL" style="--kit:#1fa055">POR</button><button data-team="NETHERLANDS" style="--kit:#ff6a00">NED</button><button data-team="ITALY" style="--kit:#2e86de">ITA</button><button data-team="MEXICO" style="--kit:#0b6e4f">MEX</button><button data-team="CROATIA" style="--kit:#e23e57">CRO</button><button data-team="NORWAY" style="--kit:#c8102e">NOR</button><button data-team="JAPAN" style="--kit:#5a4fcf">JPN</button><button data-team="MOROCCO" style="--kit:#157347">MAR</button><button data-team="SENEGAL" style="--kit:#11a658">SEN</button>
           </div>
           <div class="titles" id="titles"></div>
         </div>
@@ -101,7 +101,7 @@
         </div>
         <div class="opt-row"><div class="label">Match type</div>
           <div class="seg" id="segMode">
-            <button data-v="0" class="on">FRIENDLY</button><button data-v="1">KNOCKOUT</button><button data-v="2">CUP RUN</button>
+            <button data-v="0" class="on">FRIENDLY</button><button data-v="1">KNOCKOUT</button><button data-v="2">WORLD CUP</button>
           </div>
         </div>
         <div class="opt-row"><div class="label">Rules</div>
@@ -193,7 +193,7 @@
     </div>
   </div>
 
-  <div class="credit">YUKA STRIKERS — Yuka steering · perception · fuzzy logic · FSM agents · procedural audio</div>
+  <div class="credit">STRIKERS '26 — World Championship football · sharp agent AI · real aerial physics</div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

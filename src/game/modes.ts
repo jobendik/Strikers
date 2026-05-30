@@ -12,7 +12,7 @@ import { getSettings, saveSettings } from '../core/settings';
  * then routes back here through {@link presentResult} with the winner.
  */
 
-const ROUND_NAMES = ['ROUND 1', 'SEMI-FINAL', 'FINAL'];
+const ROUND_NAMES = ['ROUND OF 16', 'QUARTER-FINAL', 'SEMI-FINAL', 'FINAL'];
 
 let cupActive = false;
 let cupOpponents: string[] = [];
@@ -31,10 +31,32 @@ function pickOpponents(exclude: string, n: number): string[] {
   return pool.slice(0, n);
 }
 
+/** Euclidean RGB distance between two #rrggbb kit colours (0–441). */
+function kitDistance(a: string, b: string): number {
+  const v = (h: string): [number, number, number] => {
+    const n = parseInt(h.replace('#', ''), 16);
+    return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  };
+  const [r1, g1, b1] = v(a);
+  const [r2, g2, b2] = v(b);
+  return Math.hypot(r1 - r2, g1 - g2, b1 - b2);
+}
+
+/** A neutral away strip that contrasts the home kit (dark vs a light home, else light). */
+function contrastKit(home: string): string {
+  const n = parseInt(home.replace('#', ''), 16);
+  const lum = 0.299 * ((n >> 16) & 255) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255);
+  return lum > 140 ? '#222a33' : '#eef2f7';
+}
+
 /** Re-skin the two teams for a fixture and refresh the scoreboard. */
 function configureTeams(homeKey: string, awayKey: string): void {
   match.teams[0].setIdentity(homeKey);
   match.teams[1].setIdentity(awayKey);
+  // if the two nations' kits are too close to tell apart, the away side changes strip
+  if (kitDistance(match.teams[0].color, match.teams[1].color) < 90) {
+    match.teams[1].setKitColor(contrastKit(match.teams[0].color));
+  }
   match.teams[0].mentality = getSettings().mentality; // keep the user's chosen approach
   refreshTeamTags();
 }
@@ -92,11 +114,11 @@ export function presentResult(
     return;
   }
 
-  // cup tie — the user must win to go through (a level tie is decided on penalties)
+  // World Cup tie — the user must win to advance (a level tie is decided on penalties)
   if (!userWon) {
     cupActive = false;
     pendingContinue = false;
-    showFullTime(h, a, 'KNOCKED OUT', stat, motm, `Cup · ${ROUND_NAMES[cupRound]}`, 'BACK TO MENU ▸');
+    showFullTime(h, a, 'KNOCKED OUT', stat, motm, `World Cup 2026 · ${ROUND_NAMES[cupRound]}`, 'BACK TO MENU ▸');
     return;
   }
 
@@ -105,10 +127,10 @@ export function presentResult(
     cupActive = false;
     pendingContinue = false;
     saveSettings({ titles: getSettings().titles + 1 });
-    showFullTime(h, a, `${homeName} — CHAMPIONS 🏆`, stat, motm, 'Cup Final', 'BACK TO MENU ▸');
+    showFullTime(h, a, `${homeName} — WORLD CHAMPIONS 🏆`, stat, motm, 'World Cup 2026 · FINAL', 'BACK TO MENU ▸');
     return;
   }
   pendingContinue = true;
   const next = teamMeta(cupOpponents[cupRound]).name;
-  showFullTime(h, a, 'THROUGH TO THE NEXT ROUND', stat, motm, `Cup · into the ${ROUND_NAMES[cupRound]}`, `NEXT: ${next} ▸`);
+  showFullTime(h, a, 'THROUGH TO THE NEXT ROUND', stat, motm, `World Cup 2026 · into the ${ROUND_NAMES[cupRound]}`, `NEXT: ${next} ▸`);
 }
