@@ -70,7 +70,7 @@ export function scoreGoal(i: number): void {
   match.timeScale = CFG.goalSlowmo;
   match.scoredBy = i;
   updateAwayMentality(); // the away side re-reads the game after every goal
-  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].name} SCORE!`);
+  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].short} SCORE!`);
 }
 
 /** Reset all entities to their home positions for a restart. */
@@ -228,7 +228,7 @@ function motmLine(): string {
   if (best.statAssists) tally.push(`${best.statAssists}A`);
   if (best.statSaves) tally.push(`${best.statSaves} saves`);
   const extra = tally.length ? `  (${tally.join(' · ')})` : '';
-  return `★ MOTM  ${best.name} · ${best.team.name} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
+  return `★ MOTM  ${best.name} · ${best.team.short} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
 }
 
 /** End the match and show the result card (or a shootout, if a knockout is level). */
@@ -243,7 +243,7 @@ export function fullTime(): void {
   setTimeout(() => Audio.whistle(), 220);
   const [h, a] = match.score;
   const [home, away] = match.teams;
-  const result = h > a ? `${home.name} WIN` : a > h ? `${away.name} WIN` : 'DRAW';
+  const result = h > a ? `${home.fullName} WIN` : a > h ? `${away.fullName} WIN` : 'DRAW';
   showFullTime(h, a, result, fullStatsLine(), motmLine());
 }
 
@@ -251,7 +251,7 @@ export function fullTime(): void {
 export function finishShootout(winner: number, penScore: [number, number]): void {
   match.state = 'fulltime';
   Audio.whistle();
-  const result = `${match.teams[winner].name} WIN`;
+  const result = `${match.teams[winner].fullName} WIN`;
   const line = `On penalties ${penScore[0]}–${penScore[1]}  ·  ${fullStatsLine()}`;
   showFullTime(match.score[0], match.score[1], result, line, motmLine());
 }

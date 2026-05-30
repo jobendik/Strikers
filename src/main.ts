@@ -5,7 +5,7 @@ import { createGameState } from './game/state';
 import { initInput } from './game/input';
 import { startLoop } from './game/loop';
 import { returnToMenu, startMatch, startSecondHalf } from './game/flow';
-import { initUI, updateHUD } from './ui/hud';
+import { initUI, refreshTeamTags, updateHUD } from './ui/hud';
 import { initRadar } from './ui/radar';
 import { initSettings } from './core/settings';
 
@@ -26,5 +26,6 @@ initRadar();
 initInput();
 window.addEventListener('resize', handleResize);
 
+refreshTeamTags();
 updateHUD();
 startLoop();
