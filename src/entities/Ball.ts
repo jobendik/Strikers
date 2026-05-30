@@ -8,6 +8,12 @@ import type { Team } from './Team';
 export class Ball extends MovingEntity {
   /** Team of the player who last touched the ball (for throw-ins, goal kicks). */
   lastTouch: Team | null = null;
+  /**
+   * Signed spin imparted on a strike (rad/s of lateral curve). Drives the Magnus
+   * swerve in {@link integrateFreeBall}, letting shots and crosses bend — the
+   * "real, physics-driven ball motion" idea from Notblox taken a step further.
+   */
+  spin = 0;
   mesh: THREE.Mesh;
 
   constructor() {

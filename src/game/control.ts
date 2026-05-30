@@ -4,9 +4,10 @@ import { attr01 } from '../config/players';
 import { V3, distSq, headingVec, rand } from '../core/math';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, match, oppOf, teamIndex } from './state';
+import { ball, match, oppOf, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
 import { findBestPass, nearestOpp } from '../ai/analysis';
+import { addShake } from './render';
 import { flashToast } from '../ui/hud';
 import { setPiece } from './physics';
 import type { Player } from '../entities/Player';
@@ -19,15 +20,17 @@ export function setControl(p: Player | null): void {
     p.kickCooldown = 0;
     ball.lastTouch = p.team;
     if (p.roleType === 'GK') match.gkHold = 0.9;
+    setReceiver(null); // the pass has arrived (or possession changed) — receiver assignment is done
   }
 }
 
-/** Strike the ball in `dir` with `power`. type 'pass' tags it for stats/audio. */
-export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pass'): void {
+/** Strike the ball in `dir` with `power`. type 'pass' tags it for stats/audio; `spin` bends it. */
+export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pass', spin = 0): void {
   const d = V3(dir.x, 0, dir.z);
   if (d.length() < 1e-3) d.set(p.team.side, 0, 0);
   d.normalize();
   ball.velocity.set(d.x * power, 0, d.z * power); // mass=1 -> speed=power (Buckland kick)
+  ball.spin = spin;
   ball.lastTouch = p.team;
   p.kickCooldown = 0.32;
   match.controlPlayer = null;
@@ -49,10 +52,11 @@ export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pas
  * play). Shares the bookkeeping of {@link kick} but launches with vertical
  * velocity via {@link launchLob}.
  */
-export function lobKick(p: Player, target: Vector3, peak: number, type: 'kick' | 'pass'): void {
+export function lobKick(p: Player, target: Vector3, peak: number, type: 'kick' | 'pass', spin = 0): void {
   const h = headingVec(p.heading);
   ball.position.set(p.position.x + h.x * 0.4, GROUND_Y, p.position.z + h.z * 0.4);
   launchLob(target, peak);
+  ball.spin = spin;
   ball.lastTouch = p.team;
   p.kickCooldown = 0.32;
   match.controlPlayer = null;
@@ -74,6 +78,7 @@ export function headBall(p: Player, dir: Vector3, power: number): void {
   if (d.length() < 1e-3) d.set(p.team.side, 0, 0);
   d.normalize();
   ball.velocity.set(d.x * power, Math.max(2, ball.velocity.y * 0.3 + 3.5), d.z * power);
+  ball.spin = 0;
   ball.lastTouch = p.team;
   p.kickCooldown = 0.3;
   match.controlPlayer = null;
@@ -121,6 +126,7 @@ export function resolveSlides(_dt: number): void {
         ball.velocity.set((ax / al) * 7 + p.velocity.x * 0.4, 0, (az / al) * 7 + p.velocity.z * 0.4);
         match.controlCooldown = 0.16;
         Audio.tackle();
+        addShake(0.4);
         if (p.team.isUser) Haptics.tackle();
         flashToast(p.team.isUser ? 'SLIDE TACKLE!' : 'SLIDE TACKLE');
         p.slide = 0;
@@ -179,7 +185,10 @@ export function resolveControl(dt: number): void {
       flashToast(near.team.isUser ? 'BALL WON' : 'INTERCEPTED');
     }
   } else if (!blocked && near) {
-    if (near.roleType === 'GK' && ball.velocity.length() > 10) Audio.save();
+    if (near.roleType === 'GK' && ball.velocity.length() > 10) {
+      Audio.save();
+      addShake(0.35); // a smothered screamer thuds into the keeper
+    }
     setControl(near);
   }
 }
@@ -234,8 +243,10 @@ export function updateGkHold(dt: number): void {
       const gk = match.controlPlayer;
       const opp = oppOf(gk.team);
       const pass = findBestPass(gk, CFG.passLong, CFG.minPassDist, opp);
-      if (pass) kick(gk, V3(pass.target.x - ball.position.x, 0, pass.target.z - ball.position.z), CFG.passLong, 'pass');
-      else clearBall(gk);
+      if (pass) {
+        kick(gk, V3(pass.target.x - ball.position.x, 0, pass.target.z - ball.position.z), CFG.passLong, 'pass');
+        setReceiver(pass.receiver);
+      } else clearBall(gk);
     }
   }
 }

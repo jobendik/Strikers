@@ -63,6 +63,26 @@ export const CFG = {
   slideReach: 2.2, // slide-tackle ball-win range
   slideCooldown: 1.1, // recovery before sliding again
   slideFoulBase: 0.18, // base foul chance from a slide (scaled by tackling)
+
+  // --- ball spin / swerve (Magnus effect — extends Notblox's real ball motion) ---
+  // lateral accel = magnusK · spin · horizontalSpeed; tuned so a full-curl shot
+  // bends ~1.5 units over its flight while a clinical AI bend stays on frame.
+  magnusK: 0.28, // how strongly spin curves the ball per unit of horizontal speed
+  spinDecay: 0.45, // fraction of spin shed per second in flight
+  curlHuman: 2.2, // max curl a human can bend onto a shot (joystick lateral at release)
+  curlAI: 0.55, // curl a clinical AI shooter bends toward goal centre (stays on target)
+  curlCross: 1.2, // curl that whips a cross into the box
+
+  // --- woodwork (posts + crossbar rebounds) ---
+  postR: 0.16, // collision radius of a goalpost / crossbar
+  woodRest: 0.62, // restitution off the frame
+
+  // --- pass reception (Simple Soccer's intended-receiver model) ---
+  receiveSpan: 2.6, // seconds an assigned receiver chases the pass before giving up
+
+  // --- game-feel juice ---
+  goalSlowmo: 0.32, // time scale at the instant of a goal
+  slowmoRecover: 1.7, // how fast time returns to normal (units/s of time-scale)
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */

@@ -17,10 +17,18 @@ export interface MatchState {
   controlTeam: Team | null;
   controlCooldown: number;
   gkHold: number;
+  /** Intended pass receiver — Simple Soccer's `m_pReceivingPlayer`; runs onto the ball. */
+  receivingPlayer: Player | null;
+  /** Countdown for the receiving assignment before it lapses. */
+  receiveTimer: number;
   userPlayer: Player | null;
   switchLock: number;
   scoredBy: number;
   celebrateT: number;
+  /** Seconds left of slow-motion ball-into-net flight after a goal. */
+  celebrateBallT: number;
+  /** Global simulation time scale (1 = normal); dips for goal slow-motion. */
+  timeScale: number;
   input: InputState;
   joy: { x: number; z: number };
   stats: { shots: [number, number]; passes: [number, number] };
@@ -46,15 +54,29 @@ export function createGameState(): void {
     controlTeam: null,
     controlCooldown: 0,
     gkHold: 0,
+    receivingPlayer: null,
+    receiveTimer: 0,
     userPlayer: null,
     switchLock: 0,
     scoredBy: 0,
     celebrateT: 0,
+    celebrateBallT: 0,
+    timeScale: 1,
     input: { x: 0, z: 0, sprint: false },
     joy: { x: 0, z: 0 },
     stats: { shots: [0, 0], passes: [0, 0] },
   };
   ball.mesh.position.set(0, CFG.ballR, 0);
+}
+
+/**
+ * Mark (or clear) the intended receiver of a pass — Simple Soccer's
+ * `m_pReceivingPlayer`. The receiver enters a RECEIVE state and runs onto the
+ * ball, producing real combination play instead of waiting to be found.
+ */
+export function setReceiver(p: Player | null): void {
+  match.receivingPlayer = p;
+  match.receiveTimer = p ? CFG.receiveSpan : 0;
 }
 
 /** Returns the opposing team. */

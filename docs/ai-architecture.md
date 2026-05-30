@@ -196,15 +196,67 @@ We don't simulate decades of a football world, but we borrowed its spark:
 and the asymmetric attribute profiles give those names personalities — SOLA and
 FÈNX up top feel quick and clinical; United's MARS and KOLT feel like a wall.
 
+## Third wave — deeper coordination, real swerve & game-feel
+
+A later pass mined the sources again for what was *still* on the table. Three
+gaps stood out: passes had no intended receiver (Simple Soccer's central
+mechanic), the "real ball" only flew in straight lines (Notblox runs full
+rigid-body spin), and the match lacked arcade *juice*. All three are now closed.
+
+| Capability | Before | Now | Source |
+| --- | --- | --- | --- |
+| Intended pass receiver runs onto the ball | ❌ nearest player collects | ✅ `RECEIVE` state + `m_pReceivingPlayer` | **Simple Soccer** (Buckland ch.4) |
+| Ball swerve / curl | ❌ straight lines | ✅ Magnus spin on shots & crosses | **Notblox** (real ball physics) |
+| Woodwork rebounds | ❌ flew out | ✅ posts + crossbar clang back in | match realism |
+| Camera shake / goal slow-mo / ball trail | ❌ | ✅ | arcade game-feel |
+
+### Pass reception — Simple Soccer's `m_pReceivingPlayer`
+
+Buckland's *Simple Soccer* doesn't let "whoever is nearest" pick up a pass: the
+passer nominates a receiver, dispatches it a *ReceiveBall* message, and that
+player runs onto the ball while the rest of the team supports. We implement the
+same model without the full message bus: every pass call-site
+(`findBestPass`, `findThroughBall`, crosses, keeper distribution, and the
+human's pass/through-ball/cross) now records the intended receiver via
+`setReceiver()` (`src/game/state.ts`). `Team.update` promotes that player to a
+new `RECEIVE` role, and `ReceiveState` (`src/ai/states.ts`) predictively pursues
+the ball — turning isolated passes into **give-and-gos and runs in behind**. The
+assignment lapses after `receiveSpan` seconds, or the instant anyone gains
+control (`setControl` clears it), so a misplaced pass never strands a runner.
+
+### Curling shots & crosses — Magnus spin (Notblox, extended)
+
+Notblox's headline gift was a ball that lives in 3D; its underlying Rapier
+physics also carries spin. We add a scalar `ball.spin` and integrate a **Magnus
+sideways acceleration** (`magnusK · spin · horizontalSpeed`, perpendicular to
+travel) in `integrateFreeBall`, decaying through flight. A clinical AI striker
+bends the shot *toward goal centre* (so the curl keeps it on frame while
+troubling the keeper); crosses are whipped back into the middle; and the **human
+bends the ball with the joystick** — leaning the stick across the shot line at
+release imparts curl proportional to their `shooting` attribute. Scoring a
+bending screamer is now a thing.
+
+### Woodwork, shake, slow-mo, trail
+
+`hitWoodwork` (`src/game/physics.ts`) reflects the ball off the posts and
+crossbar with restitution — finally wiring up the previously-unused `post()`
+sound — for dramatic near-misses. `addShake` (`src/game/render.ts`) punches the
+broadcast camera on goals, saves, slide tackles and woodwork; goals trigger a
+brief `timeScale` dip so the ball flies into the net in **slow motion** under a
+cinematic push-in; and a lightweight additive **ball trail** streaks behind fast
+or airborne balls. None of these touch the simulation's correctness — they make
+it *feel* like an arcade game on a phone.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```
 Team.update
  ├─ updatePerception(player)        # MemorySystem: sense ball within vision cone
- ├─ assign dynamic role             # CARRIER / SUPPORT / CHASER / POSITION / GK
+ ├─ assign dynamic role             # CARRIER / SUPPORT / CHASER / RECEIVE / POSITION / GK
  └─ StateMachine.changeTo(role) → State.execute
-      ├─ CarryState  → aiCarry      # fuzzy: chip / shoot / through-ball / cross / pass / clear
+      ├─ CarryState  → aiCarry      # fuzzy: chip / shoot(curl) / through-ball / cross(swerve) / pass / clear
       ├─ ChaseState  → header if airborne, else slide-tackle chance, else pursue/last-known
+      ├─ ReceiveState→ run onto the ball (pursue while it travels) — Simple Soccer's ReceiveBall
       ├─ SupportState→ arrive at best support spot (header if airborne)
       ├─ PositionState→ hold shape / mark / shuffle (header if airborne)
       └─ GkState     → intercept or rear-interpose

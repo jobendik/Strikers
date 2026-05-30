@@ -16,11 +16,17 @@ attribute-driven players**.
 ### What makes it fun
 
 - ⚽ **Real aerial ball** — gravity, bounce and height, so the ball lives in 3D.
+- 🌀 **Curl it** — bend shots and crosses with the joystick; clinical AI strikers
+  swerve it around the keeper (a Magnus-effect spin on the ball).
 - 🪁 **Chips, crosses & lobbed through-balls** — dink a rushing keeper, whip a
   cross into the box, or float one over the top.
 - 🎯 **Charged shooting** — hold SHOOT to power up; a soft tap places it or chips.
 - 💥 **Headers & volleys** — airborne balls must be headed, not just collected.
 - 🦵 **Slide tackles** — a committed lunge with real risk/reward and fouls.
+- 🤝 **Give-and-go AI** — a passed-to teammate *runs onto the ball* instead of
+  waiting to be found (Simple Soccer's intended-receiver model).
+- 🪵 **Woodwork** — rattle one off the post or bar for a heart-in-mouth near-miss.
+- 🎬 **Arcade juice** — camera shake, a slow-motion goal cam and a ball trail.
 - 🧬 **Named squads with attributes** — pace, shooting, passing, tackling and
   composure give every player a distinct identity.
 
@@ -38,7 +44,7 @@ maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
 | Action | Touch | Keyboard |
 | --- | --- | --- |
 | Move | Left joystick | `WASD` / Arrows |
-| Shoot (hold = power, tap = place/chip) | ⚽ button | `K` |
+| Shoot (hold = power, tap = place/chip, lean stick = curl) | ⚽ button | `K` |
 | Pass (hold = loft/cross) | ➤ button | `J` |
 | Through-ball | ➤ while flicking joystick forward | `J` + forward |
 | Slide tackle / header (off the ball) | ⚽ button | `K` |

@@ -1,7 +1,7 @@
 import { CFG } from '../config/constants';
 import { attr01 } from '../config/players';
 import { V3, clamp, distSq, headingVec, rand } from '../core/math';
-import { ball, match, oppOf, teamIndex } from '../game/state';
+import { ball, match, oppOf, setReceiver, teamIndex } from '../game/state';
 import { kick, clearBall, lobKick } from '../game/control';
 import { evaluateCarrier } from './fuzzy';
 import {
@@ -83,7 +83,10 @@ export function aiCarry(p: Player, _dt: number): void {
   if (canSh && (wantsShot || !isOppWithin(p, CFG.comfortZone))) {
     addNoise(_shot, shootAcc);
     clampShot(_shot, team);
-    kick(p, V3(_shot.x - ball.position.x, 0, _shot.z - ball.position.z), power, 'kick');
+    // a clinical striker bends the shot back toward goal centre (in-swinging),
+    // so the curl keeps it on frame while making the keeper's life harder.
+    const curl = CFG.curlAI * (0.4 + shootAcc) * -Math.sign(_shot.z || 1);
+    kick(p, V3(_shot.x - ball.position.x, 0, _shot.z - ball.position.z), power, 'kick', curl);
     match.stats.shots[idx]++;
     return;
   }
@@ -94,6 +97,7 @@ export function aiCarry(p: Player, _dt: number): void {
     if (thr) {
       addNoise(thr.target, passAcc);
       kick(p, V3(thr.target.x - ball.position.x, 0, thr.target.z - ball.position.z), CFG.throughPow, 'pass');
+      setReceiver(thr.receiver); // the runner is told to chase it into space
       return;
     }
   }
@@ -112,7 +116,9 @@ export function aiCarry(p: Player, _dt: number): void {
       }
     }
     if (mate && Math.random() < 0.5) {
-      lobKick(p, V3(mate.position.x + team.side, 0, mate.position.z), 2.6, 'pass');
+      const swing = CFG.curlCross * -Math.sign(p.position.z || 1); // whip it back into the middle
+      lobKick(p, V3(mate.position.x + team.side, 0, mate.position.z), 2.6, 'pass', swing);
+      setReceiver(mate);
       return;
     }
   }
@@ -124,6 +130,7 @@ export function aiCarry(p: Player, _dt: number): void {
     if (pass) {
       addNoise(pass.target, passAcc);
       kick(p, V3(pass.target.x - ball.position.x, 0, pass.target.z - ball.position.z), power, 'pass');
+      setReceiver(pass.receiver);
       return;
     }
   }
