@@ -8,7 +8,7 @@ import { pollInput } from './input';
 import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
 import { movePlayers, selectUserPlayer } from './movement';
 import { updateBall } from './physics';
-import { fullTime, kickOff } from './flow';
+import { kickOff, tickClock } from './flow';
 import { syncMeshes, updateCamera } from './render';
 import { updateHUD, updateToast } from '../ui/hud';
 
@@ -25,11 +25,7 @@ function frame(): void {
   pollInput();
 
   if (match.state === 'play') {
-    match.timeLeft -= dt; // the match clock runs in real time, not slow-mo
-    if (match.timeLeft <= 0) {
-      match.timeLeft = 0;
-      fullTime();
-    }
+    tickClock(dt); // the match clock runs in real time, not slow-mo
     // lapse the pass-receiver assignment if it's gone unclaimed (Simple Soccer)
     if (match.receivingPlayer) {
       match.receiveTimer -= sdt;

@@ -12,6 +12,12 @@ export interface MatchState {
   teams: [Team, Team];
   state: MatchStateName;
   timeLeft: number;
+  /** Current half (1 or 2). */
+  half: number;
+  /** Added time accrued for the current half (seconds); played once timeLeft hits 0. */
+  stoppageAccrued: number;
+  /** Added-time seconds still to play; >0 only while in stoppage. */
+  stoppageLeft: number;
   score: [number, number];
   controlPlayer: Player | null;
   controlTeam: Team | null;
@@ -49,6 +55,9 @@ export function createGameState(): void {
     teams: [home, away],
     state: 'menu',
     timeLeft: CFG.matchSeconds,
+    half: 1,
+    stoppageAccrued: 0,
+    stoppageLeft: 0,
     score: [0, 0],
     controlPlayer: null,
     controlTeam: null,

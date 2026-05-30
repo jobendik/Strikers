@@ -5,11 +5,34 @@ import { ball, match, setReceiver } from './state';
 import { setControl } from './control';
 import { attackHeading } from '../ai/analysis';
 import { addShake, clearTrail } from './render';
-import { flashToast, setFullTimeVisible, setMenuVisible, showFullTime, showGoalFx, updateHUD } from '../ui/hud';
+import {
+  flashToast,
+  setFullTimeVisible,
+  setHalfTimeVisible,
+  setMenuVisible,
+  showFullTime,
+  showHalfTime,
+  showGoalFx,
+  updateHUD,
+} from '../ui/hud';
+
+/** Which team kicked off the first half — the other team kicks off the second. */
+let firstHalfKicker = 0;
+
+/**
+ * Accrue added time for the current half (a goal or stoppage in play). Capped at
+ * `CFG.stoppageMax`. If we're already playing added time, extend it a little too.
+ */
+export function addStoppage(seconds: number): void {
+  if (match.state === 'menu' || match.state === 'fulltime') return;
+  match.stoppageAccrued = Math.min(CFG.stoppageMax, match.stoppageAccrued + seconds);
+  if (match.stoppageLeft > 0) match.stoppageLeft = Math.min(CFG.stoppageMax, match.stoppageLeft + seconds * 0.5);
+}
 
 /** Register a goal for team `i` (0 = home) and start the celebration. */
 export function scoreGoal(i: number): void {
   match.score[i]++;
+  addStoppage(CFG.stoppagePerGoal);
   updateHUD();
   Audio.whistle();
   Audio.goal();
@@ -77,15 +100,73 @@ export function kickOff(team: (typeof match.teams)[number]): void {
   flashToast('KICK OFF');
 }
 
+/**
+ * Advance the match clock and resolve the end of each half. Counts the half down
+ * to 0, then plays any accrued added time before ending the half. Called from the
+ * loop while in the `play` state (real time, not slow-mo).
+ */
+export function tickClock(dt: number): void {
+  if (match.timeLeft > 0) {
+    match.timeLeft -= dt;
+    if (match.timeLeft <= 0) {
+      match.timeLeft = 0;
+      if (match.stoppageAccrued > 0) {
+        match.stoppageLeft = match.stoppageAccrued; // into added time
+        flashToast(`+${Math.ceil(match.stoppageAccrued)}s ADDED`);
+      } else endHalf();
+    }
+  } else if (match.stoppageLeft > 0) {
+    match.stoppageLeft -= dt;
+    if (match.stoppageLeft <= 0) {
+      match.stoppageLeft = 0;
+      endHalf();
+    }
+  }
+}
+
+/** End the current half: into half-time (after the 1st) or full-time (after the 2nd). */
+function endHalf(): void {
+  if (match.half >= 2) fullTime();
+  else halfTime();
+}
+
+/** Half-time — freeze play and show the interval card. */
+function halfTime(): void {
+  match.state = 'halftime';
+  Audio.whistle();
+  setReceiver(null);
+  match.controlPlayer = null;
+  match.controlTeam = null;
+  const [h, a] = match.score;
+  showHalfTime(h, a, statsLine());
+}
+
+/** Kick off the second half (taken by whoever didn't kick off the first). */
+export function startSecondHalf(): void {
+  setHalfTimeVisible(false);
+  match.half = 2;
+  match.timeLeft = CFG.matchSeconds;
+  match.stoppageAccrued = 0;
+  match.stoppageLeft = 0;
+  for (const t of match.teams) for (const p of t.players) p.stamina = 1;
+  kickOff(match.teams[1 - firstHalfKicker]);
+  updateHUD();
+}
+
+/** A one-line stats summary shared by the half-time and full-time cards. */
+function statsLine(): string {
+  return `Shots ${match.stats.shots[0]}–${match.stats.shots[1]}  ·  Passes ${match.stats.passes[0]}–${match.stats.passes[1]}`;
+}
+
 /** End the match and show the result card. */
 export function fullTime(): void {
   match.state = 'fulltime';
   Audio.whistle();
   setTimeout(() => Audio.whistle(), 220);
   const [h, a] = match.score;
-  const result = h > a ? 'STRIKERS WIN' : a > h ? 'UNITED WIN' : 'DRAW';
-  const stats = `Shots ${match.stats.shots[0]}–${match.stats.shots[1]}  ·  Passes ${match.stats.passes[0]}–${match.stats.passes[1]}`;
-  showFullTime(h, a, result, stats);
+  const [home, away] = match.teams;
+  const result = h > a ? `${home.name} WIN` : a > h ? `${away.name} WIN` : 'DRAW';
+  showFullTime(h, a, result, statsLine());
 }
 
 /** Start a fresh match from the menu. */
@@ -93,17 +174,23 @@ export function startMatch(): void {
   Audio.resume();
   match.score = [0, 0];
   match.stats = { shots: [0, 0], passes: [0, 0] };
+  match.half = 1;
   match.timeLeft = CFG.matchSeconds;
+  match.stoppageAccrued = 0;
+  match.stoppageLeft = 0;
   for (const t of match.teams) for (const p of t.players) p.stamina = 1;
   setMenuVisible(false);
   setFullTimeVisible(false);
-  kickOff(match.teams[Math.random() < 0.5 ? 0 : 1]);
+  setHalfTimeVisible(false);
+  firstHalfKicker = Math.random() < 0.5 ? 0 : 1;
+  kickOff(match.teams[firstHalfKicker]);
   updateHUD();
 }
 
 /** Return to the start menu (Play Again). */
 export function returnToMenu(): void {
   setFullTimeVisible(false);
+  setHalfTimeVisible(false);
   setMenuVisible(true);
   match.state = 'menu';
   resetPositions();

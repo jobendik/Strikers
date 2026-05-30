@@ -7,6 +7,7 @@ import { Haptics } from '../core/haptics';
 import { ball, match, oppOf, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
 import { findBestPass, nearestOpp } from '../ai/analysis';
+import { addStoppage } from './flow';
 import { addShake } from './render';
 import { flashToast } from '../ui/hud';
 import { setPiece } from './physics';
@@ -114,6 +115,7 @@ export function resolveSlides(_dt: number): void {
           for (const tt of match.teams) for (const pp of tt.players) pp.slide = 0;
           Audio.whistle();
           Haptics.whistle();
+          addStoppage(CFG.stoppagePerFoul);
           setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FOUL — FREE KICK', false);
           flashToast(p.team.isUser ? 'FOUL GIVEN AWAY' : 'FREE KICK WON');
           return;
@@ -255,6 +257,7 @@ export function updatePressure(dt: number): void {
     if (foul) {
       Audio.whistle();
       Haptics.whistle();
+      addStoppage(CFG.stoppagePerFoul);
       setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FREE KICK', false);
       return;
     }

@@ -26,7 +26,7 @@
     <div class="board">
       <div class="team-tag home-tag"><span class="dot"></span>STR</div>
       <div class="score"><span id="scoreH">0</span></div>
-      <div class="clock"><span id="clock">3:00</span><span class="lbl">1ST HALF</span></div>
+      <div class="clock"><span id="clock">3:00</span><span class="lbl" id="half">1ST HALF</span></div>
       <div class="score"><span id="scoreA">0</span></div>
       <div class="team-tag away-tag">UTD<span class="dot"></span></div>
     </div>
@@ -78,6 +78,16 @@
         Defending? <b>SHOOT</b> launches a slide tackle and heads high balls clear.<br>
         Keyboard: WASD/Arrows · J pass (hold = lob) · K shoot (hold = power) · Shift sprint · Space switch
       </div>
+    </div>
+  </div>
+
+  <!-- Half time -->
+  <div class="overlay hidden" id="ht">
+    <div class="card">
+      <div class="kicker">Half Time</div>
+      <div class="scoreline"><span class="h" id="htH">0</span> <span style="color:#fff">–</span> <span class="a" id="htA">0</span></div>
+      <div class="sub" id="htStats"></div>
+      <button class="cta" id="btnSecond">2ND HALF ▸</button>
     </div>
   </div>
 

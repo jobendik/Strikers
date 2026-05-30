@@ -41,8 +41,13 @@ export const CFG = {
   staminaDrain: 0.05,
   staminaRegen: 0.06,
   foulChance: 0.07,
-  matchSeconds: 180,
+  matchSeconds: 180, // length of ONE half (the match is two halves — see flow.ts)
   diff: 1, // 0 easy · 1 pro · 2 legend
+
+  // --- match structure (two halves + half-time + stoppage) ---
+  stoppagePerGoal: 3.0, // seconds of added time accrued per goal
+  stoppagePerFoul: 1.4, // ...and per stoppage in play (foul / free kick)
+  stoppageMax: 30, // cap on a half's added time
 
   // --- aerial ball physics (Notblox-inspired 3D ball) ---
   gravity: 24, // world units / s² — tuned for snappy arcade arcs

@@ -17,6 +17,9 @@ export function updateHUD(): void {
   const mm = Math.floor(tl / 60);
   const ss = Math.floor(tl % 60);
   el('clock').textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+  // the half label doubles as the added-time indicator while stoppage is playing
+  el('half').textContent =
+    match.stoppageLeft > 0 ? `+${Math.ceil(match.stoppageLeft)}s` : match.half >= 2 ? '2ND HALF' : '1ST HALF';
   updatePlayerBadge();
 }
 
@@ -66,15 +69,26 @@ export function showFullTime(h: number, a: number, result: string, stats: string
   setFullTimeVisible(true);
 }
 
+/** Show the half-time interval card with the running score + stats. */
+export function showHalfTime(h: number, a: number, stats: string): void {
+  el('htH').textContent = String(h);
+  el('htA').textContent = String(a);
+  el('htStats').textContent = stats;
+  setHalfTimeVisible(true);
+}
+
 export function setMenuVisible(v: boolean): void {
   el('menu').classList.toggle('hidden', !v);
 }
 export function setFullTimeVisible(v: boolean): void {
   el('ft').classList.toggle('hidden', !v);
 }
+export function setHalfTimeVisible(v: boolean): void {
+  el('ht').classList.toggle('hidden', !v);
+}
 
 /** Wire menu segmented controls and primary buttons. */
-export function initUI(callbacks: { onPlay: () => void; onAgain: () => void }): void {
+export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onSecondHalf: () => void }): void {
   const seg = (id: string, cb: (v: number) => void): void => {
     const group = el(id);
     group.querySelectorAll('button').forEach((b) =>
@@ -90,6 +104,7 @@ export function initUI(callbacks: { onPlay: () => void; onAgain: () => void }): 
 
   el('btnPlay').addEventListener('click', callbacks.onPlay);
   el('btnAgain').addEventListener('click', callbacks.onAgain);
+  el('btnSecond').addEventListener('click', callbacks.onSecondHalf);
 
   let muted = false;
   const muteBtn = el('muteBtn');

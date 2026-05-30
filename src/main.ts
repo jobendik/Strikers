@@ -4,7 +4,7 @@ import { buildStadium } from './rendering/stadium';
 import { createGameState } from './game/state';
 import { initInput } from './game/input';
 import { startLoop } from './game/loop';
-import { returnToMenu, startMatch } from './game/flow';
+import { returnToMenu, startMatch, startSecondHalf } from './game/flow';
 import { initUI, updateHUD } from './ui/hud';
 
 /* ============================================================================
@@ -18,7 +18,7 @@ import { initUI, updateHUD } from './ui/hud';
 buildStadium();
 createGameState();
 
-initUI({ onPlay: startMatch, onAgain: returnToMenu });
+initUI({ onPlay: startMatch, onAgain: returnToMenu, onSecondHalf: startSecondHalf });
 initInput();
 window.addEventListener('resize', handleResize);
 
