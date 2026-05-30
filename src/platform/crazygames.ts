@@ -37,6 +37,9 @@ interface CrazySDK {
   init?: () => Promise<void> | void;
   environment?: string;
   game?: {
+    // v3 loading handshake; sdkGameLoading* kept as a v2 fallback (we call whichever exists)
+    loadingStart?: () => void;
+    loadingStop?: () => void;
     sdkGameLoadingStart?: () => void;
     sdkGameLoadingStop?: () => void;
     gameplayStart?: () => void;
@@ -130,12 +133,13 @@ function adoptDataBackend(): void {
   setStorageBackend(backend);
 }
 
-/** Bracket the initial asset/scene load so the platform shows its branded loader. */
+/** Bracket the initial asset/scene load so the platform shows its branded loader.
+ *  Uses the v3 `loadingStart/Stop`, falling back to the v2 `sdkGameLoading*` name. */
 export function loadingStart(): void {
-  safe(() => sdk!.game?.sdkGameLoadingStart?.());
+  safe(() => (sdk!.game?.loadingStart ?? sdk!.game?.sdkGameLoadingStart)?.());
 }
 export function loadingStop(): void {
-  safe(() => sdk!.game?.sdkGameLoadingStop?.());
+  safe(() => (sdk!.game?.loadingStop ?? sdk!.game?.sdkGameLoadingStop)?.());
 }
 
 // ---- gameplay events (B2) ---------------------------------------------------
