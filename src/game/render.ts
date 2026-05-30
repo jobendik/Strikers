@@ -14,6 +14,10 @@ export function syncMeshes(dt: number): void {
       while (diff > Math.PI) diff -= 2 * Math.PI;
       while (diff < -Math.PI) diff += 2 * Math.PI;
       p.mesh.rotation.y = cur + diff * Math.min(1, 12 * dt);
+      // a diving keeper pitches forward and goes full-stretch toward the ball;
+      // sliding tacklers lean too. Ease the lean in and back out smoothly.
+      const leanTo = p.dive > 0 ? 1.25 : p.slide > 0 ? 0.7 : 0;
+      p.mesh.rotation.x += (leanTo - p.mesh.rotation.x) * Math.min(1, 14 * dt);
       (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
     }
   ball.mesh.position.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);

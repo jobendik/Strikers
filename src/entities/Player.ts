@@ -5,6 +5,7 @@ import {
   PursuitBehavior,
   Regulator,
   SeekBehavior,
+  SeparationBehavior,
   StateMachine,
   Vector3,
   Vehicle,
@@ -38,6 +39,13 @@ export class Player extends Vehicle {
   /** Cooldown before this player can slide again. */
   slideCd = 0;
 
+  /** Goalkeeper dive timer: >0 while flinging himself at a shot (cannot steer). */
+  dive = 0;
+  /** Cooldown before the keeper can dive again. */
+  diveCd = 0;
+  /** Point the keeper is diving toward (predicted shot crossing point). */
+  diveTarget: Vector3 = V3();
+
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
   isHuman = false;
@@ -54,6 +62,8 @@ export class Player extends Vehicle {
   arrive: ArriveBehavior;
   seek: SeekBehavior;
   pursuit: PursuitBehavior;
+  /** Group-steering separation that keeps team-mates from clumping (Yuka). */
+  separation: SeparationBehavior;
 
   // AI brain support
   memory: MemorySystem;
@@ -105,9 +115,17 @@ export class Player extends Vehicle {
     this.seek.active = false;
     this.pursuit = new PursuitBehavior(null, 1.3);
     this.pursuit.active = false;
+    // Separation blends *on top of* whichever target behaviour is active, so it
+    // is added last (the SteeringManager prioritises by insertion order — the
+    // move-to-target force is satisfied first, separation nudges with what's
+    // left). Neighbours are populated each frame in movePlayers().
+    this.separation = new SeparationBehavior();
+    this.separation.weight = CFG.spreadWeight;
+    this.separation.active = false;
     this.steering.add(this.arrive);
     this.steering.add(this.seek);
     this.steering.add(this.pursuit);
+    this.steering.add(this.separation);
 
     this.memory = new MemorySystem(this);
     initPerception(this);

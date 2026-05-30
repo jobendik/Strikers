@@ -80,6 +80,25 @@ export const CFG = {
   // --- pass reception (Simple Soccer's intended-receiver model) ---
   receiveSpan: 2.6, // seconds an assigned receiver chases the pass before giving up
 
+  // --- off-ball spacing (Yuka SeparationBehavior — the flagged-unused Yuka group
+  // steering behaviour). A push-away force keeps team-mates from clumping so the
+  // attack spreads into space and offers real passing options. ---
+  spreadRadius: 4.6, // team-mates within this push each other apart
+  spreadWeight: 9, // SteeringManager weight on the separation force
+
+  // --- goalkeeper diving saves (deepens Simple Soccer's keeper, uses the aerial
+  // model). The keeper predicts a shot's crossing point and flings himself. ---
+  gkDiveSpeed: 2.6, // lateral lunge speed multiplier during a dive
+  gkDiveTime: 0.5, // how long a dive commits the keeper
+  gkDiveCooldown: 0.7, // recovery before he can dive again
+  gkDiveReach: 1.05, // small catch-radius bonus at full stretch (the lunge does the work)
+  gkDiveTrigger: 14, // min ball speed (u/s) toward goal to trigger a dive
+  // The keeper can only fling himself so far. With his standing catch radius this
+  // still leaves the corners beatable from a central position — place it, curl it
+  // around him, wrong-foot him, or pick the far top corner.
+  gkDiveLunge: 2.0, // furthest lateral distance a dive physically covers
+  gkParrySpeed: 24, // a save above this speed may be parried (rebound) not caught
+
   // --- game-feel juice ---
   goalSlowmo: 0.32, // time scale at the instant of a goal
   slowmoRecover: 1.7, // how fast time returns to normal (units/s of time-scale)

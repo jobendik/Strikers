@@ -25,8 +25,15 @@ attribute-driven players**.
 - 🦵 **Slide tackles** — a committed lunge with real risk/reward and fouls.
 - 🤝 **Give-and-go AI** — a passed-to teammate *runs onto the ball* instead of
   waiting to be found (Simple Soccer's intended-receiver model).
+- 🧤 **Diving keepers** — the goalkeeper reads your shot and flings himself at
+  the corner; beat him by placing it, curling it round him or wrong-footing him,
+  and watch screamers get parried out for a rebound.
+- 🏃 **Off-ball runs** — team-mates spread into space instead of clumping (Yuka's
+  `SeparationBehavior` group steering), so there's always a pass on.
 - 🪵 **Woodwork** — rattle one off the post or bar for a heart-in-mouth near-miss.
 - 🎬 **Arcade juice** — camera shake, a slow-motion goal cam and a ball trail.
+- 📣 **Living stadium** — a procedural crowd that swells as you bear down on goal
+  and roars for shots, saves and goals (every sound synthesised at runtime).
 - 🧬 **Named squads with attributes** — pace, shooting, passing, tackling and
   composure give every player a distinct identity.
 

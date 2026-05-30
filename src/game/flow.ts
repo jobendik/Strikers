@@ -13,6 +13,7 @@ export function scoreGoal(i: number): void {
   updateHUD();
   Audio.whistle();
   Audio.goal();
+  Audio.roar(true);
   Haptics.goal();
   showGoalFx(i);
   addShake(1.2); // the net ripples — punch the camera
@@ -41,6 +42,11 @@ export function resetPositions(): void {
       p.pressure = 0;
       p.slide = 0;
       p.slideCd = 0;
+      p.dive = 0;
+      p.diveCd = 0;
+      p.separation.active = false;
+      p.neighbors.length = 0;
+      p.mesh.rotation.x = 0;
       p.fsm.currentState = null; // force a fresh state on next tick
     }
   }
