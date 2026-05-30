@@ -56,19 +56,22 @@ Done end-to-end (headless-tested; UI items marked still want an in-browser pass)
 **Sim-bundle rule (important):** the retention/tournament/UI modules are kept OUT of the headless harness because `game/modes`, `core/settings`, `ui/hud`, `game/render`, `core/audio` etc. are **stubbed** in `simtest/vite.config.ts`. Anything reached only via `modes`/`main` stays out of the sim. **Do not add imports of these systems into the gameplay path (`flow`, `control`, `physics`, `movement`, `Team`, `Player`)** or they'll pollute the sim bundle.
 
 ### Key files to hook into
-- `src/game/flow.ts` — `scoreGoal`, `fullTime`, `halfTime`, `startMatch`, `kickOff`. Calls `modes.presentResult` at full time.
-- `src/game/modes.ts` — mode controller; **owns the reward-pipeline + World Cup call at `presentResult`** (stubbed in sim — safe place for retention logic).
+- `src/game/flow.ts` — `scoreGoal` (big-goal FX + commentary), `fullTime`, `halfTime`, `startMatch`, `kickOff`; SDK `gameplayStart/Stop` (B2). Calls `modes.presentResult` at full time.
+- `src/game/modes.ts` — mode controller; **owns the reward-pipeline + World Cup call + Result-Screen build at `presentResult`/`presentWorldCupResult`** (stubbed in sim — safe place for retention logic). `onFullTimeButton` (PLAY AGAIN / NEXT, B3 interstitial) + `onResultMenu` (exit).
 - `src/game/rewards.ts` — `applyMatchRewards()` reward pipeline (extend here for season/achievements/medals).
 - `src/game/worldcup.ts` — tournament engine (extend for 32/48 field, or to swap in `simulateMatch`).
 - `src/game/quests.ts` — daily orders/chest (extend for weekly orders E4).
 - `src/core/playerData.ts` — the save schema/singleton (`getPlayerData()` + `savePlayerData()`); add fields here (additive, self-healed in `migrate`).
-- `src/config/players.ts` — `TEAMS`, `SQUADS`, `DEFAULT_TEAM`, `teamMeta`, `teamStrength` source.
-- `src/ui/hud.ts` (`showFullTime`, `#ft`/`#ftReward`), `src/ui/worldcup.ts`, `src/ui/daily.ts` + `index.html` + `src/style.css` — UI surfaces. **`#ft` is the seed for the D Result Screen rebuild.**
-- `src/main.ts` — boot wiring (init order: settings → playerData → worldcup UI → daily card).
-- `src/game/state.ts` — `match`, `MatchStats`.
+- `src/config/players.ts` — `TEAMS`, `SQUADS`, `DEFAULT_TEAM`, `teamMeta` source.
+- **UI surfaces** (`index.html` + `src/style.css`): `src/ui/resultScreen.ts` (`#ft`, the Result Screen — D), `src/ui/profile.ts` (`#profileCard` — C4), `src/ui/commentary.ts` (`#commentary` — H1), `src/ui/hud.ts` (scoreboard, toasts, `showGoalFx`/`showScorerFlash`, half-time, shootout board; re-exports commentary), `src/ui/worldcup.ts` (`#tournament`), `src/ui/daily.ts` (daily card).
+- `src/platform/crazygames.ts` — CrazyGames SDK seam (B1–B4); `src/platform/storage.ts` — KV backend (B5).
+- `src/main.ts` — boot wiring (init order: `initCrazyGames` (async, non-blocking) → UI buttons → result screen → settings → playerData → worldcup UI → daily card → profile card).
+- `src/game/state.ts` — `match`, `MatchStats`. `src/game/render.ts` — `addShake`, meshes/camera/trail. `src/config/constants.ts` — FX tunables (`goalSlowmo[Big]`, `celebrateBall[Big]`).
 
 ### Known follow-ups / debt
-- **In-browser verification debt:** the World Cup banner/screens, daily card, and result-card reward lines are headless-tested but have **not** had a browser pass. Verify before/while building the **D** Result Screen (which rebuilds `#ft`).
+- **In-browser verification debt (TOP priority):** everything shipped after PR #18 — the **D** Result Screen, **C4** profile card, **H1** commentary, **H2** goal-moment punch, and the **B** CrazyGames SDK no-op path — builds clean (tsc + vite + `npm run sim` green) but has **never been click-tested in a browser**. The visual/feel layers and the SDK event firing specifically need eyes-on (`npm run dev`) + a **CrazyGames QA-tool pass (L1)**. The older WC banner/screens + daily card also still want this pass.
+- **B4 rewarded UI:** the wrapper `rewarded(onComplete)` is engine-ready, but the opt-in UI surfaces (a rewarded button on the Result Screen / daily card — e.g. continue-after-loss, double XP, reroll order) are not wired. Do with the browser pass so the honest framing can be seen.
+- **H2 best-moment capture:** Best-Moment-of-the-Match on the Result Screen is not done — needs the replay buffer (`game/replay.ts`) surfaced on `#ft` + a browser pass.
 - **A1 isolation:** to use the real physics `simulateMatch` for AI-vs-AI World Cup fixtures in-browser, build an isolation layer (pause render loop, swap `performance.now`, snapshot/restore the `state.ts` live bindings, headless meshes, bypass `flow.fullTime`'s UI). Until then `worldcup.resolveFixture` (statistical) is the resolver — interface is ready for the swap.
 - **Legacy cup state removed:** the old 4-round single-elim in `modes.ts` is gone (replaced by the engine).
 
