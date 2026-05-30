@@ -15,6 +15,7 @@ import {
   type MatchdayOutcome,
 } from './worldcup';
 import { refreshWorldCupUI } from '../ui/worldcup';
+import { refreshDailyCard } from '../ui/daily';
 
 /*
  * Game-mode controller: team selection, the friendly/knockout one-off, and the
@@ -116,11 +117,14 @@ export function onFullTimeButton(): void {
   returnToMenu();
 }
 
-/** A compact one-line progress note for the result card (the full animated
- *  Result Screen is D). Honest, immediate XP/level/coins feedback. */
+/** A compact progress note for the result card (the full animated Result Screen
+ *  is D). Honest, immediate XP/level/coins + daily progress + next-best-action. */
 function rewardLine(r: MatchRewards): string {
   const parts = [`+${r.xp.total} XP`, `Lv ${r.level} · ${r.xpIntoLevel}/${r.xpForNext}`, `+${r.coins} coins`];
   if (r.levelsGained > 0) parts.push(r.newTitle ? `LEVEL UP → ${r.newTitle}!` : 'LEVEL UP!');
+  for (const c of r.daily.completed) parts.push(`✓ ${c}`);
+  parts.push(`Daily chest ${r.daily.chestPoints}%${r.daily.chestAwarded ? ' — CHEST!' : ''}`);
+  if (r.daily.nextBest) parts.push(r.daily.nextBest);
   return parts.join('  ·  ');
 }
 
@@ -208,6 +212,7 @@ export function presentResult(
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}  ·  ` : '';
   const stat = `${penLine}${stats}`;
   const reward = rewardLine(rewards);
+  refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
 
   // World Cup tournament — feed the result into the engine and advance the bracket
   if (getSettings().mode === 'cup' && wcRun) {

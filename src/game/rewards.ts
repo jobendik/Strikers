@@ -15,6 +15,7 @@
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import { grantXp, titleForLevel } from '../core/progression';
 import { localDateString } from '../core/dates';
+import { ensureToday, progressDaily, remainingOrders, orderLabel, CHEST_MAX, type MatchFacts } from './quests';
 
 /** What happened in the match, from the *user team's* perspective. */
 export interface MatchOutcome {
@@ -32,7 +33,30 @@ export interface XpBreakdown {
   goals: number;
   cleanSheet: number;
   margin: number;
+  firstWin: number;
   total: number;
+}
+
+/** A daily-order line for the result screen. */
+export interface OrderProgress {
+  label: string;
+  progress: number;
+  target: number;
+  done: boolean;
+}
+
+/** Daily-systems progress this match (E2/E3). */
+export interface DailyRewards {
+  orders: OrderProgress[];
+  /** Labels of orders completed this match. */
+  completed: string[];
+  /** 0–100 chest meter after this match. */
+  chestPoints: number;
+  chestMax: number;
+  /** The chest filled this match. */
+  chestAwarded: boolean;
+  /** A concise "next best action" nudge (or empty). */
+  nextBest: string;
 }
 
 /** Everything the result screen needs to reveal after a match. */
@@ -51,6 +75,7 @@ export interface MatchRewards {
   newTitle: string | null;
   firstMatchOfDay: boolean;
   firstWinOfDay: boolean;
+  daily: DailyRewards;
 }
 
 // --- tunables (retention §3.1) ----------------------------------------------
@@ -64,11 +89,13 @@ const XP_CLEAN_SHEET = 80;
 const XP_BIG_WIN = 50; // win by 3+
 const BIG_WIN_MARGIN = 3;
 
+const XP_FIRST_WIN = 60; // first win of the local day (E)
 const COINS_WIN = 50;
 const COINS_DRAW = 25;
 const COINS_LOSS = 12;
 const COINS_PER_GOAL = 5;
 const COINS_FIRST_MATCH = 25;
+const COINS_FIRST_WIN = 40;
 
 /**
  * Run the reward pipeline for a decided match and persist the result. Mutates the
@@ -80,15 +107,11 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   const result: 'win' | 'draw' | 'loss' = o.win ? 'win' : o.loss ? 'loss' : 'draw';
   const cleanSheet = o.goalsAgainst === 0;
 
-  // first match of a new local day → roll the daily block's date + bonus
+  // first match of a new local day (drives the first-match bonus + daily reset)
   const firstMatchOfDay = data.daily.date !== today;
-  if (firstMatchOfDay) {
-    data.daily.date = today;
-    data.daily.firstWin = false;
-    // note: daily orders / chest reset (E) will hook in here once those land
-  }
+  ensureToday(data.daily, today); // roll fresh daily orders / chest on a new day (E2/E3)
 
-  // first *win* of the day (E rewards it; we just flag it honestly here)
+  // first *win* of the day (E first-win bonus)
   const firstWinOfDay = o.win && !data.daily.firstWin;
   if (firstWinOfDay) data.daily.firstWin = true;
 
@@ -98,7 +121,8 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   const goalsXp = Math.min(XP_GOALS_CAP, o.goalsFor * XP_PER_GOAL);
   const cleanSheetXp = cleanSheet && !o.loss ? XP_CLEAN_SHEET : 0;
   const marginXp = o.win && o.goalsFor - o.goalsAgainst >= BIG_WIN_MARGIN ? XP_BIG_WIN : 0;
-  const totalXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp;
+  const firstWinXp = firstWinOfDay ? XP_FIRST_WIN : 0;
+  const totalXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp;
 
   const xp: XpBreakdown = {
     base,
@@ -106,11 +130,29 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     goals: goalsXp,
     cleanSheet: cleanSheetXp,
     margin: marginXp,
+    firstWin: firstWinXp,
     total: totalXp,
   };
 
+  // --- daily orders + chest (E2/E3) ---
+  const facts: MatchFacts = {
+    win: o.win,
+    draw: o.draw,
+    loss: o.loss,
+    goalsFor: o.goalsFor,
+    goalsAgainst: o.goalsAgainst,
+    cleanSheet,
+  };
+  const dp = progressDaily(data.daily, facts);
+
   // --- coins ---
-  const coins = (o.win ? COINS_WIN : o.draw ? COINS_DRAW : COINS_LOSS) + o.goalsFor * COINS_PER_GOAL + (firstMatchOfDay ? COINS_FIRST_MATCH : 0);
+  const coins =
+    (o.win ? COINS_WIN : o.draw ? COINS_DRAW : COINS_LOSS) +
+    o.goalsFor * COINS_PER_GOAL +
+    (firstMatchOfDay ? COINS_FIRST_MATCH : 0) +
+    (firstWinOfDay ? COINS_FIRST_WIN : 0) +
+    dp.orderCoins +
+    dp.chestCoins;
 
   // --- apply to the save ---
   const out = grantXp(data.level, data.xp, totalXp);
@@ -129,6 +171,23 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
 
   savePlayerData();
 
+  // "next best action" copy (honest, no pressure) — chest first, then an order
+  const chestLeft = CHEST_MAX - data.daily.chestPoints;
+  const remaining = remainingOrders(data.daily);
+  let nextBest = '';
+  if (dp.chestAwarded) nextBest = 'Daily chest claimed! The meter resets — keep going.';
+  else if (chestLeft <= 40) nextBest = 'One more match fills your daily chest.';
+  else if (remaining.length) nextBest = `Daily order: ${orderLabel(remaining[0].id)} — ${remaining[0].progress}/${remaining[0].target}.`;
+
+  const daily: DailyRewards = {
+    orders: data.daily.orders.map((q) => ({ label: orderLabel(q.id), progress: q.progress, target: q.target, done: q.claimed })),
+    completed: dp.completed,
+    chestPoints: data.daily.chestPoints,
+    chestMax: CHEST_MAX,
+    chestAwarded: dp.chestAwarded,
+    nextBest,
+  };
+
   return {
     result,
     goalsFor: o.goalsFor,
@@ -143,5 +202,6 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     newTitle: out.newTitle,
     firstMatchOfDay,
     firstWinOfDay,
+    daily,
   };
 }

@@ -237,9 +237,9 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 - [ ] **D2** Animated progress stack (XP, season, daily order, daily chest, achievement).
 - [ ] **D3** Reward reveal sequencing + "next best action" copy.
 - [ ] **D4** Button hierarchy: NEXT MATCH/PLAY AGAIN primary; Menu/Collection secondary; exit always available.
-- [ ] **E1** Daily Match hook (your nation's next WC fixture) on the menu.
-- [ ] **E2** Daily Orders (3, rerollable once) + completion tracking from match events.
-- [ ] **E3** Daily Chest meter (0→100) with per-action points.
+- [x] **E1** Daily Match hook (your nation's next WC fixture) on the menu. → delivered by the A5 World Cup menu banner ("WORLD CUP 2026 · <round> · <date> — <nation> vs <opp> — play now") in `ui/worldcup.ts`.
+- [x] **E2** Daily Orders (3, rerollable once) + completion tracking from match events. → `game/quests.ts` (order catalogue, daily roll, reroll-once, match scoring) wired into the reward pipeline; menu daily card (`ui/daily.ts`) shows orders + reroll; completions surfaced on the result card. *(UI wants an in-browser pass.)*
+- [x] **E3** Daily Chest meter (0→100) with per-action points. → +40 play / +30 win / +20 per order; fills in ~2–3 matches, awards coins + carries overflow; shown as a meter on the menu daily card and on the result card with "one more match fills your chest" copy. First-win-of-day bonus also added (part of **E4**). 23-case headless test.
 - [ ] **H1** On-screen commentary shouts on key events (goal/save/curler/winner/progress).
 - [ ] **H2** Bigger goal moments (slow-mo punch, scorer flash, crowd swell on knockouts, best-moment capture).
 - [ ] **L1** CrazyGames QA pass: SDK events fire, ads in QA tool, mute on blur, no external links, fast load.
