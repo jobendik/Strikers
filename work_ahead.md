@@ -33,23 +33,44 @@
 
 ## 2. Current state (DONE — do not redo)
 
+### 2a. Core gameplay & reskin (pre-retention baseline)
 - **Core gameplay fixed & validated** (see git history on `main`):
   - Ball physics fix (rolling ball no longer scrubbed every frame) — passes/shots/penalties work.
   - Pass-request off-ball runs (Simple Soccer `RequestPass`).
   - Distance-weighted passing (`passWeight`).
   - Shot-on-target stat fix (`Ball.shot` flag) and away-team curl-direction fix (`* team.side`).
   - Kickoff red-card guard.
-- **World Championship 2026 reskin** (PR #9): 16 national teams (host **USA** default, **Norway** included), flag kits, fictional squads, away-kit clash handling, 4-round World Cup bracket, branding/SEO, self-healing saved team key.
-- **Headless balance harness**: `simtest/`, run `npm run sim -- <matches> <secsPerHalf>`. Real sim, no renderer. Use it to validate every gameplay/balance change.
-- Modes today: **Friendly / Knockout / World Cup** (4-round single-elim). Settings persist in `localStorage` (`core/settings.ts`).
+- **World Championship 2026 reskin** (PR #9): 16 national teams (host **USA** default, **Norway** included), flag kits, fictional squads, away-kit clash handling, branding/SEO, self-healing saved team key.
+- **Headless balance harness**: `simtest/`, run `npm run sim -- <matches> <secsPerHalf>`. Real sim, no renderer. Use it to validate every gameplay/balance change. **Now driven by the shared `simulateMatch()` (A1).**
+- Modes: **Friendly / Knockout / World Cup**. Settings persist in `localStorage` (`core/settings.ts`).
 
-**Key files to hook into:**
-- `src/game/flow.ts` — `scoreGoal`, `fullTime`, `halfTime`, `startMatch`, `kickOff`, stats. **The result/full-time flow is where the retention pipeline plugs in.**
-- `src/game/modes.ts` — mode/tournament controller, `configureTeams`, `presentResult`, cup bracket.
-- `src/config/players.ts` — `TEAMS`, `SQUADS`, `DEFAULT_TEAM`, `teamMeta`.
-- `src/core/settings.ts` — persistence pattern (extend into the player-save module).
-- `src/ui/hud.ts` + `index.html` + `src/style.css` — UI surfaces (full-time card `#ft` is the result screen seed).
+### 2b. Retention foundation + World Cup + daily loop (PRs #11–17, this build)
+Done end-to-end (headless-tested; UI items marked still want an in-browser pass):
+- **A1 — shared sim:** `src/game/simulate.ts` `simulateMatch()`; harness drives it. *In-browser headless isolation is NOT done — `createGameState()` spawns scene meshes and `flow.fullTime()` fires UI; the World Cup engine therefore uses a statistical resolver, not `simulateMatch`, for AI-vs-AI fixtures (see A1 note below).*
+- **B5 — storage:** `src/platform/storage.ts` — swappable KV backend (localStorage now, CrazyGames data module later via `setStorageBackend`), in-memory fallback.
+- **C1 — player save:** `src/core/playerData.ts` — full §5 schema, versioned, `migratePlayerData` self-heals partial/corrupt/old saves. Loads on boot.
+- **C2/C3 — progression:** `src/core/progression.ts` (XP curve + Rookie→Legend titles) + `src/game/rewards.ts` (`applyMatchRewards` pipeline: XP/coins/bonuses, stats). Hooked in `modes.presentResult`.
+- **A2–A6 — World Cup:** `src/game/worldcup.ts` (engine: 16-team field → 4 groups of 4 → QF/SF/Final, strength-based resolver, standings, champion, resume) + live integration in `modes.ts` (the "World Cup" mode now drives it) + `src/ui/worldcup.ts` (menu banner + groups/bracket/your-road screens, `#tournament` overlay).
+- **E1/E2/E3 — daily loop:** `src/game/quests.ts` (daily orders + chest) + reward-pipeline integration (first-win bonus) + `src/ui/daily.ts` (menu daily card). `src/core/dates.ts` for local-day/ISO-week keys.
+
+**Sim-bundle rule (important):** the retention/tournament/UI modules are kept OUT of the headless harness because `game/modes`, `core/settings`, `ui/hud`, `game/render`, `core/audio` etc. are **stubbed** in `simtest/vite.config.ts`. Anything reached only via `modes`/`main` stays out of the sim. **Do not add imports of these systems into the gameplay path (`flow`, `control`, `physics`, `movement`, `Team`, `Player`)** or they'll pollute the sim bundle.
+
+### Key files to hook into
+- `src/game/flow.ts` — `scoreGoal`, `fullTime`, `halfTime`, `startMatch`, `kickOff`. Calls `modes.presentResult` at full time.
+- `src/game/modes.ts` — mode controller; **owns the reward-pipeline + World Cup call at `presentResult`** (stubbed in sim — safe place for retention logic).
+- `src/game/rewards.ts` — `applyMatchRewards()` reward pipeline (extend here for season/achievements/medals).
+- `src/game/worldcup.ts` — tournament engine (extend for 32/48 field, or to swap in `simulateMatch`).
+- `src/game/quests.ts` — daily orders/chest (extend for weekly orders E4).
+- `src/core/playerData.ts` — the save schema/singleton (`getPlayerData()` + `savePlayerData()`); add fields here (additive, self-healed in `migrate`).
+- `src/config/players.ts` — `TEAMS`, `SQUADS`, `DEFAULT_TEAM`, `teamMeta`, `teamStrength` source.
+- `src/ui/hud.ts` (`showFullTime`, `#ft`/`#ftReward`), `src/ui/worldcup.ts`, `src/ui/daily.ts` + `index.html` + `src/style.css` — UI surfaces. **`#ft` is the seed for the D Result Screen rebuild.**
+- `src/main.ts` — boot wiring (init order: settings → playerData → worldcup UI → daily card).
 - `src/game/state.ts` — `match`, `MatchStats`.
+
+### Known follow-ups / debt
+- **In-browser verification debt:** the World Cup banner/screens, daily card, and result-card reward lines are headless-tested but have **not** had a browser pass. Verify before/while building the **D** Result Screen (which rebuilds `#ft`).
+- **A1 isolation:** to use the real physics `simulateMatch` for AI-vs-AI World Cup fixtures in-browser, build an isolation layer (pause render loop, swap `performance.now`, snapshot/restore the `state.ts` live bindings, headless meshes, bypass `flow.fullTime`'s UI). Until then `worldcup.resolveFixture` (statistical) is the resolver — interface is ready for the swap.
+- **Legacy cup state removed:** the old 4-round single-elim in `modes.ts` is gone (replaced by the engine).
 
 ---
 
@@ -215,11 +236,13 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 
 ## 8. MASTER CHECKLIST  ✅ (tick across sessions — this is the durable to-do)
 
+> **Progress snapshot (last updated this build):** P0 is **14/24 done** — the **progression foundation** (A1, B5, C1, C2, C3), the **entire World Cup** (A2–A6), and the **daily loop** (E1–E3). ~155 headless test assertions; `npm run sim` green throughout. **Remaining P0:** B1–B4 (CrazyGames SDK + ads), C4 (profile card), D1–D4 (animated Result Screen), H1–H2 (excitement layer), L1–L3 (QA + submission). **Top non-feature priority:** an **in-browser verification pass** of the UI shipped so far (WC banner/screens, daily card, result-card lines) before the **D** rebuild of `#ft`.
+
 ### P0 — launch-critical & headline
 - [x] **A1** Refactor harness match loop into importable `simulateMatch(home, away, diff)` (shared by sim + in-game tournament). → `src/game/simulate.ts`; harness now drives it. Behaviour-preserving (sim numbers unchanged). NOTE for A2: in-browser use needs mesh/UI isolation (createGameState adds meshes to the live scene; `flow.fullTime` fires UI) — handle in `game/worldcup.ts`.
 - [x] **A2** World Cup data model: field/groups/bracket/matchday in player save (`worldcup`), resume across sessions. → `src/game/worldcup.ts` engine: 16-team field, pot-based draw into 4 groups of 4, round-robin fixtures, knockout ties, champion/userOut; serialised into the `worldcup` save slot (`saveRun`/`loadRun`), resumes mid-tournament. 69-case headless lifecycle test.
-- [~] **A3** Group stage: standings table + sim all other fixtures per matchday; advance per real 2026 format. → engine + **live integration done** (PR B): playing your nation's fixture resolves the rest of the field and advances the matchday; group draws stand. **Standings-table screen still pending (A6).**
-- [~] **A4** Knockout bracket tree (R32→…→Final) screen + "road to the final". → engine + **live integration done** (PR B): win to advance QF→SF→Final, level knockout ties go to the live shootout, champion crowned (bumps titles + `cupsWon`); knocked-out run plays on simulated. **Bracket-tree screen still pending (A6).**
+- [x] **A3** Group stage: standings table + sim all other fixtures per matchday; advance per real 2026 format. → engine + live integration: playing your nation's fixture resolves the rest of the field and advances the matchday (group draws stand); standings-table screen shipped in A6. *(UI wants an in-browser pass.)*
+- [x] **A4** Knockout bracket tree (R32→…→Final) screen + "road to the final". → engine + live integration: win to advance QF→SF→Final, level knockout ties go to the live shootout, champion crowned (bumps titles + `cupsWon`), knocked-out run plays on simulated; bracket-tree + your-road screens shipped in A6. *(UI wants an in-browser pass.)*
 - [x] **A5** Real-calendar mapping: matchdays → real dates; menu surfaces "your nation plays today" (honest sim framing). → `CALENDAR` (6 matchdays → real 2026 dates) + menu banner (`ui/worldcup.ts` `refreshBanner`) showing "WORLD CUP 2026 · <round> · <date> — <nation> vs <opp> — play now", updates on team/mode change. Not hard-gated on the real date (don't gate core play) — date is flavour + the hook. *(UI wants an in-browser pass.)*
 - [x] **A6** Tournament UI: your fixtures, results ticker, bracket, group table, persistent resume. → `ui/worldcup.ts` + `#tournament` overlay: GROUPS (4 standings tables, qualifiers + your nation highlighted), BRACKET (QF/SF/Final tree with scores/winners/pens + champion), YOUR ROAD (your fixtures with results + next marked). Opens from the menu banner; reads persisted run so it resumes. *(UI wants an in-browser pass.)*
 
