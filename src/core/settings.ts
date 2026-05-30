@@ -4,12 +4,14 @@ import { Haptics } from './haptics';
 import { renderer } from '../rendering/scene';
 import { setReplayEnabled } from '../game/replay';
 import { match } from '../game/state';
+import { TEAMS, teamMeta } from '../config/players';
+import type { GameMode } from '../config/types';
 
 /*
- * Persistent player settings (localStorage). Covers both presentation prefs
- * (sound, haptics, graphics tier, left-handed layout) and the menu game options
- * (difficulty, half length, match type, rules) so a returning player keeps their
- * setup. Everything degrades gracefully if storage is unavailable.
+ * Persistent player settings (localStorage). Covers presentation prefs (sound,
+ * haptics, graphics tier, left-handed layout), the menu game options (difficulty,
+ * half length, match type, rules, mentality, chosen team) and cup progress, so a
+ * returning player keeps their setup. Degrades gracefully if storage is blocked.
  */
 
 export interface Settings {
@@ -19,12 +21,15 @@ export interface Settings {
   lefty: boolean;
   diff: number;
   half: number;
-  knockout: boolean;
+  mode: GameMode;
   sim: boolean;
   mentality: number;
+  team: string;
+  titles: number;
 }
 
 const KEY = 'yuka-strikers/settings';
+const MODES: GameMode[] = ['friendly', 'knockout', 'cup'];
 
 const DEFAULTS: Settings = {
   sound: true,
@@ -33,9 +38,11 @@ const DEFAULTS: Settings = {
   lefty: false,
   diff: 1,
   half: 180,
-  knockout: false,
+  mode: 'friendly',
   sim: false,
   mentality: 1,
+  team: 'STRIKERS',
+  titles: 0,
 };
 
 const S: Settings = load();
@@ -62,6 +69,12 @@ export function getSettings(): Settings {
   return S;
 }
 
+/** Merge a patch into the saved settings and persist (used for cup titles). */
+export function saveSettings(patch: Partial<Settings>): void {
+  Object.assign(S, patch);
+  persist();
+}
+
 const el = (id: string): HTMLElement | null => document.getElementById(id);
 
 /** Light up the option in a segmented control whose data-v matches `value`. */
@@ -81,6 +94,17 @@ function applyQuality(): void {
   renderer.shadowMap.enabled = high;
 }
 
+/** Reflect the team picker's selection (highlight + the chosen team's name). */
+function reflectTeam(): void {
+  el('teamPick')
+    ?.querySelectorAll('button')
+    .forEach((b) => b.classList.toggle('on', b.getAttribute('data-team') === S.team));
+  const name = el('teamName');
+  if (name) name.textContent = teamMeta(S.team).name;
+  const titles = el('titles');
+  if (titles) titles.textContent = S.titles > 0 ? `🏆 Cups won: ${S.titles}` : '';
+}
+
 /** Push every setting into the running game + the DOM. */
 export function applySettings(): void {
   Audio.setMute(!S.sound);
@@ -89,7 +113,6 @@ export function applySettings(): void {
   document.body.classList.toggle('lefty', S.lefty);
   CFG.diff = S.diff;
   CFG.matchSeconds = S.half;
-  match.settleDraws = S.knockout;
   match.simRules = S.sim;
   match.teams[0].mentality = S.mentality; // the user team's chosen approach
 
@@ -97,12 +120,13 @@ export function applySettings(): void {
   if (mute) mute.textContent = S.sound ? '🔊' : '🔇';
   setSeg('segDiff', S.diff);
   setSeg('segLen', S.half);
-  setSeg('segMode', S.knockout ? 1 : 0);
+  setSeg('segMode', Math.max(0, MODES.indexOf(S.mode)));
   setSeg('segRules', S.sim ? 1 : 0);
   setSeg('segMentality', S.mentality);
   setSeg('segHaptics', S.haptics ? 1 : 0);
   setSeg('segQuality', S.quality === 'high' ? 1 : 0);
   setSeg('segLayout', S.lefty ? 1 : 0);
+  reflectTeam();
 }
 
 /** Wire every menu/settings control to mutate, persist and re-apply. Call once. */
@@ -121,12 +145,24 @@ export function initSettings(): void {
 
   seg('segDiff', (v) => (S.diff = v));
   seg('segLen', (v) => (S.half = v));
-  seg('segMode', (v) => (S.knockout = v === 1));
+  seg('segMode', (v) => (S.mode = MODES[v] ?? 'friendly'));
   seg('segRules', (v) => (S.sim = v === 1));
   seg('segMentality', (v) => (S.mentality = v));
   seg('segHaptics', (v) => (S.haptics = v === 1));
   seg('segQuality', (v) => (S.quality = v === 1 ? 'high' : 'lite'));
   seg('segLayout', (v) => (S.lefty = v === 1));
+
+  // team picker (string keys, so wired separately from the numeric segments)
+  el('teamPick')
+    ?.querySelectorAll('button')
+    .forEach((b) =>
+      b.addEventListener('click', () => {
+        const key = b.getAttribute('data-team');
+        if (key && TEAMS.some((t) => t.key === key)) S.team = key;
+        persist();
+        applySettings();
+      }),
+    );
 
   el('muteBtn')?.addEventListener('click', () => {
     Audio.resume();
