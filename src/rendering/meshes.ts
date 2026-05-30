@@ -89,6 +89,17 @@ export function makeBallMesh(): THREE.Mesh {
     new THREE.MeshStandardMaterial({ map: tex, roughness: 0.45, metalness: 0.05 }),
   );
   m.castShadow = true;
+
+  // a fake contact shadow that shrinks as the ball lifts off the turf — sells height
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(CFG.ballR * 1.15, 18),
+    new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.34 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  world.add(shadow);
+  m.userData.shadow = shadow;
+
   world.add(m);
   return m;
 }

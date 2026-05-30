@@ -3,7 +3,8 @@
 A fast, mobile-first 5-a-side arcade football game for the browser. You command
 the **Crimson Strikers** against **Azure United**; every other player on the
 pitch is driven by game AI — steering behaviors, perception with short-term
-memory, fuzzy-logic decision making and team state machines.
+memory, fuzzy-logic decision making, team state machines and **named,
+attribute-driven players**.
 
 - **Rendering:** [three.js](https://threejs.org)
 - **Game AI:** [Yuka](https://mugen87.github.io/yuka/) (Vehicle steering,
@@ -11,6 +12,20 @@ memory, fuzzy-logic decision making and team state machines.
 - **Tooling:** [Vite](https://vitejs.dev) + TypeScript, deployed to GitHub Pages
 - **Zero art/audio assets** — the pitch, players, ball and every sound effect are
   generated procedurally at runtime.
+
+### What makes it fun
+
+- ⚽ **Real aerial ball** — gravity, bounce and height, so the ball lives in 3D.
+- 🪁 **Chips, crosses & lobbed through-balls** — dink a rushing keeper, whip a
+  cross into the box, or float one over the top.
+- 🎯 **Charged shooting** — hold SHOOT to power up; a soft tap places it or chips.
+- 💥 **Headers & volleys** — airborne balls must be headed, not just collected.
+- 🦵 **Slide tackles** — a committed lunge with real risk/reward and fouls.
+- 🧬 **Named squads with attributes** — pace, shooting, passing, tackling and
+  composure give every player a distinct identity.
+
+See [`docs/ai-architecture.md`](docs/ai-architecture.md) for how each feature
+maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
 
 > Architecture inspired by Mat Buckland's *Programming Game AI by Example*
 > (ch. 4, "Simple Soccer") and the Yuka "kickoff" demo. See
@@ -23,10 +38,15 @@ memory, fuzzy-logic decision making and team state machines.
 | Action | Touch | Keyboard |
 | --- | --- | --- |
 | Move | Left joystick | `WASD` / Arrows |
-| Shoot | ⚽ button | `K` |
-| Pass | ➤ button | `J` |
+| Shoot (hold = power, tap = place/chip) | ⚽ button | `K` |
+| Pass (hold = loft/cross) | ➤ button | `J` |
+| Through-ball | ➤ while flicking joystick forward | `J` + forward |
+| Slide tackle / header (off the ball) | ⚽ button | `K` |
 | Sprint | » button | `Shift` |
 | Switch player | ⇄ button | `Space` |
+
+**Tip:** when the keeper rushes out, a *soft tap* of SHOOT dinks the ball over
+him. Hold SHOOT to wind up a screamer.
 
 Best played in **landscape** on a phone — it's installable as a PWA.
 
@@ -63,7 +83,8 @@ src/
 ├── style.css              # all UI styling (extracted from the monolith)
 ├── config/
 │   ├── constants.ts       # CFG, DIFF, FORMATION — single source of balance truth
-│   └── types.ts           # shared types (roles, formation, input, …)
+│   ├── players.ts         # named squads + per-player attributes (Openfoot/open-football)
+│   └── types.ts           # shared types (roles, formation, input, attributes, …)
 ├── core/
 │   ├── math.ts            # V3, clamp, lerp, rand, distSq, headingVec
 │   ├── time.ts            # shared simulation clock (delta + elapsed)
@@ -87,10 +108,11 @@ src/
 │   └── goalkeeper.ts      # goalkeeper brain
 ├── game/
 │   ├── state.ts           # shared singletons (ball, teams, match) + helpers
-│   ├── control.ts         # possession, kicks, pressure, fouls
-│   ├── physics.ts         # ball integration, bounds, set-pieces
-│   ├── movement.ts        # player integration, stamina, collisions, switching
-│   ├── humanActions.ts    # user shoot / pass / switch
+│   ├── aerial.ts          # 3D ball helpers: lob launch, header detection (Notblox)
+│   ├── control.ts         # possession, kicks, lobs, headers, slide tackles, fouls
+│   ├── physics.ts         # 3D ball integration (gravity + bounce), bounds, set-pieces
+│   ├── movement.ts        # player integration, slides, stamina, collisions, switching
+│   ├── humanActions.ts    # user shoot/chip · pass/cross/through-ball · slide/header
 │   ├── flow.ts            # scoring, kickoff, full-time
 │   ├── render.ts          # mesh + camera sync
 │   ├── input.ts           # joystick, buttons, keyboard

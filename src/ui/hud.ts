@@ -17,6 +17,20 @@ export function updateHUD(): void {
   const mm = Math.floor(tl / 60);
   const ss = Math.floor(tl % 60);
   el('clock').textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+  updatePlayerBadge();
+}
+
+/** Show which named player the user is currently controlling. */
+function updatePlayerBadge(): void {
+  const badge = el('pname');
+  const p = match.userPlayer;
+  if (p && match.state === 'play') {
+    el('pnum').textContent = String(p.num);
+    el('pnm').textContent = p.name;
+    badge.classList.add('show');
+  } else {
+    badge.classList.remove('show');
+  }
 }
 
 let toastT = 0;

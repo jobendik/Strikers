@@ -180,11 +180,67 @@ export function findBestPass(
   return receiver ? { receiver, target: tgt } : null;
 }
 
-/** Difficulty-scaled aiming noise added to a target. */
-export function addNoise(t: Vector3): void {
-  const n = 0.75 - CFG.diff * 0.2;
+/**
+ * Difficulty- and skill-scaled aiming noise added to a target. `accuracy` is a
+ * 0–1 attribute fraction (shooting/passing/composure) — a clinical player
+ * sprays the ball far less than a journeyman.
+ */
+export function addNoise(t: Vector3, accuracy = 0.5): void {
+  const n = (0.78 - CFG.diff * 0.2) * (1.25 - accuracy);
   t.z += rand(-n, n);
   t.x += rand(-n, n) * 0.4;
+}
+
+/**
+ * A driven through-ball into space ahead of a forward-running teammate, behind
+ * the defensive line — a first-class action from the footballSimulationEngine
+ * set. Returns the runner and the space to play them into, or null.
+ */
+export function findThroughBall(passer: Player, oppTeam: Team): { receiver: Player; target: Vector3 } | null {
+  const team = passer.team;
+  const gx = goalX(team);
+  let best: Player | null = null;
+  let bestScore = -Infinity;
+  const target = V3();
+  const tgt = V3();
+  for (const m of team.outfield()) {
+    if (m === passer) continue;
+    const ahead = (m.position.x - passer.position.x) * team.side;
+    if (ahead < -1.5) continue; // only thread it forward
+    tgt.set(
+      clamp(m.position.x + team.side * 6.5, -CFG.halfL + 3, CFG.halfL - 3),
+      0,
+      clamp(m.position.z * 0.85, -CFG.halfW + 3, CFG.halfW - 3),
+    );
+    if (!isInside(tgt)) continue;
+    if (passer.position.distanceTo(m.position) < CFG.minPassDist) continue;
+    if (!isPassSafe(ball.position, tgt, m, CFG.throughPow, oppTeam, true)) continue;
+    const score = -Math.abs(gx - tgt.x) + ahead * 0.6;
+    if (score > bestScore) {
+      bestScore = score;
+      best = m;
+      target.copy(tgt);
+    }
+  }
+  return best ? { receiver: best, target } : null;
+}
+
+/**
+ * If the opposing keeper has rushed off the line, returns a chip target under
+ * the bar behind them, else null. Enables the AI (and assists the human) to lob
+ * an advancing goalkeeper — only possible with the aerial ball model.
+ */
+export function canChipKeeper(origin: Vector3, team: Team, oppTeam: Team, out: Vector3): boolean {
+  const gk = oppTeam.gk;
+  const gx = goalX(team);
+  if (Math.abs(gx - gk.position.x) < 3.5) return false; // keeper still on his line
+  if ((gk.position.x - origin.x) * team.side <= 0) return false; // keeper not between ball and goal
+  const dgoal = Math.abs(gx - origin.x);
+  if (dgoal > 17 || dgoal < 3.5) return false;
+  // aim ~2 units beyond the line so the ball is still dropping (over the keeper,
+  // under the bar) as it crosses the goal line, rather than bottoming out on it.
+  out.set(gx + team.side * 2, 0, clamp(origin.z * 0.3, -(CFG.goalHalf - 0.7), CFG.goalHalf - 0.7));
+  return true;
 }
 
 /** Snaps a shot target onto the goal line, inside the posts. */

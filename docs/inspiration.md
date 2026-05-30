@@ -21,3 +21,31 @@
    * **2D Simulation:** Autonomous software agents (represented as circles) receive noisy, relative sensor data (visual and acoustic) and must send basic commands (dash, turn, kick) to a central server every 100 milliseconds.
    * **3D Simulation:** Highly complex physics simulation where agents must calculate low-level controls for humanoid robots, managing up to 22 individual hinges just to walk, stand up, or kick.
  * **Key Insight:** This is a heavy academic research platform used by universities worldwide to test machine learning and multi-agent cooperation. It is far too complex and resource-intensive for standard web game development.
+
+---
+
+## More engines & repositories (second wave)
+
+These range from real-time 3D multiplayer architectures to deep macro-level simulators.
+
+**6. Notblox (Three.js Multiplayer ECS Engine)**
+A modern, open-source multiplayer game engine built with **Three.js** and TypeScript. It uses an Entity Component System (ECS) for network synchronization and Rapier.js for physics, and ships a server-authoritative **Football game mode** demo.
+ * **What it consists of:** A Node.js backend using WebSockets, client-side Three.js rendering, and modular TypeScript game scripts.
+ * **Verdict:** Highly relevant for a 3D browser-based multiplayer football game — a working blueprint for server-authoritative ball physics and player synchronization. Its headline takeaway for a single-player arcade game is **real, physics-driven ball motion in 3D** (height, gravity, bounce).
+
+**7. footballSimulationEngine**
+A pure Node.js module designed strictly for backend match logic. It runs iterative 2D football matches by taking two JSON files (teams + player stats) and outputting positional data step-by-step.
+ * **What it consists of:** Iterative logic handling ball movement scaled to kick power, possession states, and player actions (shoot, **through-ball**, intercept, **slide**). It separates player movement decisions from ball physics to prevent simultaneous conflicting actions.
+ * **Verdict:** A lightweight headless backend for a custom renderer. Its transferable gift is an explicit **action set** — through-ball, slide tackle, intercept — beyond plain pass/shoot.
+
+**8. Openfoot Manager**
+A highly active, completely free open-source alternative to *Football Manager*.
+ * **What it consists of:** A fast match engine (Rust) paired with a React + TypeScript UI, running as a Tauri desktop app. Zone-based minute-by-minute simulation, full squad management, transfers, training.
+ * **Verdict:** Not arcade gameplay, but the reference for **attribute-driven squads** — named players with distinct ratings and lots of structured JSON player data.
+
+**9. open-football (by ZOXEXIVO)**
+A pure Rust "football world simulator" that runs autonomously, simulating entire ecosystems over decades.
+ * **What it consists of:** A single-binary engine simulating leagues, club finances, AI-driven transfers and **player reputations** without human intervention, plus a web UI to view the world.
+ * **Verdict:** A macro-level simulator, disconnected from real-time control. The transferable spark is **named player identities/reputations** giving characters on the pitch.
+
+*(Note: the repo `fbsim-core` simulates American Football (NFL), not soccer — out of scope.)*

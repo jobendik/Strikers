@@ -16,11 +16,20 @@ export function syncMeshes(dt: number): void {
       p.mesh.rotation.y = cur + diff * Math.min(1, 12 * dt);
       (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
     }
-  ball.mesh.position.set(ball.position.x, CFG.ballR, ball.position.z);
-  const sp = ball.velocity.length();
+  ball.mesh.position.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);
+  const sp = Math.hypot(ball.velocity.x, ball.velocity.z);
   if (sp > 0.1) {
     const ax = new THREE.Vector3(ball.velocity.z, 0, -ball.velocity.x).normalize();
     ball.mesh.rotateOnWorldAxis(ax, (sp * dt) / CFG.ballR);
+  }
+  // ground shadow shrinks as the ball climbs, selling the height
+  const shadow = ball.mesh.userData.shadow as THREE.Mesh | undefined;
+  if (shadow) {
+    shadow.position.set(ball.position.x, 0.02, ball.position.z);
+    const h = Math.max(0, ball.position.y - CFG.ballR);
+    const s = clamp(1 - h * 0.07, 0.4, 1);
+    shadow.scale.set(s, s, s);
+    (shadow.material as THREE.MeshBasicMaterial).opacity = 0.34 * s;
   }
 }
 

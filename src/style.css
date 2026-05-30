@@ -52,6 +52,23 @@ canvas{display:block;width:100%;height:100%;touch-action:none;}
 .btn.sprint{background:radial-gradient(circle at 40% 35%,#bff7a8,var(--neon));box-shadow:0 6px 18px rgba(57,255,20,.45),inset 0 2px 0 rgba(255,255,255,.4);grid-column:2;grid-row:2;}
 .btn.switch{background:radial-gradient(circle at 40% 35%,#ffe79a,var(--amber));box-shadow:0 6px 18px rgba(255,206,46,.45),inset 0 2px 0 rgba(255,255,255,.4);grid-column:1;grid-row:1;}
 
+/* ---------- controlled-player badge ---------- */
+#pname{position:fixed;left:50%;top:max(env(safe-area-inset-top),12px);transform:translateX(-50%);z-index:25;
+  display:flex;align-items:center;gap:7px;padding:4px 12px 4px 5px;border-radius:18px;pointer-events:none;
+  background:rgba(6,10,16,.6);border:1px solid rgba(255,255,255,.12);backdrop-filter:blur(6px);
+  font-family:'Rajdhani';font-weight:700;letter-spacing:.1em;font-size:14px;color:#fff;opacity:0;transition:opacity .25s;}
+#pname.show{opacity:1;}
+#pname .num{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;
+  background:var(--home);color:#fff;font-family:'Teko';font-size:17px;line-height:1;}
+
+/* ---------- shot power meter ---------- */
+#power{position:fixed;left:50%;bottom:max(env(safe-area-inset-bottom),20px);transform:translateX(-50%);
+  width:min(46vw,260px);height:12px;border-radius:8px;z-index:25;pointer-events:none;overflow:hidden;
+  background:rgba(6,10,16,.65);border:1px solid rgba(255,255,255,.15);opacity:0;transition:opacity .12s;}
+#power.show{opacity:1;}
+#power .fill{height:100%;width:0;border-radius:7px;
+  background:linear-gradient(90deg,#39ff14,#ffce2e 60%,#ff2d55);transition:width .04s linear;}
+
 /* ---------- overlays (menu, goal, fulltime) ---------- */
 .overlay{position:fixed;inset:0;z-index:40;display:flex;align-items:center;justify-content:center;
   background:radial-gradient(ellipse at 50% 30%,rgba(20,40,30,.6),rgba(3,5,9,.92));backdrop-filter:blur(3px);

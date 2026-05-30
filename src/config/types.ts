@@ -32,3 +32,29 @@ export interface InputState {
   z: number;
   sprint: boolean;
 }
+
+/**
+ * Per-player attributes (0–100), inspired by the manager-engine sources
+ * (Openfoot Manager / open-football). They give each player a distinct
+ * identity that feeds movement speed, finishing, passing range, tackling and
+ * decision quality, so a team is no longer five identical clones.
+ */
+export interface PlayerAttributes {
+  /** Movement speed multiplier source. */
+  pace: number;
+  /** Shot power and accuracy. */
+  shooting: number;
+  /** Pass range and accuracy. */
+  passing: number;
+  /** Tackle success and foul avoidance. */
+  tackling: number;
+  /** Decision quality under pressure — lowers aiming noise, raises shot nerve. */
+  composure: number;
+}
+
+/** One named squad member with a shirt number and an attribute block. */
+export interface SquadPlayer {
+  name: string;
+  num: number;
+  attr: PlayerAttributes;
+}

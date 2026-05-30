@@ -1,25 +1,52 @@
 import { match } from './state';
+import { clamp } from '../core/math';
 import { Haptics } from '../core/haptics';
 import { switchPlayer, userPass, userShoot } from './humanActions';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
 
+const MAX_CHARGE_MS = 620; // hold time for a full-power shot
+const LOB_HOLD_MS = 230; // hold PASS beyond this to loft the ball
+
+let shootDownAt = 0;
+let shooting = false;
+let passDownAt = 0;
+let passing = false;
+
+function shootDown(): void {
+  shooting = true;
+  shootDownAt = performance.now();
+  Haptics.tap();
+}
+function shootUp(): void {
+  if (!shooting) return;
+  const charge = clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1);
+  shooting = false;
+  userShoot(charge);
+}
+function passDown(): void {
+  passing = true;
+  passDownAt = performance.now();
+}
+function passUp(): void {
+  if (!passing) return;
+  const lob = performance.now() - passDownAt >= LOB_HOLD_MS;
+  passing = false;
+  userPass(lob);
+  Haptics.tap();
+}
+
+/** 0–1 shot charge level (for the on-screen power bar); 0 when not charging. */
+export function shootCharge(): number {
+  return shooting ? clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1) : 0;
+}
+
 /** Attach all touch, mouse and keyboard listeners. Call once at boot. */
 export function initInput(): void {
   initJoystick();
-  bindButton('bShoot', (down) => {
-    if (down) {
-      userShoot();
-      Haptics.tap();
-    }
-  });
-  bindButton('bPass', (down) => {
-    if (down) {
-      userPass();
-      Haptics.tap();
-    }
-  });
+  bindButton('bShoot', (down) => (down ? shootDown() : shootUp()));
+  bindButton('bPass', (down) => (down ? passDown() : passUp()));
   bindButton('bSprint', (down) => {
     sprintBtn = down;
   });
@@ -31,9 +58,11 @@ export function initInput(): void {
   });
 
   addEventListener('keydown', (e) => {
+    const repeat = keys[e.code];
     keys[e.code] = true;
-    if (e.code === 'KeyJ') userPass();
-    if (e.code === 'KeyK') userShoot();
+    if (repeat) return; // ignore auto-repeat for edge-triggered actions
+    if (e.code === 'KeyJ') passDown();
+    if (e.code === 'KeyK') shootDown();
     if (e.code === 'Space') {
       e.preventDefault();
       switchPlayer();
@@ -41,6 +70,8 @@ export function initInput(): void {
   });
   addEventListener('keyup', (e) => {
     keys[e.code] = false;
+    if (e.code === 'KeyJ') passUp();
+    if (e.code === 'KeyK') shootUp();
   });
 }
 
@@ -60,6 +91,21 @@ export function pollInput(): void {
     match.input.z = match.joy.z;
   }
   match.input.sprint = sprintBtn || keys['ShiftLeft'] || keys['ShiftRight'];
+  updatePowerBar();
+}
+
+let powerEl: HTMLElement | null = null;
+let powerFillEl: HTMLElement | null = null;
+function updatePowerBar(): void {
+  if (!powerEl) {
+    powerEl = document.getElementById('power');
+    powerFillEl = document.getElementById('powerFill');
+  }
+  if (!powerEl || !powerFillEl) return;
+  const c = shootCharge();
+  const live = c > 0 && match.controlPlayer != null && match.controlPlayer === match.userPlayer;
+  powerEl.classList.toggle('show', live);
+  if (live) powerFillEl.style.width = `${Math.round(c * 100)}%`;
 }
 
 function initJoystick(): void {

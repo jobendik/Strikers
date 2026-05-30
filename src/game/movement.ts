@@ -8,33 +8,38 @@ export function movePlayers(dt: number): void {
   const D = DIFF[CFG.diff];
   for (const t of match.teams)
     for (const p of t.players) {
+      if (p.slideCd > 0) p.slideCd = Math.max(0, p.slideCd - dt);
+
+      // a committed slide overrides all steering: skate toward the ball, decay out
+      if (p.slide > 0) {
+        p.slide = Math.max(0, p.slide - dt);
+        const dx = ball.position.x - p.position.x;
+        const dz = ball.position.z - p.position.z;
+        const d = Math.hypot(dx, dz) || 1;
+        const sp = p.baseSpeed * CFG.slideSpeed * (p.slide / CFG.slideTime);
+        p.velocity.set((dx / d) * sp, 0, (dz / d) * sp);
+        p.position.x += p.velocity.x * dt;
+        p.position.z += p.velocity.z * dt;
+        p.heading = Math.atan2(dx, dz);
+        p.position.x = clamp(p.position.x, -CFG.halfL - 3, CFG.halfL + 3);
+        p.position.z = clamp(p.position.z, -CFG.halfW - 2, CFG.halfW + 2);
+        p.kickCooldown = Math.max(0, p.kickCooldown - dt);
+        continue;
+      }
+
       const staF = 0.8 + 0.2 * p.stamina;
       let hard = false;
       if (p.isHuman) {
-        let vx: number;
-        let vz: number;
-        let speed: number;
-        if (match.lunge > 0) {
-          match.lunge -= dt;
-          const dx = ball.position.x - p.position.x;
-          const dz = ball.position.z - p.position.z;
-          const d = Math.hypot(dx, dz) || 1;
-          vx = dx / d;
-          vz = dz / d;
-          speed = p.baseSpeed * CFG.spd.sprint * staF;
-          hard = true;
-        } else {
-          vx = match.input.x;
-          vz = match.input.z;
-          const l = Math.hypot(vx, vz);
-          if (l > 1) {
-            vx /= l;
-            vz /= l;
-          }
-          const spr = match.input.sprint && l > 0.1;
-          speed = p.baseSpeed * (spr ? CFG.spd.sprint : 1) * staF;
-          hard = spr;
+        let vx = match.input.x;
+        let vz = match.input.z;
+        const l = Math.hypot(vx, vz);
+        if (l > 1) {
+          vx /= l;
+          vz /= l;
         }
+        const spr = match.input.sprint && l > 0.1;
+        const speed = p.baseSpeed * (spr ? CFG.spd.sprint : 1) * staF;
+        hard = spr;
         p.velocity.set(vx * speed, 0, vz * speed);
         p.position.x += p.velocity.x * dt;
         p.position.z += p.velocity.z * dt;
