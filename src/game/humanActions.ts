@@ -4,7 +4,7 @@ import { attr01 } from '../config/players';
 import { V3, clamp, distSq, headingVec } from '../core/math';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, match, oppOf, setReceiver } from './state';
+import { ball, match, oppOf, setPassRequest, setReceiver } from './state';
 import {
   canChipKeeper,
   canShoot,
@@ -13,6 +13,7 @@ import {
   findThroughBall,
   getBestPassToReceiver,
   goalX,
+  passWeight,
 } from '../ai/analysis';
 import { headBall, kick, lobKick, startSlide } from './control';
 import { canHead } from './aerial';
@@ -120,12 +121,34 @@ export function userPass(lob = false): void {
   const team = p.team;
   const opp = oppOf(team);
   const power = CFG.passLong * 0.9;
+  const inLen = Math.hypot(match.input.x, match.input.z);
+  const call =
+    match.callingPlayer &&
+    match.callingPlayer.team === team &&
+    match.callingPlayer !== p &&
+    !match.callingPlayer.sentOff &&
+    match.callTarget
+      ? { mate: match.callingPlayer, target: match.callTarget.clone() }
+      : null;
+  const callAligned =
+    call && inLen > 0.35
+      ? (() => {
+          const dx = call.target.x - p.position.x;
+          const dz = call.target.z - p.position.z;
+          const dl = Math.hypot(dx, dz) || 1;
+          return (dx / dl) * (match.input.x / inLen) + (dz / dl) * (match.input.z / inLen) > 0.12;
+        })()
+      : true;
 
   if (lob) {
     // lofted ball — toward the joystick if aimed, else to the most advanced mate
-    const dir = directionalMate(p, power, opp, true);
+    const dir = inLen > 0.35 ? directionalMate(p, power, opp, true) : null;
     let target = dir?.target ?? null;
     let mate: Player | null = dir?.mate ?? null;
+    if (!target && call && callAligned) {
+      target = call.target;
+      mate = call.mate;
+    }
     if (!target) {
       let adv = -Infinity;
       for (const m of team.outfield()) {
@@ -142,13 +165,12 @@ export function userPass(lob = false): void {
       const swing = CFG.curlCross * -Math.sign(p.position.z || 1);
       lobKick(p, target, 2.7, 'pass', swing);
       if (mate) setReceiver(mate);
-      flashToast('LOFTED BALL');
+      flashToast(mate ? `LOFTED TO ${mate.name}` : 'LOFTED BALL');
     }
     return;
   }
 
   // through-ball when pushing forward and a runner is in behind
-  const inLen = Math.hypot(match.input.x, match.input.z);
   const forward = inLen > 0.35 && (match.input.x / inLen) * team.side > 0.4;
   if (forward) {
     const thr = findThroughBall(p, opp);
@@ -158,6 +180,16 @@ export function userPass(lob = false): void {
       flashToast('THROUGH BALL!');
       return;
     }
+  }
+
+  // no strong aim: honour the teammate actively calling for the ball.
+  if (call && callAligned) {
+    const dx = call.target.x - ball.position.x;
+    const dz = call.target.z - ball.position.z;
+    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), power), 'pass');
+    setReceiver(call.mate);
+    flashToast(`TO ${call.mate.name}!`);
+    return;
   }
 
   // directional ground pass, else safest pass, else nearest
@@ -180,7 +212,9 @@ export function userPass(lob = false): void {
     if (nm) chosen = { mate: nm, target: V3(nm.position.x, 0, nm.position.z) };
   }
   if (chosen) {
-    kick(p, V3(chosen.target.x - ball.position.x, 0, chosen.target.z - ball.position.z), power, 'pass');
+    const dx = chosen.target.x - ball.position.x;
+    const dz = chosen.target.z - ball.position.z;
+    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), power), 'pass');
     setReceiver(chosen.mate);
   }
 }
@@ -206,6 +240,7 @@ export function userKnockOn(): void {
   match.controlTeam = null;
   match.controlCooldown = 0.14;
   match.gkHold = 0;
+  setPassRequest(null);
   Audio.kick();
   Haptics.tap();
   flashToast('KNOCK ON!');

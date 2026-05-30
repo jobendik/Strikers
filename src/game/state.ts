@@ -4,6 +4,7 @@ import { Team } from '../entities/Team';
 import type { Player } from '../entities/Player';
 import { flagOffside } from './rules';
 import type { InputState, MatchStateName } from '../config/types';
+import type { Vector3 } from 'yuka';
 
 /**
  * Mutable match state. Mirrors the original monolith's `match` object but
@@ -34,6 +35,12 @@ export interface MatchState {
   receivingPlayer: Player | null;
   /** Countdown for the receiving assignment before it lapses. */
   receiveTimer: number;
+  /** Teammate actively requesting a pass into space (Simple Soccer `RequestPass`). */
+  callingPlayer: Player | null;
+  /** The lane/pocket the requesting teammate wants the ball played into. */
+  callTarget: Vector3 | null;
+  /** Countdown for the pass request cue before it lapses. */
+  callTimer: number;
   userPlayer: Player | null;
   switchLock: number;
   scoredBy: number;
@@ -98,6 +105,9 @@ export function createGameState(): void {
     gkHold: 0,
     receivingPlayer: null,
     receiveTimer: 0,
+    callingPlayer: null,
+    callTarget: null,
+    callTimer: 0,
     userPlayer: null,
     switchLock: 0,
     scoredBy: 0,
@@ -120,6 +130,18 @@ export function setReceiver(p: Player | null): void {
   match.receivingPlayer = p;
   match.receiveTimer = p ? CFG.receiveSpan : 0;
   flagOffside(p); // Sim rules: judge the receiver's offside position at the pass
+}
+
+/**
+ * Mark (or clear) an off-ball teammate's pass request. This is the lightweight
+ * arcade equivalent of Simple Soccer's `RequestPass` telegram: a teammate
+ * evaluates that they are open, runs into the lane and advertises the option to
+ * the carrier/HUD for a short window.
+ */
+export function setPassRequest(p: Player | null, target: Vector3 | null = null): void {
+  match.callingPlayer = p;
+  match.callTarget = p && target ? target.clone() : null;
+  match.callTimer = p && target ? CFG.passRequestSpan : 0;
 }
 
 /** Returns the opposing team. */

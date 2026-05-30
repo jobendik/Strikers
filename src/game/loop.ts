@@ -3,7 +3,7 @@ import { CFG } from '../config/constants';
 import { advanceTime } from '../core/time';
 import { Audio } from '../core/audio';
 import { camera, renderer, scene } from '../rendering/scene';
-import { ball, match, setReceiver, teamIndex } from './state';
+import { ball, match, setPassRequest, setReceiver, teamIndex } from './state';
 import { pollInput } from './input';
 import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
 import { movePlayers, selectUserPlayer } from './movement';
@@ -40,6 +40,10 @@ function frame(): void {
     if (match.receivingPlayer) {
       match.receiveTimer -= sdt;
       if (match.receiveTimer <= 0) setReceiver(null);
+    }
+    if (match.callingPlayer) {
+      match.callTimer -= sdt;
+      if (match.callTimer <= 0) setPassRequest(null);
     }
     resolveControl(sdt);
     updateGkHold(sdt);

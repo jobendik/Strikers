@@ -26,15 +26,15 @@ export function initRadar(): void {
 const mapX = (x: number): number => PAD + ((x + CFG.halfL) / (CFG.halfL * 2)) * (W - 2 * PAD);
 const mapZ = (z: number): number => PAD + ((z + CFG.halfW) / (CFG.halfW * 2)) * (H - 2 * PAD);
 
-function dot(x: number, z: number, r: number, fill: string, ring = false): void {
+function dot(x: number, z: number, r: number, fill: string, ring = false, call = false): void {
   if (!ctx) return;
   ctx.fillStyle = fill;
   ctx.beginPath();
   ctx.arc(mapX(x), mapZ(z), r, 0, Math.PI * 2);
   ctx.fill();
-  if (ring) {
-    ctx.strokeStyle = '#fff';
-    ctx.lineWidth = 1.3;
+  if (ring || call) {
+    ctx.strokeStyle = call ? '#39ff14' : '#fff';
+    ctx.lineWidth = call ? 1.8 : 1.3;
     ctx.stroke();
   }
 }
@@ -64,7 +64,7 @@ export function updateRadar(): void {
     for (const p of t.players) {
       if (p.sentOff) continue;
       const user = p === match.userPlayer;
-      dot(p.position.x, p.position.z, user ? 3.1 : 2.2, t.color, user);
+      dot(p.position.x, p.position.z, user ? 3.1 : 2.2, t.color, user, p === match.callingPlayer);
     }
   dot(ball.position.x, ball.position.z, 1.8, '#ffffff');
 }

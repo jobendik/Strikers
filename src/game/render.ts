@@ -19,6 +19,16 @@ export function syncMeshes(dt: number): void {
       const leanTo = p.dive > 0 ? 1.25 : p.slide > 0 ? 0.7 : 0;
       p.mesh.rotation.x += (leanTo - p.mesh.rotation.x) * Math.min(1, 14 * dt);
       (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
+      const call = p.mesh.userData.call as THREE.Mesh | undefined;
+      if (call) {
+        const active = p === match.callingPlayer && match.state === 'play';
+        call.visible = active;
+        if (active) {
+          const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.013);
+          call.scale.setScalar(0.92 + pulse * 0.18);
+          (call.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.45;
+        }
+      }
     }
   ball.mesh.position.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);
   const sp = Math.hypot(ball.velocity.x, ball.velocity.z);
