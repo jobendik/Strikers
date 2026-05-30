@@ -95,6 +95,19 @@ h1 .accent{background:linear-gradient(180deg,#ffe79a,var(--amber));-webkit-backg
   transition:transform .08s ease, filter .12s;}
 .cta:active{transform:translateY(2px) scale(.99);}
 .cta:hover{filter:brightness(1.08);}
+.cta.small{font-size:26px;padding:9px 34px 6px;}
+.panel-title{font-family:'Teko';font-weight:600;font-size:34px;letter-spacing:.05em;color:#eaf2ff;margin:2px 0 10px;}
+.menu-links{display:flex;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;}
+.link{font-family:'Rajdhani';font-weight:700;letter-spacing:.1em;font-size:13px;color:#9fb1c9;cursor:pointer;
+  background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.12);border-radius:10px;padding:9px 16px;transition:all .15s;}
+.link:hover{color:#eaf2ff;background:rgba(255,255,255,.1);}
+.howto-grid{display:grid;grid-template-columns:auto 1fr;gap:8px 16px;text-align:left;margin:6px 0 4px;}
+.howto-grid .k{font-family:'Rajdhani';font-weight:700;letter-spacing:.06em;color:var(--neon);font-size:14px;white-space:nowrap;}
+.howto-grid .v{font-size:13px;color:#cdd9ea;line-height:1.35;}
+
+/* left-handed layout: swap the joystick and the button pad */
+body.lefty #joy{left:auto;right:max(env(safe-area-inset-right),18px);}
+body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 .scoreline{font-family:'Teko';font-size:clamp(60px,18vw,120px);line-height:.85;letter-spacing:.04em;margin:6px 0 2px;}
 .scoreline .h{color:var(--home);} .scoreline .a{color:var(--away);}
 .resultword{font-family:'Teko';font-size:clamp(40px,12vw,76px);letter-spacing:.06em;color:var(--amber);

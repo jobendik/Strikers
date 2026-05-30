@@ -72,7 +72,7 @@
     <div class="card">
       <div class="kicker">Yuka · Three.js · Agent AI</div>
       <h1>YUKA <span class="accent">STRIKERS</span></h1>
-      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Crimson Strikers</b>.<br>Steering, perception, fuzzy-logic &amp; named, attribute-driven agents power every player — with real aerial ball physics, curling shots, give-and-go runs, chips, crosses, through-balls &amp; slide tackles.</div>
+      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Strikers</b> in red; every other player is driven by steering, perception, fuzzy-logic &amp; named, attribute-driven agents — with real aerial physics, curling shots, give-and-go runs, diving keepers and penalty shootouts.</div>
       <div class="opts">
         <div class="opt-row"><div class="label">Difficulty</div>
           <div class="seg" id="segDiff">
@@ -96,13 +96,50 @@
         </div>
       </div>
       <button class="cta" id="btnPlay">KICK OFF ▸</button>
-      <div class="sub" style="margin-top:18px;opacity:.65;font-size:12px">
-        Move with the joystick. <b>Hold SHOOT</b> to power up a strike — a soft tap dinks it over a rushing keeper, and
-        <b>leaning the stick</b> as you shoot <b>bends</b> the ball around him.
-        <b>Hold PASS</b> to loft a cross; flick PASS forward to slide a <b>through-ball</b> in behind.
-        Defending? <b>SHOOT</b> launches a slide tackle and heads high balls clear.<br>
-        Keyboard: WASD/Arrows · J pass (hold = lob) · K shoot (hold = power) · Shift sprint · Space switch
+      <div class="menu-links">
+        <button class="link" id="btnHowto">❔ HOW TO PLAY</button>
+        <button class="link" id="btnSettings">⚙ SETTINGS</button>
       </div>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="overlay hidden" id="howto">
+    <div class="card">
+      <div class="kicker">How to play</div>
+      <h2 class="panel-title">CONTROLS</h2>
+      <div class="howto-grid">
+        <span class="k">Move</span><span class="v">Left joystick · WASD / Arrows</span>
+        <span class="k">Shoot</span><span class="v">⚽ / K — hold to power up, soft tap to place or chip a rushing keeper, lean the stick to curl it</span>
+        <span class="k">Pass</span><span class="v">➤ / J — hold to loft a cross, flick forward for a through-ball</span>
+        <span class="k">Off the ball</span><span class="v">⚽ / K slides in or heads a high ball clear</span>
+        <span class="k">Sprint</span><span class="v">» / Shift</span>
+        <span class="k">Switch player</span><span class="v">⇄ / Space (when defending)</span>
+        <span class="k">Penalties</span><span class="v">Aim with the joystick + SHOOT to strike; pick a corner + SHOOT to dive as keeper</span>
+      </div>
+      <div class="sub" style="font-size:12px;opacity:.7;margin-top:12px">KNOCKOUT settles a draw on penalties · SIM rules add offside &amp; cards · best played in landscape.</div>
+      <button class="cta small" id="btnHowtoDone">GOT IT ▸</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay hidden" id="settings">
+    <div class="card">
+      <div class="kicker">Settings</div>
+      <h2 class="panel-title">PREFERENCES</h2>
+      <div class="opts">
+        <div class="opt-row"><div class="label">Haptics</div>
+          <div class="seg" id="segHaptics"><button data-v="0">OFF</button><button data-v="1" class="on">ON</button></div>
+        </div>
+        <div class="opt-row"><div class="label">Graphics</div>
+          <div class="seg" id="segQuality"><button data-v="0">LITE</button><button data-v="1" class="on">HIGH</button></div>
+        </div>
+        <div class="opt-row"><div class="label">Layout</div>
+          <div class="seg" id="segLayout"><button data-v="0" class="on">RIGHT-HAND</button><button data-v="1">LEFT-HAND</button></div>
+        </div>
+      </div>
+      <div class="sub" style="font-size:12px;opacity:.7">LITE graphics turns off replays and lowers resolution on weaker phones. Left-hand swaps the joystick and buttons.</div>
+      <button class="cta small" id="btnSettingsDone">DONE ▸</button>
     </div>
   </div>
 
@@ -128,7 +165,7 @@
     </div>
   </div>
 
-  <div class="credit">CRIMSON STRIKERS vs AZURE UNITED — Yuka steering · perception · fuzzy logic · FSM agents</div>
+  <div class="credit">YUKA STRIKERS — Yuka steering · perception · fuzzy logic · FSM agents · procedural audio</div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

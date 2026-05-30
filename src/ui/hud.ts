@@ -1,6 +1,4 @@
 import { CFG } from '../config/constants';
-import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
 import { match } from '../game/state';
 
 const el = (id: string): HTMLElement => {
@@ -121,35 +119,13 @@ export function setHalfTimeVisible(v: boolean): void {
   el('ht').classList.toggle('hidden', !v);
 }
 
-/** Wire menu segmented controls and primary buttons. */
+/**
+ * Wire the primary flow buttons. The menu's option controls (difficulty, length,
+ * match type, rules) and all settings live in {@link initSettings}, which owns
+ * persistence.
+ */
 export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onSecondHalf: () => void }): void {
-  const seg = (id: string, cb: (v: number) => void): void => {
-    const group = el(id);
-    group.querySelectorAll('button').forEach((b) =>
-      b.addEventListener('click', () => {
-        group.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
-        b.classList.add('on');
-        cb(Number(b.getAttribute('data-v')));
-      }),
-    );
-  };
-  seg('segDiff', (v) => (CFG.diff = v));
-  seg('segLen', (v) => (CFG.matchSeconds = v));
-  // KNOCKOUT settles a drawn match from the penalty spot; FRIENDLY just ends level
-  seg('segMode', (v) => (match.settleDraws = v === 1));
-  // SIM enables offside + cards; ARCADE (default) keeps it frustration-free
-  seg('segRules', (v) => (match.simRules = v === 1));
-
   el('btnPlay').addEventListener('click', callbacks.onPlay);
   el('btnAgain').addEventListener('click', callbacks.onAgain);
   el('btnSecond').addEventListener('click', callbacks.onSecondHalf);
-
-  let muted = false;
-  const muteBtn = el('muteBtn');
-  muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    Audio.setMute(muted);
-    Haptics.setEnabled(!muted);
-    muteBtn.textContent = muted ? '🔇' : '🔊';
-  });
 }
