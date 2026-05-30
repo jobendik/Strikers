@@ -71,6 +71,7 @@ export function movePlayers(dt: number): void {
 
       const staF = 0.8 + 0.2 * p.stamina;
       let hard = false;
+      if (p.boost > 0) p.boost = Math.max(0, p.boost - dt);
       if (p.isHuman) {
         let vx = match.input.x;
         let vz = match.input.z;
@@ -80,8 +81,10 @@ export function movePlayers(dt: number): void {
           vz /= l;
         }
         const spr = match.input.sprint && l > 0.1;
-        const speed = p.baseSpeed * (spr ? CFG.spd.sprint : 1) * staF;
-        hard = spr;
+        // a knock-on burst overrides sprint with a brief speed explosion
+        const boosting = p.boost > 0;
+        const speed = p.baseSpeed * (boosting ? CFG.knockBoost : spr ? CFG.spd.sprint : 1) * staF;
+        hard = spr || boosting;
         p.velocity.set(vx * speed, 0, vz * speed);
         p.position.x += p.velocity.x * dt;
         p.position.z += p.velocity.z * dt;

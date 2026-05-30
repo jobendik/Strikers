@@ -121,6 +121,14 @@ export const CFG = {
     aiOnTarget: [0.78, 0.84, 0.9], // chance an AI penalty is on target, by diff
     bestOf: 5, // kicks each before sudden death
   },
+
+  // --- knock-on burst (double-tap sprint): push the ball ahead and explode past ---
+  knockSpeed: 15, // speed the ball is knocked ahead
+  knockBoost: 1.58, // running-speed multiplier during the burst (overrides sprint)
+  knockBoostTime: 0.6, // how long the burst lasts
+
+  // --- corner kicks: a defender's last touch over his own byline ---
+  cornerInset: 0.7, // how far inside the lines the corner ball is placed
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */

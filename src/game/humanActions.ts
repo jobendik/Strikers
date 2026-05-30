@@ -1,7 +1,9 @@
 import type { Vector3 } from 'yuka';
 import { CFG } from '../config/constants';
 import { attr01 } from '../config/players';
-import { V3, clamp, distSq } from '../core/math';
+import { V3, clamp, distSq, headingVec } from '../core/math';
+import { Audio } from '../core/audio';
+import { Haptics } from '../core/haptics';
 import { ball, match, oppOf, setReceiver } from './state';
 import {
   canChipKeeper,
@@ -181,6 +183,32 @@ export function userPass(lob = false): void {
     kick(p, V3(chosen.target.x - ball.position.x, 0, chosen.target.z - ball.position.z), power, 'pass');
     setReceiver(chosen.mate);
   }
+}
+
+/**
+ * KNOCK-ON — a skill burst (double-tap sprint): the carrier pushes the ball into
+ * space ahead and explodes after it, blowing past a flat-footed defender. High
+ * risk/reward — knock it too far and you'll run it out or lose it.
+ */
+export function userKnockOn(): void {
+  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
+  const p = match.userPlayer;
+  if (match.controlPlayer !== p) return;
+  const h = headingVec(p.heading);
+  ball.position.set(p.position.x + h.x * 0.6, CFG.ballR, p.position.z + h.z * 0.6);
+  ball.velocity.set(h.x * CFG.knockSpeed, 0, h.z * CFG.knockSpeed);
+  ball.spin = 0;
+  ball.lastTouch = p.team;
+  ball.lastKicker = p;
+  p.kickCooldown = 0.12;
+  p.boost = CFG.knockBoostTime;
+  match.controlPlayer = null;
+  match.controlTeam = null;
+  match.controlCooldown = 0.14;
+  match.gkHold = 0;
+  Audio.kick();
+  Haptics.tap();
+  flashToast('KNOCK ON!');
 }
 
 /** SWITCH — cycle control to the next-nearest outfield player (when defending). */

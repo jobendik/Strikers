@@ -46,6 +46,9 @@ export class Player extends Vehicle {
   /** Point the keeper is diving toward (predicted shot crossing point). */
   diveTarget: Vector3 = V3();
 
+  /** Knock-on burst timer: >0 grants a brief speed explosion after a knock-on. */
+  boost = 0;
+
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
   isHuman = false;
