@@ -106,6 +106,25 @@ class SupportState extends State<Player> {
   }
 }
 
+/**
+ * The intended receiver of a pass (Simple Soccer's `ReceiveBall`). Runs onto
+ * the ball — predictively pursuing it while it travels — so passes are met by a
+ * deliberate run rather than picked up by whoever happens to be nearest. This is
+ * what turns isolated passes into give-and-gos and runs in behind.
+ */
+class ReceiveState extends State<Player> {
+  override execute(p: Player): void {
+    if (p.isHuman) return;
+    if (canHead(p)) {
+      aiHeader(p);
+      return;
+    }
+    const rec = p.memory.getRecord(ball);
+    if (rec && rec.visible) p.goPursue(ball);
+    else p.goArrive(perceivedBallPos(p));
+  }
+}
+
 /** Goalkeeper brain — tend goal, rush to intercept, or distribute. */
 class GkState extends State<Player> {
   override execute(p: Player): void {
@@ -120,5 +139,6 @@ export const PLAYER_STATES: Record<PlayerRole, State<Player>> = {
   CHASER: new ChaseState(),
   CARRIER: new CarryState(),
   SUPPORT: new SupportState(),
+  RECEIVE: new ReceiveState(),
   GK: new GkState(),
 };

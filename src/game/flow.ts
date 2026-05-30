@@ -1,9 +1,10 @@
 import { CFG } from '../config/constants';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, match } from './state';
+import { ball, match, setReceiver } from './state';
 import { setControl } from './control';
 import { attackHeading } from '../ai/analysis';
+import { addShake, clearTrail } from './render';
 import { flashToast, setFullTimeVisible, setMenuVisible, showFullTime, showGoalFx, updateHUD } from '../ui/hud';
 
 /** Register a goal for team `i` (0 = home) and start the celebration. */
@@ -14,11 +15,14 @@ export function scoreGoal(i: number): void {
   Audio.goal();
   Haptics.goal();
   showGoalFx(i);
-  ball.velocity.set(0, 0, 0);
+  addShake(1.2); // the net ripples — punch the camera
   match.controlPlayer = null;
   match.controlTeam = null;
+  setReceiver(null);
   match.state = 'celebrate';
   match.celebrateT = 2.2;
+  match.celebrateBallT = 0.7; // keep the ball flying into the net in slow motion
+  match.timeScale = CFG.goalSlowmo;
   match.scoredBy = i;
   flashToast(i === 0 ? 'STRIKERS SCORE!' : 'UNITED SCORE!');
 }
@@ -42,7 +46,12 @@ export function resetPositions(): void {
   }
   ball.position.set(0, CFG.ballR, 0);
   ball.velocity.set(0, 0, 0);
+  ball.spin = 0;
   ball.lastTouch = null;
+  setReceiver(null);
+  match.timeScale = 1;
+  match.celebrateBallT = 0;
+  clearTrail();
 }
 
 /** Kick off for `team`. */

@@ -4,7 +4,7 @@ import type { Vector3 } from 'yuka';
 export type RoleType = 'GK' | 'DEF' | 'ATT';
 
 /** The dynamic, per-frame tactical role assigned by the team AI. */
-export type PlayerRole = 'POSITION' | 'CHASER' | 'CARRIER' | 'SUPPORT' | 'GK';
+export type PlayerRole = 'POSITION' | 'CHASER' | 'CARRIER' | 'SUPPORT' | 'RECEIVE' | 'GK';
 
 /** High-level match flow state. */
 export type MatchStateName = 'menu' | 'play' | 'celebrate' | 'fulltime';

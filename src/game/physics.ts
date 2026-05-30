@@ -7,6 +7,8 @@ import { scoreGoal } from './flow';
 import { attackHeading } from '../ai/analysis';
 import { GROUND_Y } from './aerial';
 import { Audio } from '../core/audio';
+import { Haptics } from '../core/haptics';
+import { addShake } from './render';
 import { flashToast } from '../ui/hud';
 import type { Team } from '../entities/Team';
 import type { Player } from '../entities/Player';
@@ -19,20 +21,39 @@ export function updateBall(dt: number): void {
     ball.position.y = GROUND_Y;
     ball.position.z = c.position.z;
     ball.velocity.set(0, 0, 0);
+    ball.spin = 0;
   } else if (c && c.kickCooldown <= 0) {
     const fwd = headingVec(c.heading);
     ball.position.x = c.position.x + fwd.x * CFG.carryDist;
     ball.position.y = GROUND_Y;
     ball.position.z = c.position.z + fwd.z * CFG.carryDist;
     ball.velocity.set(c.velocity.x, 0, c.velocity.z);
+    ball.spin = 0;
   } else {
     integrateFreeBall(dt);
   }
+  hitWoodwork();
   checkBounds();
 }
 
 /** Free-flight integration: gravity, ground bounce, rolling friction + air drag. */
 function integrateFreeBall(dt: number): void {
+  // Magnus swerve: spin pushes the ball sideways, perpendicular to its travel,
+  // so a struck ball bends. Scales with horizontal speed (fast balls curve more)
+  // and decays through the flight as the spin bleeds off.
+  if (ball.spin !== 0) {
+    const hx = ball.velocity.x;
+    const hz = ball.velocity.z;
+    const hsp = Math.hypot(hx, hz);
+    if (hsp > 0.5) {
+      const a = CFG.magnusK * ball.spin * hsp; // lateral acceleration magnitude
+      ball.velocity.x += (-hz / hsp) * a * dt;
+      ball.velocity.z += (hx / hsp) * a * dt;
+    }
+    ball.spin *= Math.max(0, 1 - CFG.spinDecay * dt);
+    if (Math.abs(ball.spin) < 0.02) ball.spin = 0;
+  }
+
   ball.velocity.y -= CFG.gravity * dt;
   ball.position.x += ball.velocity.x * dt;
   ball.position.y += ball.velocity.y * dt;
@@ -64,6 +85,54 @@ function integrateFreeBall(dt: number): void {
   if (!airborne && ball.velocity.y === 0 && hsp < CFG.ballStop) {
     ball.velocity.x = 0;
     ball.velocity.z = 0;
+  }
+}
+
+/**
+ * Rebound the ball off the goal frame (posts + crossbar). Turns balls that
+ * would otherwise have sailed harmlessly out into dramatic near-misses that
+ * clang back into play — and finally puts the unused post() sound to work.
+ */
+function hitWoodwork(): void {
+  if (match.state !== 'play') return;
+  const gx = ball.position.x > 0 ? CFG.halfL : -CFG.halfL;
+  if (Math.abs(ball.position.x - gx) > CFG.postR + CFG.ballR) return; // not at the goal line
+  const margin = CFG.postR + CFG.ballR;
+  let hit = false;
+
+  // upright posts: at z = ±goalHalf, below the bar. Only a ball level with the
+  // post line (a would-be miss or graze) clangs — one aimed cleanly inside the
+  // mouth passes through to score, so corner-bound shots are still rewarded.
+  if (ball.position.y < CFG.crossbarH && Math.abs(ball.position.z) > CFG.goalHalf - 0.05) {
+    for (const pz of [-CFG.goalHalf, CFG.goalHalf]) {
+      if (Math.abs(ball.position.z - pz) < margin) {
+        ball.velocity.z = (ball.position.z < pz ? -1 : 1) * Math.abs(ball.velocity.z) * CFG.woodRest;
+        ball.velocity.x *= -CFG.woodRest;
+        hit = true;
+        break;
+      }
+    }
+  }
+  // crossbar: at y = crossbarH, between the posts. Likewise only a ball up at
+  // bar height clangs — a clean low strike still counts as a goal.
+  if (
+    !hit &&
+    Math.abs(ball.position.z) < CFG.goalHalf &&
+    ball.position.y > CFG.crossbarH - 0.05 &&
+    Math.abs(ball.position.y - CFG.crossbarH) < margin
+  ) {
+    ball.velocity.y = -Math.abs(ball.velocity.y) * CFG.woodRest;
+    ball.velocity.x *= -CFG.woodRest;
+    hit = true;
+  }
+
+  if (hit) {
+    ball.position.x = gx - Math.sign(gx) * margin; // nudge back inside the field of play
+    ball.spin *= 0.3;
+    Audio.post();
+    Haptics.tap();
+    addShake(0.35);
+    flashToast(ball.position.y > CFG.crossbarH - 0.6 ? 'OFF THE BAR!' : 'OFF THE POST!');
   }
 }
 

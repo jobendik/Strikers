@@ -2,7 +2,7 @@ import type { Vector3 } from 'yuka';
 import { CFG } from '../config/constants';
 import { attr01 } from '../config/players';
 import { V3, clamp, distSq } from '../core/math';
-import { ball, match, oppOf } from './state';
+import { ball, match, oppOf, setReceiver } from './state';
 import {
   canChipKeeper,
   canShoot,
@@ -49,9 +49,20 @@ export function userShoot(charge = 1): void {
       _tmp.set(goalX(p.team), 0, (opp.gk.position.z >= 0 ? -1 : 1) * CFG.goalHalf * 0.6);
     }
     clampShot(_tmp, p.team);
-    kick(p, V3(_tmp.x - ball.position.x, 0, _tmp.z - ball.position.z), power, 'kick');
+    // bend the shot with the joystick: holding the stick across the shot line at
+    // release whips curl onto it — lean left/right to swerve it around the keeper.
+    const dx = _tmp.x - ball.position.x;
+    const dz = _tmp.z - ball.position.z;
+    const dl = Math.hypot(dx, dz) || 1;
+    const il = Math.hypot(match.input.x, match.input.z);
+    let curl = 0;
+    if (il > 0.25) {
+      const cross = (match.input.z / il) * (dx / dl) - (match.input.x / il) * (dz / dl);
+      curl = CFG.curlHuman * clamp(cross, -1, 1) * (0.6 + 0.4 * attr01(p.attr.shooting));
+    }
+    kick(p, V3(dx, 0, dz), power, 'kick', curl);
     match.stats.shots[0]++;
-    flashToast(charge > 0.8 ? 'SHOOT!' : 'PLACED');
+    flashToast(Math.abs(curl) > 0.8 ? 'CURLER!' : charge > 0.8 ? 'SHOOT!' : 'PLACED');
     return;
   }
 
@@ -110,9 +121,10 @@ export function userPass(lob = false): void {
 
   if (lob) {
     // lofted ball — toward the joystick if aimed, else to the most advanced mate
-    let target = directionalMate(p, power, opp, true)?.target ?? null;
+    const dir = directionalMate(p, power, opp, true);
+    let target = dir?.target ?? null;
+    let mate: Player | null = dir?.mate ?? null;
     if (!target) {
-      let mate: Player | null = null;
       let adv = -Infinity;
       for (const m of team.outfield()) {
         if (m === p) continue;
@@ -125,7 +137,9 @@ export function userPass(lob = false): void {
       if (mate) target = V3(mate.position.x + team.side, 0, mate.position.z);
     }
     if (target) {
-      lobKick(p, target, 2.7, 'pass');
+      const swing = CFG.curlCross * -Math.sign(p.position.z || 1);
+      lobKick(p, target, 2.7, 'pass', swing);
+      if (mate) setReceiver(mate);
       flashToast('LOFTED BALL');
     }
     return;
@@ -138,6 +152,7 @@ export function userPass(lob = false): void {
     const thr = findThroughBall(p, opp);
     if (thr) {
       kick(p, V3(thr.target.x - ball.position.x, 0, thr.target.z - ball.position.z), CFG.throughPow, 'pass');
+      setReceiver(thr.receiver);
       flashToast('THROUGH BALL!');
       return;
     }
@@ -164,6 +179,7 @@ export function userPass(lob = false): void {
   }
   if (chosen) {
     kick(p, V3(chosen.target.x - ball.position.x, 0, chosen.target.z - ball.position.z), power, 'pass');
+    setReceiver(chosen.mate);
   }
 }
 

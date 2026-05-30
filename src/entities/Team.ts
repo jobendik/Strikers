@@ -124,6 +124,10 @@ export class Team {
       this.assignMarks();
     }
 
+    // an assigned pass receiver overrides their tactical role to run onto the ball
+    const rcv = match.receivingPlayer;
+    if (rcv && rcv.team === this && rcv.roleType !== 'GK') rcv.role = 'RECEIVE';
+
     for (const p of this.players) {
       const role: PlayerRole = p.role;
       if (!p.fsm.in(role)) p.fsm.changeTo(role);
