@@ -36,6 +36,18 @@ attribute-driven players**.
   and roars for shots, saves and goals (every sound synthesised at runtime).
 - 🧬 **Named squads with attributes** — pace, shooting, passing, tackling and
   composure give every player a distinct identity.
+- ⏱️ **Two halves, half-time & stoppage** — added time accrues from goals and
+  fouls; the second half is kicked off by the other side.
+- 🥅 **Penalty shootouts** — settle a drawn knockout from the spot: best-of-five
+  then sudden death, taking *and* keeping against the diving keeper.
+- 🎞️ **Instant goal replays** — every goal is replayed in slow motion from a
+  dramatic low camera, with a skip control.
+- 🧠 **Mentality** — set your team Defensive / Balanced / Attacking; the AI
+  opponent adapts to the scoreline (chases when behind, sits on a lead).
+- 📊 **Match stats & Man of the Match** — possession, shots on target, tackles,
+  saves and a standout-player rating at full time.
+- 🎚️ **Arcade or Sim** — opt into offside and yellow/red cards when you want the
+  authenticity; Arcade (default) keeps it frustration-free.
 
 See [`docs/ai-architecture.md`](docs/ai-architecture.md) for how each feature
 maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
@@ -57,11 +69,30 @@ maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
 | Slide tackle / header (off the ball) | ⚽ button | `K` |
 | Sprint | » button | `Shift` |
 | Switch player | ⇄ button | `Space` |
+| Pause | ⏸ button | `Esc` / `P` |
+| Penalty (take) | aim joystick + ⚽ | aim + `K` |
+| Penalty (keep) | pick a corner + ⚽ | side + `K` |
 
 **Tip:** when the keeper rushes out, a *soft tap* of SHOOT dinks the ball over
 him. Hold SHOOT to wind up a screamer.
 
 Best played in **landscape** on a phone — it's installable as a PWA.
+
+### Modes & options
+
+- **Match type** — *Friendly* (a draw ends level) or *Knockout* (a draw is
+  settled by a penalty shootout).
+- **Rules** — *Arcade* (default) or *Sim* (offside + yellow/red cards).
+- **Mentality** — Defensive / Balanced / Attacking for your team.
+- **Difficulty** — Easy / Pro / Legend, and a 2/3/5-minute half length.
+
+### Settings & accessibility
+
+A **Settings** panel (and a **How to play** overlay) on the start menu cover
+haptics on/off, a **Graphics** tier (LITE turns off replays and lowers
+resolution for weaker phones) and a **left-handed layout** that swaps the
+joystick and button pad. A **tactical radar** minimap shows the shape of the
+game. Every choice is saved to `localStorage` between sessions.
 
 ## Develop
 
@@ -102,7 +133,8 @@ src/
 │   ├── math.ts            # V3, clamp, lerp, rand, distSq, headingVec
 │   ├── time.ts            # shared simulation clock (delta + elapsed)
 │   ├── audio.ts           # procedural Web Audio engine
-│   └── haptics.ts         # Vibration API feedback for mobile
+│   ├── haptics.ts         # Vibration API feedback for mobile
+│   └── settings.ts        # persistent prefs (sound/haptics/quality/layout/options)
 ├── rendering/
 │   ├── scene.ts           # renderer, scene, camera, lights, world group
 │   ├── pitchTexture.ts    # canvas-painted pitch markings
@@ -126,12 +158,16 @@ src/
 │   ├── physics.ts         # 3D ball integration (gravity + bounce), bounds, set-pieces
 │   ├── movement.ts        # player integration, slides, stamina, collisions, switching
 │   ├── humanActions.ts    # user shoot/chip · pass/cross/through-ball · slide/header
-│   ├── flow.ts            # scoring, kickoff, full-time
+│   ├── flow.ts            # scoring, halves/half-time/stoppage, MOTM, pause, kickoff
+│   ├── penalty.ts         # penalty shootout mini-game (take + keep vs diving keeper)
+│   ├── replay.ts          # goal replay ring buffer + dramatic playback
+│   ├── rules.ts           # opt-in Sim rules: offside + yellow/red cards
 │   ├── render.ts          # mesh + camera sync
 │   ├── input.ts           # joystick, buttons, keyboard
 │   └── loop.ts            # the main RAF simulation loop
 └── ui/
-    └── hud.ts             # scoreboard, toast, overlays, menu wiring
+    ├── hud.ts             # scoreboard, toast, overlays, shootout board
+    └── radar.ts           # tactical minimap
 ```
 
 The original single-file prototype is preserved at
