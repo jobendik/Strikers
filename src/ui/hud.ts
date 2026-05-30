@@ -21,6 +21,17 @@ export function updateHUD(): void {
   updatePlayerBadge();
 }
 
+/** Sync the scoreboard tags + kit dots to the two teams' current identities. */
+export function refreshTeamTags(): void {
+  const [h, a] = match.teams;
+  el('tagH').textContent = h.short;
+  el('tagA').textContent = a.short;
+  el('dotH').style.background = h.color;
+  el('dotH').style.color = h.color;
+  el('dotA').style.background = a.color;
+  el('dotA').style.color = a.color;
+}
+
 /** Show which named player the user is currently controlling. */
 function updatePlayerBadge(): void {
   const badge = el('pname');
@@ -59,12 +70,22 @@ export function showGoalFx(i: number): void {
   fx.classList.add('show');
 }
 
-export function showFullTime(h: number, a: number, result: string, stats: string, motm = ''): void {
+export function showFullTime(
+  h: number,
+  a: number,
+  result: string,
+  stats: string,
+  motm = '',
+  kicker = 'Full Time',
+  buttonLabel = 'PLAY AGAIN ▸',
+): void {
   el('ftH').textContent = String(h);
   el('ftA').textContent = String(a);
   el('ftResult').textContent = result;
   el('ftStats').textContent = stats;
   el('ftMotm').textContent = motm;
+  el('ftKicker').textContent = kicker;
+  el('btnAgain').textContent = buttonLabel;
   setFullTimeVisible(true);
 }
 
@@ -105,7 +126,7 @@ export function updateShootoutBoard(
       dots += `<span class="so-dot ${m ?? 'empty'}"></span>`;
     }
     row.className = `so-row${i === current ? ' current' : ''}`;
-    row.innerHTML = `<span class="so-tag">${match.teams[i].name}</span>${dots}<span class="so-score">${goals[i]}</span>`;
+    row.innerHTML = `<span class="so-tag">${match.teams[i].short}</span>${dots}<span class="so-score">${goals[i]}</span>`;
   }
 }
 

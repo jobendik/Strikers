@@ -1,5 +1,6 @@
 import { Regulator, Vector3 } from 'yuka';
 import { CFG, FORMATION, MENTALITY } from '../config/constants';
+import { teamMeta } from '../config/players';
 import { V3, clamp, distSq } from '../core/math';
 import { ball, match, oppOf } from '../game/state';
 import { updatePerception } from '../ai/perception';
@@ -13,8 +14,12 @@ const _scratch = V3();
 /** A team of five: GK + 2 DEF + 2 ATT. Owns role assignment and tactics. */
 export class Team {
   side: number;
-  color: string;
+  /** Roster key (indexes into SQUADS). */
   name: string;
+  /** Kit colour, 3-letter tag and full display name (from the team registry). */
+  color: string;
+  short: string;
+  fullName: string;
   isUser: boolean;
   inAttack = false;
   /** 0 Defensive · 1 Balanced · 2 Attacking — biases the resting shape's depth. */
@@ -27,16 +32,29 @@ export class Team {
   /** Throttles the (relatively expensive) support-spot solver to ~4 Hz. */
   private supportRegulator = new Regulator(4);
 
-  constructor(side: number, color: string, name: string, isUser: boolean) {
+  constructor(side: number, key: string, isUser: boolean) {
     this.side = side;
-    this.color = color;
-    this.name = name;
     this.isUser = isUser;
+    const m = teamMeta(key);
+    this.name = key;
+    this.color = m.color;
+    this.short = m.short;
+    this.fullName = m.name;
     this.players = FORMATION.map((e, i) => new Player(this, i, e));
     this.gk = this.players[0];
 
     const xs = side > 0 ? [6, 11, 16, 21, 26] : [-6, -11, -16, -21, -26];
     for (const x of xs) for (const z of [-13, -6.5, 0, 6.5, 13]) this.spots.push(V3(x, 0, z));
+  }
+
+  /** Re-skin this team to a new roster/kit (team selection & cup fixtures). */
+  setIdentity(key: string): void {
+    const m = teamMeta(key);
+    this.name = key;
+    this.color = m.color;
+    this.short = m.short;
+    this.fullName = m.name;
+    for (const p of this.players) p.applyIdentity();
   }
 
   outfield(): Player[] {

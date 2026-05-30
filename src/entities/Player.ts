@@ -27,7 +27,7 @@ export class Player extends Vehicle {
   idx: number;
   entry: FormationEntry;
   roleType: RoleType;
-  baseSpeed: number;
+  baseSpeed!: number; // resolved by applyIdentity() during construction
 
   /** Squad identity + attributes (pace, shooting, passing, tackling, composure). */
   override name: string;
@@ -45,6 +45,9 @@ export class Player extends Vehicle {
   diveCd = 0;
   /** Point the keeper is diving toward (predicted shot crossing point). */
   diveTarget: Vector3 = V3();
+
+  /** Knock-on burst timer: >0 grants a brief speed explosion after a knock-on. */
+  boost = 0;
 
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
@@ -90,34 +93,19 @@ export class Player extends Vehicle {
     this.entry = entry;
     this.roleType = entry.role;
 
-    // resolve squad identity, with a safe fallback if a roster slot is missing
-    const roster = SQUADS[team.name] ?? SQUADS.STRIKERS;
-    const squad: SquadPlayer = roster[idx] ?? {
-      name: `P${idx + 1}`,
-      num: idx + 1,
-      attr: { pace: 70, shooting: 70, passing: 70, tackling: 70, composure: 70 },
-    };
-    this.name = squad.name;
-    this.num = squad.num;
-    this.attr = squad.attr;
-
-    // pace scales the base running speed; keepers stay on the GK baseline.
-    const raw = this.roleType === 'GK' ? CFG.spd.gk : CFG.spd.out;
-    this.baseSpeed = this.roleType === 'GK' ? raw : raw * attrMul(this.attr.pace);
-    this.maxSpeed = this.baseSpeed;
+    // identity (name/number/attributes/kit) is resolved by applyIdentity() so it
+    // can be re-applied when the team is re-skinned (team selection / cup ties)
+    this.name = '';
+    this.num = idx + 1;
+    this.attr = { pace: 70, shooting: 70, passing: 70, tackling: 70, composure: 70 };
     this.maxForce = CFG.force;
     this.mass = 1;
     this.updateOrientation = false; // we drive heading manually for crisp facing
     this.heading = attackHeading(team.side);
 
-    this.position.copy(this.homePos());
     this.mesh = makePlayerMesh(team.color);
-    if (this.roleType === 'GK') {
-      // keepers get a distinct kit
-      (this.mesh.userData.body as { material: { color: { set(c: string): void } } }).material.color.set(
-        team.side > 0 ? '#ffd23e' : '#19e0c0',
-      );
-    }
+    this.applyIdentity();
+    this.position.copy(this.homePos());
 
     this.arrive = new ArriveBehavior(V3(), 2, 0.4);
     this.arrive.active = false;
@@ -144,6 +132,31 @@ export class Player extends Vehicle {
     for (const id of Object.keys(PLAYER_STATES) as PlayerRole[]) {
       this.fsm.add(id, PLAYER_STATES[id]);
     }
+  }
+
+  /**
+   * (Re)resolve this player's squad identity from the team's current roster key
+   * and recolour the kit. Called at construction and whenever the team's identity
+   * changes (team selection / cup fixtures).
+   */
+  applyIdentity(): void {
+    const roster = SQUADS[this.team.name] ?? SQUADS.STRIKERS;
+    const squad: SquadPlayer = roster[this.idx] ?? {
+      name: `P${this.idx + 1}`,
+      num: this.idx + 1,
+      attr: { pace: 70, shooting: 70, passing: 70, tackling: 70, composure: 70 },
+    };
+    this.name = squad.name;
+    this.num = squad.num;
+    this.attr = squad.attr;
+    // pace scales the base running speed; keepers stay on the GK baseline.
+    const raw = this.roleType === 'GK' ? CFG.spd.gk : CFG.spd.out;
+    this.baseSpeed = this.roleType === 'GK' ? raw : raw * attrMul(this.attr.pace);
+    this.maxSpeed = this.baseSpeed;
+    // outfielders wear the kit colour; keepers a distinct keeper kit per side
+    (this.mesh.userData.body as { material: { color: { set(c: string): void } } }).material.color.set(
+      this.roleType === 'GK' ? (this.team.side > 0 ? '#ffd23e' : '#19e0c0') : this.team.color,
+    );
   }
 
   homePos(): Vector3 {

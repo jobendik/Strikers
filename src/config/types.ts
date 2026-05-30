@@ -58,3 +58,14 @@ export interface SquadPlayer {
   num: number;
   attr: PlayerAttributes;
 }
+
+/** A selectable team's identity: roster key, display name, tag and kit colour. */
+export interface TeamMeta {
+  key: string;
+  name: string;
+  short: string;
+  color: string;
+}
+
+/** Which game mode is being played. */
+export type GameMode = 'friendly' | 'knockout' | 'cup';

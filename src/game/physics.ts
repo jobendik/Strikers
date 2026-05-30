@@ -3,7 +3,7 @@ import { CFG } from '../config/constants';
 import { V3, clamp, distSq, headingVec } from '../core/math';
 import { ball, match } from './state';
 import { setControl } from './control';
-import { scoreGoal } from './flow';
+import { addStoppage, scoreGoal } from './flow';
 import { attackHeading } from '../ai/analysis';
 import { GROUND_Y } from './aerial';
 import { Audio } from '../core/audio';
@@ -159,9 +159,23 @@ function checkBounds(): void {
   }
   if (Math.abs(x) > CFG.halfL - 0.1) {
     const defTeam = x > 0 ? match.teams[1] : match.teams[0];
-    const gkx = defTeam.side > 0 ? -CFG.halfL + 5 : CFG.halfL - 5;
-    setPiece(V3(gkx, 0, clamp(z, -6, 6)), defTeam, 'GOAL KICK', true);
+    // a defender's own touch over his byline is a corner; otherwise a goal kick
+    if (ball.lastTouch === defTeam) {
+      cornerKick(defTeam, Math.sign(z || 1));
+    } else {
+      const gkx = defTeam.side > 0 ? -CFG.halfL + 5 : CFG.halfL - 5;
+      setPiece(V3(gkx, 0, clamp(z, -6, 6)), defTeam, 'GOAL KICK', true);
+    }
   }
+}
+
+/** Award a corner to the team attacking `defTeam`'s goal, taken from the `zSign` flag. */
+function cornerKick(defTeam: Team, zSign: number): void {
+  const attTeam = defTeam === match.teams[0] ? match.teams[1] : match.teams[0];
+  const lineX = defTeam.side > 0 ? -CFG.halfL : CFG.halfL; // defTeam's own goal line
+  const pos = V3(lineX - Math.sign(lineX) * CFG.cornerInset, 0, zSign * (CFG.halfW - CFG.cornerInset));
+  addStoppage(CFG.stoppagePerFoul); // a corner banks a little added time
+  setPiece(pos, attTeam, 'CORNER', false);
 }
 
 /** Restart play with a free kick / throw-in / goal kick taken by `team`. */

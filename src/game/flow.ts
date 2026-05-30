@@ -4,6 +4,7 @@ import { Haptics } from '../core/haptics';
 import { ball, freshStats, match, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
 import { abortShootout, startShootout } from './penalty';
+import { presentResult } from './modes';
 import { resetReplayBuffer } from './replay';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
@@ -14,7 +15,6 @@ import {
   setHalfTimeVisible,
   setMenuVisible,
   setPauseVisible,
-  showFullTime,
   showHalfTime,
   showGoalFx,
   updateHUD,
@@ -70,7 +70,7 @@ export function scoreGoal(i: number): void {
   match.timeScale = CFG.goalSlowmo;
   match.scoredBy = i;
   updateAwayMentality(); // the away side re-reads the game after every goal
-  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].name} SCORE!`);
+  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].short} SCORE!`);
 }
 
 /** Reset all entities to their home positions for a restart. */
@@ -228,7 +228,7 @@ function motmLine(): string {
   if (best.statAssists) tally.push(`${best.statAssists}A`);
   if (best.statSaves) tally.push(`${best.statSaves} saves`);
   const extra = tally.length ? `  (${tally.join(' · ')})` : '';
-  return `★ MOTM  ${best.name} · ${best.team.name} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
+  return `★ MOTM  ${best.name} · ${best.team.short} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
 }
 
 /** End the match and show the result card (or a shootout, if a knockout is level). */
@@ -241,19 +241,14 @@ export function fullTime(): void {
   match.state = 'fulltime';
   Audio.whistle();
   setTimeout(() => Audio.whistle(), 220);
-  const [h, a] = match.score;
-  const [home, away] = match.teams;
-  const result = h > a ? `${home.name} WIN` : a > h ? `${away.name} WIN` : 'DRAW';
-  showFullTime(h, a, result, fullStatsLine(), motmLine());
+  presentResult(null, null, fullStatsLine(), motmLine()); // modes owns the card (cup vs one-off)
 }
 
-/** Resolve a tie decided on penalties — show the result card with the shootout score. */
+/** Resolve a tie decided on penalties — hand the shootout winner back to modes. */
 export function finishShootout(winner: number, penScore: [number, number]): void {
   match.state = 'fulltime';
   Audio.whistle();
-  const result = `${match.teams[winner].name} WIN`;
-  const line = `On penalties ${penScore[0]}–${penScore[1]}  ·  ${fullStatsLine()}`;
-  showFullTime(match.score[0], match.score[1], result, line, motmLine());
+  presentResult(winner, penScore, fullStatsLine(), motmLine());
 }
 
 /** Start a fresh match from the menu. */

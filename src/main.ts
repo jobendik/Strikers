@@ -4,8 +4,9 @@ import { buildStadium } from './rendering/stadium';
 import { createGameState } from './game/state';
 import { initInput } from './game/input';
 import { startLoop } from './game/loop';
-import { returnToMenu, startMatch, startSecondHalf } from './game/flow';
-import { initUI, updateHUD } from './ui/hud';
+import { startSecondHalf } from './game/flow';
+import { onFullTimeButton, startGame } from './game/modes';
+import { initUI, refreshTeamTags, updateHUD } from './ui/hud';
 import { initRadar } from './ui/radar';
 import { initSettings } from './core/settings';
 
@@ -20,11 +21,12 @@ import { initSettings } from './core/settings';
 buildStadium();
 createGameState();
 
-initUI({ onPlay: startMatch, onAgain: returnToMenu, onSecondHalf: startSecondHalf });
+initUI({ onPlay: startGame, onAgain: onFullTimeButton, onSecondHalf: startSecondHalf });
 initSettings(); // loads saved prefs and applies them to the menu + engine
 initRadar();
 initInput();
 window.addEventListener('resize', handleResize);
 
+refreshTeamTags();
 updateHUD();
 startLoop();

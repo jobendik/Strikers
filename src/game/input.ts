@@ -1,13 +1,23 @@
 import { match } from './state';
 import { clamp } from '../core/math';
 import { Haptics } from '../core/haptics';
-import { switchPlayer, userPass, userShoot } from './humanActions';
+import { switchPlayer, userKnockOn, userPass, userShoot } from './humanActions';
 import { penaltyAction } from './penalty';
 import { skipReplay } from './replay';
 import { quitToMenu, restartMatch, resumeGame, togglePause } from './flow';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
+
+const DOUBLE_TAP_MS = 280; // window for a double-tap sprint → knock-on burst
+let lastSprintTap = 0;
+
+/** Register a sprint tap; a quick second tap fires the knock-on burst. */
+function sprintTap(): void {
+  const now = performance.now();
+  if (now - lastSprintTap < DOUBLE_TAP_MS) userKnockOn();
+  lastSprintTap = now;
+}
 
 const MAX_CHARGE_MS = 620; // hold time for a full-power shot
 const LOB_HOLD_MS = 230; // hold PASS beyond this to loft the ball
@@ -53,6 +63,7 @@ export function initInput(): void {
   bindButton('bPass', (down) => (down ? passDown() : passUp()));
   bindButton('bSprint', (down) => {
     sprintBtn = down;
+    if (down) sprintTap();
   });
   bindButton('bSwitch', (down) => {
     if (down) {
@@ -82,6 +93,7 @@ export function initInput(): void {
       e.preventDefault();
       togglePause();
     }
+    if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') sprintTap();
   });
   addEventListener('keyup', (e) => {
     keys[e.code] = false;
