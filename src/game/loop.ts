@@ -3,7 +3,7 @@ import { CFG } from '../config/constants';
 import { advanceTime } from '../core/time';
 import { Audio } from '../core/audio';
 import { camera, renderer, scene } from '../rendering/scene';
-import { ball, match, setReceiver } from './state';
+import { ball, match, setReceiver, teamIndex } from './state';
 import { pollInput } from './input';
 import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
 import { movePlayers, selectUserPlayer } from './movement';
@@ -26,6 +26,7 @@ function frame(): void {
 
   if (match.state === 'play') {
     tickClock(dt); // the match clock runs in real time, not slow-mo
+    if (match.controlTeam) match.stats.possession[teamIndex(match.controlTeam)] += dt;
     // lapse the pass-receiver assignment if it's gone unclaimed (Simple Soccer)
     if (match.receivingPlayer) {
       match.receiveTimer -= sdt;

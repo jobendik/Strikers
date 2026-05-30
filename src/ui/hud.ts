@@ -61,11 +61,12 @@ export function showGoalFx(i: number): void {
   fx.classList.add('show');
 }
 
-export function showFullTime(h: number, a: number, result: string, stats: string): void {
+export function showFullTime(h: number, a: number, result: string, stats: string, motm = ''): void {
   el('ftH').textContent = String(h);
   el('ftA').textContent = String(a);
   el('ftResult').textContent = result;
   el('ftStats').textContent = stats;
+  el('ftMotm').textContent = motm;
   setFullTimeVisible(true);
 }
 

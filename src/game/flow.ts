@@ -1,9 +1,10 @@
 import { CFG } from '../config/constants';
 import { Audio } from '../core/audio';
 import { Haptics } from '../core/haptics';
-import { ball, match, setReceiver } from './state';
+import { ball, freshStats, match, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
 import { attackHeading } from '../ai/analysis';
+import type { Player } from '../entities/Player';
 import { addShake, clearTrail } from './render';
 import {
   flashToast,
@@ -33,6 +34,14 @@ export function addStoppage(seconds: number): void {
 export function scoreGoal(i: number): void {
   match.score[i]++;
   addStoppage(CFG.stoppagePerGoal);
+  match.stats.onTarget[i]++;
+  // credit the scorer (last toucher of the scoring team) and, if the prior pass
+  // came from a team-mate, the assist — both feed the Man-of-the-Match rating.
+  const scorer = ball.lastKicker && teamIndex(ball.lastKicker.team) === i ? ball.lastKicker : null;
+  if (scorer) {
+    scorer.statGoals++;
+    if (ball.passer && ball.passer !== scorer && teamIndex(ball.passer.team) === i) ball.passer.statAssists++;
+  }
   updateHUD();
   Audio.whistle();
   Audio.goal();
@@ -48,7 +57,7 @@ export function scoreGoal(i: number): void {
   match.celebrateBallT = 0.7; // keep the ball flying into the net in slow motion
   match.timeScale = CFG.goalSlowmo;
   match.scoredBy = i;
-  flashToast(i === 0 ? 'STRIKERS SCORE!' : 'UNITED SCORE!');
+  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].name} SCORE!`);
 }
 
 /** Reset all entities to their home positions for a restart. */
@@ -77,6 +86,8 @@ export function resetPositions(): void {
   ball.velocity.set(0, 0, 0);
   ball.spin = 0;
   ball.lastTouch = null;
+  ball.lastKicker = null;
+  ball.passer = null;
   setReceiver(null);
   match.timeScale = 1;
   match.celebrateBallT = 0;
@@ -153,9 +164,56 @@ export function startSecondHalf(): void {
   updateHUD();
 }
 
-/** A one-line stats summary shared by the half-time and full-time cards. */
+/** A concise stats summary for the half-time card. */
 function statsLine(): string {
-  return `Shots ${match.stats.shots[0]}–${match.stats.shots[1]}  ·  Passes ${match.stats.passes[0]}–${match.stats.passes[1]}`;
+  const [pa, pb] = possessionPct();
+  return `Poss ${pa}–${pb}%  ·  Shots ${match.stats.shots[0]}–${match.stats.shots[1]}  ·  Passes ${match.stats.passes[0]}–${match.stats.passes[1]}`;
+}
+
+/** Possession as whole-percent shares of the two teams (defaults to 50–50). */
+function possessionPct(): [number, number] {
+  const [a, b] = match.stats.possession;
+  const tot = a + b;
+  if (tot < 1) return [50, 50];
+  const pa = Math.round((a / tot) * 100);
+  return [pa, 100 - pa];
+}
+
+/** The fuller stats block shown at full time. */
+function fullStatsLine(): string {
+  const [pa, pb] = possessionPct();
+  const s = match.stats;
+  return (
+    `Poss ${pa}–${pb}%  ·  Shots ${s.shots[0]}–${s.shots[1]} (on target ${s.onTarget[0]}–${s.onTarget[1]})  ·  ` +
+    `Tackles ${s.tackles[0]}–${s.tackles[1]}  ·  Saves ${s.saves[0]}–${s.saves[1]}`
+  );
+}
+
+/** Arcade player rating: a base lifted by end product and defensive work. */
+function playerRating(p: Player): number {
+  const winBonus = match.score[teamIndex(p.team)] > match.score[1 - teamIndex(p.team)] ? 0.4 : 0;
+  return 6 + winBonus + p.statGoals * 1.6 + p.statAssists * 1.0 + p.statTackles * 0.22 + p.statSaves * 0.5;
+}
+
+/** Pick the standout performer across both teams for the Man-of-the-Match line. */
+function motmLine(): string {
+  let best: Player | null = null;
+  let bestR = -Infinity;
+  for (const t of match.teams)
+    for (const p of t.players) {
+      const r = playerRating(p);
+      if (r > bestR) {
+        bestR = r;
+        best = p;
+      }
+    }
+  if (!best) return '';
+  const tally: string[] = [];
+  if (best.statGoals) tally.push(`${best.statGoals}G`);
+  if (best.statAssists) tally.push(`${best.statAssists}A`);
+  if (best.statSaves) tally.push(`${best.statSaves} saves`);
+  const extra = tally.length ? `  (${tally.join(' · ')})` : '';
+  return `★ MOTM  ${best.name} · ${best.team.name} · ${Math.min(10, bestR).toFixed(1)}${extra}`;
 }
 
 /** End the match and show the result card. */
@@ -166,19 +224,23 @@ export function fullTime(): void {
   const [h, a] = match.score;
   const [home, away] = match.teams;
   const result = h > a ? `${home.name} WIN` : a > h ? `${away.name} WIN` : 'DRAW';
-  showFullTime(h, a, result, statsLine());
+  showFullTime(h, a, result, fullStatsLine(), motmLine());
 }
 
 /** Start a fresh match from the menu. */
 export function startMatch(): void {
   Audio.resume();
   match.score = [0, 0];
-  match.stats = { shots: [0, 0], passes: [0, 0] };
+  match.stats = freshStats();
   match.half = 1;
   match.timeLeft = CFG.matchSeconds;
   match.stoppageAccrued = 0;
   match.stoppageLeft = 0;
-  for (const t of match.teams) for (const p of t.players) p.stamina = 1;
+  for (const t of match.teams)
+    for (const p of t.players) {
+      p.stamina = 1;
+      p.statGoals = p.statAssists = p.statTackles = p.statSaves = 0;
+    }
   setMenuVisible(false);
   setFullTimeVisible(false);
   setHalfTimeVisible(false);

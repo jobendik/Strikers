@@ -37,7 +37,30 @@ export interface MatchState {
   timeScale: number;
   input: InputState;
   joy: { x: number; z: number };
-  stats: { shots: [number, number]; passes: [number, number] };
+  stats: MatchStats;
+}
+
+/** Accumulated team match statistics (for the half-time / full-time cards). */
+export interface MatchStats {
+  shots: [number, number];
+  onTarget: [number, number];
+  passes: [number, number];
+  tackles: [number, number];
+  saves: [number, number];
+  /** Possession measured as seconds in control; rendered as a percentage. */
+  possession: [number, number];
+}
+
+/** A fresh, zeroed stats block. */
+export function freshStats(): MatchStats {
+  return {
+    shots: [0, 0],
+    onTarget: [0, 0],
+    passes: [0, 0],
+    tackles: [0, 0],
+    saves: [0, 0],
+    possession: [0, 0],
+  };
 }
 
 // Live bindings — populated by createGameState() before the loop starts.
@@ -73,7 +96,7 @@ export function createGameState(): void {
     timeScale: 1,
     input: { x: 0, z: 0, sprint: false },
     joy: { x: 0, z: 0 },
-    stats: { shots: [0, 0], passes: [0, 0] },
+    stats: freshStats(),
   };
   ball.mesh.position.set(0, CFG.ballR, 0);
 }

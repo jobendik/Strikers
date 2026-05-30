@@ -58,6 +58,12 @@ export class Player extends Vehicle {
   markTarget: Vector3 | null = null;
   supportTarget: Vector3 = V3();
 
+  /** Per-match contribution tally — feeds the Man-of-the-Match rating. */
+  statGoals = 0;
+  statAssists = 0;
+  statTackles = 0;
+  statSaves = 0;
+
   // steering behaviors
   arrive: ArriveBehavior;
   seek: SeekBehavior;

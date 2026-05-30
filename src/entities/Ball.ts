@@ -3,11 +3,16 @@ import * as THREE from 'three';
 import { CFG } from '../config/constants';
 import { makeBallMesh } from '../rendering/meshes';
 import type { Team } from './Team';
+import type { Player } from './Player';
 
 /** The match ball — a Yuka MovingEntity with a custom constant-deceleration model. */
 export class Ball extends MovingEntity {
   /** Team of the player who last touched the ball (for throw-ins, goal kicks). */
   lastTouch: Team | null = null;
+  /** Player who last struck the ball — credits the scorer on a goal. */
+  lastKicker: Player | null = null;
+  /** Player who played the most recent pass — credits the assist on a goal. */
+  passer: Player | null = null;
   /**
    * Signed spin imparted on a strike (rad/s of lateral curve). Drives the Magnus
    * swerve in {@link integrateFreeBall}, letting shots and crosses bend — the

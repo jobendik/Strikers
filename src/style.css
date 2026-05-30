@@ -99,6 +99,8 @@ h1 .accent{background:linear-gradient(180deg,#ffe79a,var(--amber));-webkit-backg
 .scoreline .h{color:var(--home);} .scoreline .a{color:var(--away);}
 .resultword{font-family:'Teko';font-size:clamp(40px,12vw,76px);letter-spacing:.06em;color:var(--amber);
   text-shadow:0 0 26px rgba(255,206,46,.45);}
+.motm{font-family:'Rajdhani';font-weight:700;letter-spacing:.06em;font-size:14px;color:#ffe79a;margin:2px 0 16px;
+  text-shadow:0 0 14px rgba(255,206,46,.35);}
 .credit{position:fixed;left:0;right:0;bottom:8px;text-align:center;font-size:10px;letter-spacing:.22em;
   color:rgba(255,255,255,.35);z-index:41;}
 #goalFx{position:fixed;inset:0;z-index:38;display:flex;align-items:center;justify-content:center;pointer-events:none;opacity:0;}
