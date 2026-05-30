@@ -187,12 +187,14 @@ CFG.matchSeconds = SECS;
 
 console.log(`# ${N} matches/scenario, ${SECS}s halves (home-away)\n`);
 const scenarios: [string, string, string, number, boolean][] = [
-  ['EASY   STR v UTD', 'STRIKERS', 'UNITED', 0, false],
-  ['PRO    STR v UTD', 'STRIKERS', 'UNITED', 1, false],
-  ['LEGEND STR v UTD', 'STRIKERS', 'UNITED', 2, false],
-  ['PRO    STR v STR (mirror)', 'STRIKERS', 'STRIKERS', 1, false],
-  ['PRO    STR v STR (frozen ment.)', 'STRIKERS', 'STRIKERS', 1, true],
-  ['PRO    IRN v ROV', 'IRONSIDE', 'ROVERS', 1, false],
+  ['EASY   USA v BRA', 'USA', 'BRAZIL', 0, false],
+  ['PRO    USA v BRA', 'USA', 'BRAZIL', 1, false],
+  ['LEGEND USA v BRA', 'USA', 'BRAZIL', 2, false],
+  ['PRO    BRA v BRA (mirror)', 'BRAZIL', 'BRAZIL', 1, false],
+  ['PRO    BRA v BRA (frozen ment.)', 'BRAZIL', 'BRAZIL', 1, true],
+  ['PRO    ARG v FRA (elite)', 'ARGENTINA', 'FRANCE', 1, false],
+  ['PRO    NOR v SEN (mid)', 'NORWAY', 'SENEGAL', 1, false],
+  ['PRO    GER v ENG', 'GERMANY', 'ENGLAND', 1, false],
 ];
 for (const [label, h, a, d, fz] of scenarios) {
   const rs: MatchResult[] = [];

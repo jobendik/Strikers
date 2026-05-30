@@ -60,6 +60,12 @@ export class Team {
     for (const p of this.players) p.applyIdentity();
   }
 
+  /** Force a specific outfield kit colour — used to resolve a clash with the opponent's strip. */
+  setKitColor(color: string): void {
+    this.color = color;
+    for (const p of this.players) p.applyIdentity();
+  }
+
   outfield(): Player[] {
     return this.players.filter((p) => p.roleType !== 'GK' && !p.sentOff);
   }

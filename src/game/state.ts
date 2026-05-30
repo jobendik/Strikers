@@ -86,8 +86,8 @@ export let match!: MatchState;
 /** Constructs the ball, both teams and the match state. Call once at boot. */
 export function createGameState(): void {
   ball = new Ball();
-  home = new Team(+1, 'STRIKERS', true);
-  away = new Team(-1, 'UNITED', false);
+  home = new Team(+1, 'USA', true);
+  away = new Team(-1, 'BRAZIL', false);
   match = {
     teams: [home, away],
     state: 'menu',

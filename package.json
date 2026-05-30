@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "YUKA STRIKERS — an AI-driven 5-a-side arcade soccer game for mobile, built with Three.js + Yuka.js.",
+  "description": "Strikers '26 — a fast arcade soccer game themed around the World Championship 2026, built with Three.js + Yuka.js.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
