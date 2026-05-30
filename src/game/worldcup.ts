@@ -341,6 +341,99 @@ export function userFixture(run: WorldCupRun, matchday: number): Fixture | null 
   return fixturesForMatchday(run, matchday).find((f) => f.isUser && !f.played) ?? null;
 }
 
+/** The opponent's team key in a fixture, from the user's perspective. */
+export function opponentOf(f: Fixture, userNation: string): string {
+  return f.home === userNation ? f.away : f.home;
+}
+
+/**
+ * Start a fresh run, or resume the saved one if it belongs to the current nation
+ * and is still live and playable. Switching nations (or a finished/abandoned run)
+ * starts a new tournament.
+ */
+export function startOrResumeRun(nation: string): WorldCupRun {
+  const saved = loadRun();
+  if (saved && saved.active && saved.userNation === nation && !saved.champion && !saved.userOut) {
+    return saved;
+  }
+  return startWorldCup(nation);
+}
+
+/** What a just-played user matchday meant for the player's tournament run. */
+export type OutcomeStatus =
+  | 'group-continue' // group stage, more group games to come
+  | 'group-through' // topped/placed in the group → into the knockouts
+  | 'group-out' // failed to qualify from the group
+  | 'advanced' // won a knockout tie → next round
+  | 'knocked-out' // lost a knockout tie
+  | 'champion'; // won the Final 🏆
+
+/** The result of {@link playUserMatchday}, for the result card + UI. */
+export interface MatchdayOutcome {
+  status: OutcomeStatus;
+  /** The round the user just played. */
+  roundJustPlayed: RoundKey;
+  /** The matchday the user just played. */
+  matchdayJustPlayed: number;
+  champion: string | null;
+  userOut: boolean;
+  /** Next user opponent's key (null if the run is over for the user). */
+  nextOpponent: string | null;
+  nextRound: RoundKey | null;
+  nextMatchday: number | null;
+}
+
+/**
+ * Apply the user's live result for the current matchday, resolve the rest of the
+ * field, advance the tournament and report what it meant. This is the single entry
+ * point the live-match flow calls at full time. Pure logic — no UI.
+ *
+ * `userGoals`/`oppGoals` are from the user's perspective; `penUserWon` settles a
+ * level knockout tie (the live game's shootout result).
+ */
+export function playUserMatchday(
+  run: WorldCupRun,
+  userGoals: number,
+  oppGoals: number,
+  penUserWon: boolean | null = null,
+): MatchdayOutcome {
+  const mdPlayed = run.matchday;
+  const round = matchdayMeta(mdPlayed)?.round ?? 'GROUP';
+  const f = userFixture(run, mdPlayed);
+
+  if (f) {
+    const userHome = f.home === run.userNation;
+    const hg = userHome ? userGoals : oppGoals;
+    const ag = userHome ? oppGoals : userGoals;
+    let pens: 'home' | 'away' | null = null;
+    if (penUserWon !== null) pens = userHome === penUserWon ? 'home' : 'away';
+    recordUserResult(run, hg, ag, pens);
+  }
+
+  resolveMatchday(run);
+
+  // figure out the outcome before advancing
+  let status: OutcomeStatus;
+  if (run.champion === run.userNation) status = 'champion';
+  else if (run.userOut) status = mdPlayed <= 3 ? 'group-out' : 'knocked-out';
+  else status = mdPlayed <= 2 ? 'group-continue' : mdPlayed === 3 ? 'group-through' : 'advanced';
+
+  const stillIn = status === 'group-continue' || status === 'group-through' || status === 'advanced';
+  if (stillIn && mdPlayed < FINAL_MATCHDAY) advanceMatchday(run);
+
+  const next = stillIn ? userFixture(run, run.matchday) : null;
+  return {
+    status,
+    roundJustPlayed: round,
+    matchdayJustPlayed: mdPlayed,
+    champion: run.champion,
+    userOut: run.userOut,
+    nextOpponent: next ? opponentOf(next, run.userNation) : null,
+    nextRound: next ? next.round : null,
+    nextMatchday: next ? next.matchday : null,
+  };
+}
+
 /** Record the result of the user's just-played fixture for the current matchday. */
 export function recordUserResult(run: WorldCupRun, homeGoals: number, awayGoals: number, pens: 'home' | 'away' | null = null): void {
   const f = userFixture(run, run.matchday);
@@ -483,12 +576,12 @@ function computeUserOut(run: WorldCupRun): boolean {
     if (f.home !== run.userNation && f.away !== run.userNation) continue;
     if (tieWinner(f) !== run.userNation) return true;
   }
-  // group stage: out if group complete and not in the top QUALIFY_PER_GROUP
-  if (run.matchday > 3 && run.knockout.length) {
-    const stillIn = run.knockout.some((f) => f.home === run.userNation || f.away === run.userNation) ||
-      run.champion === run.userNation;
-    // if there's a knockout but the user isn't in any tie, they failed to qualify
-    if (!stillIn) return true;
+  // once the knockout is seeded (group stage complete), a user who isn't in any
+  // tie failed to qualify. Knockout losers are caught by the loop above; a still-
+  // alive user is always in their current tie, so this only fires for non-qualifiers.
+  if (run.knockout.length) {
+    const inKnockout = run.knockout.some((f) => f.home === run.userNation || f.away === run.userNation);
+    if (!inKnockout) return true;
   }
   return false;
 }
