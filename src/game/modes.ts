@@ -5,25 +5,33 @@ import { refreshTeamTags, showFullTime } from '../ui/hud';
 import { getSettings, saveSettings } from '../core/settings';
 import { applyMatchRewards, type MatchRewards } from './rewards';
 import { getPlayerData, savePlayerData } from '../core/playerData';
+import {
+  startOrResumeRun,
+  userFixture,
+  opponentOf,
+  playUserMatchday,
+  roundName,
+  type WorldCupRun,
+  type MatchdayOutcome,
+} from './worldcup';
 
 /*
- * Game-mode controller: team selection, the friendly/knockout one-off, and a
- * single-elimination Cup Run. Owns what happens at full time (advance the cup,
- * crown a champion, or drop back to the menu). Drawn knockout/cup ties are
- * settled by the penalty shootout (see flow.fullTime / finishShootout), which
- * then routes back here through {@link presentResult} with the winner.
+ * Game-mode controller: team selection, the friendly/knockout one-off, and the
+ * living World Cup tournament. Owns what happens at full time — for the World Cup
+ * it feeds the result into the tournament engine (`game/worldcup.ts`), which
+ * resolves the rest of the field and advances the bracket, then shows the next
+ * fixture / knock-out / trophy. Drawn knockout ties are settled by the penalty
+ * shootout (flow.fullTime / finishShootout), routed back here via presentResult.
  */
 
-const ROUND_NAMES = ['ROUND OF 16', 'QUARTER-FINAL', 'SEMI-FINAL', 'FINAL'];
-
-let cupActive = false;
-let cupOpponents: string[] = [];
-let cupRound = 0;
-let pendingContinue = false; // the full-time button should start the next cup tie
+/** The active World Cup run while the user is playing the tournament. */
+let wcRun: WorldCupRun | null = null;
+/** The full-time button should kick off the next World Cup fixture. */
+let pendingContinue = false;
 
 const userTeamKey = (): string => getSettings().team;
 
-/** A shuffled set of `n` opponent keys, excluding the user's team. */
+/** A shuffled set of `n` opponent keys, excluding the user's team (friendly/KO). */
 function pickOpponents(exclude: string, n: number): string[] {
   const pool = TEAMS.map((t) => t.key).filter((k) => k !== exclude);
   for (let i = pool.length - 1; i > 0; i--) {
@@ -63,31 +71,47 @@ function configureTeams(homeKey: string, awayKey: string): void {
   refreshTeamTags();
 }
 
+/**
+ * Kick off the user's fixture for the World Cup run's current matchday. The user
+ * always plays as the home side (team[0]); group draws stand, knockout ties go to
+ * a shootout. Returns false if there's no playable fixture (run over for the user).
+ */
+function startWorldCupFixture(run: WorldCupRun): boolean {
+  const f = userFixture(run, run.matchday);
+  if (!f) return false;
+  match.settleDraws = f.round !== 'GROUP'; // only knockout ties must produce a winner
+  configureTeams(run.userNation, opponentOf(f, run.userNation));
+  startMatch();
+  return true;
+}
+
 /** Start a match in the current mode (the menu's KICK OFF). */
 export function startGame(): void {
   const mode = getSettings().mode;
-  match.settleDraws = mode !== 'friendly'; // knockout & cup must produce a winner
+
   if (mode === 'cup') {
-    cupActive = true;
-    cupRound = 0;
-    cupOpponents = pickOpponents(userTeamKey(), ROUND_NAMES.length);
-  } else {
-    cupActive = false;
+    wcRun = startOrResumeRun(userTeamKey());
+    if (startWorldCupFixture(wcRun)) return;
+    // no playable fixture (shouldn't happen for a fresh/resumed run) — start anew
+    wcRun = startOrResumeRun(userTeamKey());
+    if (startWorldCupFixture(wcRun)) return;
   }
-  const opp = cupActive ? cupOpponents[0] : pickOpponents(userTeamKey(), 1)[0];
-  configureTeams(userTeamKey(), opp);
+
+  // friendly / knockout one-off
+  wcRun = null;
+  match.settleDraws = mode === 'knockout';
+  configureTeams(userTeamKey(), pickOpponents(userTeamKey(), 1)[0]);
   startMatch();
 }
 
-/** The full-time card's primary button — advance the cup tie, or return to menu. */
+/** The full-time card's primary button — next World Cup fixture, or back to menu. */
 export function onFullTimeButton(): void {
-  if (pendingContinue) {
+  if (pendingContinue && wcRun) {
     pendingContinue = false;
-    configureTeams(userTeamKey(), cupOpponents[cupRound]);
-    startMatch();
-  } else {
-    returnToMenu();
+    if (startWorldCupFixture(wcRun)) return;
   }
+  pendingContinue = false;
+  returnToMenu();
 }
 
 /** A compact one-line progress note for the result card (the full animated
@@ -98,10 +122,62 @@ function rewardLine(r: MatchRewards): string {
   return parts.join('  ·  ');
 }
 
+/** The World Cup result card: headline + context + button driven by the outcome. */
+function presentWorldCupResult(
+  o: MatchdayOutcome,
+  h: number,
+  a: number,
+  decided: boolean,
+  userWon: boolean,
+  stat: string,
+  motm: string,
+  reward: string,
+): void {
+  const ctxRound = roundName(o.roundJustPlayed);
+  const ctx = o.roundJustPlayed === 'GROUP'
+    ? `World Cup 2026 · Group Stage · Matchday ${o.matchdayJustPlayed}`
+    : `World Cup 2026 · ${ctxRound}`;
+  const nextName = o.nextOpponent ? teamMeta(o.nextOpponent).name : '';
+  const nextBtn = o.nextOpponent ? `NEXT: ${nextName} ▸` : 'BACK TO MENU ▸';
+
+  let headline: string;
+  switch (o.status) {
+    case 'champion':
+      headline = `${match.teams[0].fullName} — WORLD CHAMPIONS 🏆`;
+      break;
+    case 'knocked-out':
+      headline = 'KNOCKED OUT';
+      break;
+    case 'group-out':
+      headline = 'GROUP STAGE EXIT';
+      break;
+    case 'group-through':
+      headline = 'THROUGH TO THE KNOCKOUTS';
+      break;
+    case 'advanced':
+      headline = o.nextRound ? `INTO THE ${roundName(o.nextRound).toUpperCase()}` : 'THROUGH';
+      break;
+    default: // group-continue
+      headline = !decided ? 'MATCHDAY DRAWN' : userWon ? 'MATCHDAY WIN' : 'MATCHDAY DEFEAT';
+  }
+
+  const advancing = o.status === 'group-continue' || o.status === 'group-through' || o.status === 'advanced';
+  pendingContinue = advancing && !!o.nextOpponent;
+
+  if (o.status === 'champion') {
+    // record the trophy (settings cup count + career stat)
+    saveSettings({ titles: getSettings().titles + 1 });
+    getPlayerData().stats.cupsWon++;
+    savePlayerData();
+  }
+
+  showFullTime(h, a, headline, stat, motm, ctx, pendingContinue ? nextBtn : 'BACK TO MENU ▸', reward);
+}
+
 /**
- * Present the full-time outcome. `penWinner` is the shootout winner when a tie
- * was settled from the spot (else null and the score decides). Resolves the cup
- * (advance / crown / knock out) or shows the plain friendly/knockout result.
+ * Present the full-time outcome. `penWinner` is the shootout winner when a tie was
+ * settled from the spot (else null and the score decides). Routes to the World Cup
+ * tournament engine, or shows the plain friendly/knockout result.
  */
 export function presentResult(
   penWinner: number | null,
@@ -130,33 +206,16 @@ export function presentResult(
   const stat = `${penLine}${stats}`;
   const reward = rewardLine(rewards);
 
-  if (!cupActive) {
-    const result = !decided ? 'DRAW' : userWon ? `${homeName} WIN` : `${awayName} WIN`;
-    pendingContinue = false;
-    showFullTime(h, a, result, stat, motm, 'Full Time', 'PLAY AGAIN ▸', reward);
+  // World Cup tournament — feed the result into the engine and advance the bracket
+  if (getSettings().mode === 'cup' && wcRun) {
+    const penUserWon = penWinner === null ? null : penWinner === 0;
+    const outcome = playUserMatchday(wcRun, h, a, penUserWon);
+    presentWorldCupResult(outcome, h, a, decided, userWon, stat, motm, reward);
     return;
   }
 
-  // World Cup tie — the user must win to advance (a level tie is decided on penalties)
-  if (!userWon) {
-    cupActive = false;
-    pendingContinue = false;
-    showFullTime(h, a, 'KNOCKED OUT', stat, motm, `World Cup 2026 · ${ROUND_NAMES[cupRound]}`, 'BACK TO MENU ▸', reward);
-    return;
-  }
-
-  cupRound++;
-  if (cupRound >= cupOpponents.length) {
-    cupActive = false;
-    pendingContinue = false;
-    saveSettings({ titles: getSettings().titles + 1 });
-    // record the trophy on the player save too (career stat for the profile/achievements)
-    getPlayerData().stats.cupsWon++;
-    savePlayerData();
-    showFullTime(h, a, `${homeName} — WORLD CHAMPIONS 🏆`, stat, motm, 'World Cup 2026 · FINAL', 'BACK TO MENU ▸', reward);
-    return;
-  }
-  pendingContinue = true;
-  const next = teamMeta(cupOpponents[cupRound]).name;
-  showFullTime(h, a, 'THROUGH TO THE NEXT ROUND', stat, motm, `World Cup 2026 · into the ${ROUND_NAMES[cupRound]}`, `NEXT: ${next} ▸`, reward);
+  // friendly / knockout one-off
+  pendingContinue = false;
+  const result = !decided ? 'DRAW' : userWon ? `${homeName} WIN` : `${awayName} WIN`;
+  showFullTime(h, a, result, stat, motm, 'Full Time', 'PLAY AGAIN ▸', reward);
 }
