@@ -157,36 +157,47 @@ function buildGoal(sx: number): void {
   bar.castShadow = true;
   grp.add(bar);
 
-  // back frame
-  const backTop = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r * 0.8, 2 * w, 8), postMat);
-  backTop.rotation.z = Math.PI / 2;
-  backTop.position.set(gx + sx * d, h * 0.7, 0);
-  grp.add(backTop);
-  for (const z of [-w, w]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, h, 8), postMat);
-    m.position.set(gx + sx * d, h * 0.35, z);
-    grp.add(m);
-    const top = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.6, r * 0.6, d, 8), postMat);
-    top.rotation.z = Math.PI / 2;
-    top.rotation.y = Math.PI / 2;
-    top.position.set(gx + (sx * d) / 2, h, z);
-    grp.add(top);
-  }
+  // The net drapes from the crossbar back and DOWN to the ground — the classic
+  // goal profile. No full-height vertical back posts (those read as two poles
+  // standing out of the goal); the back is held by angled struts to the turf.
+  const bx = gx + sx * d; // back of the goal (outward, away from the pitch)
+  const netMat = new THREE.MeshBasicMaterial({ color: '#dfe8f5', wireframe: true, transparent: true, opacity: 0.22, side: THREE.DoubleSide });
 
-  // net (back + sides + roof)
-  const netMat = new THREE.MeshBasicMaterial({ color: '#dfe8f5', wireframe: true, transparent: true, opacity: 0.22 });
-  const back = new THREE.Mesh(new THREE.PlaneGeometry(2 * w, h, 10, 6), netMat);
-  back.position.set(gx + sx * d, h / 2, 0);
-  back.rotation.y = Math.PI / 2;
-  grp.add(back);
-  const roof = new THREE.Mesh(new THREE.PlaneGeometry(d, 2 * w, 4, 10), netMat);
-  roof.rotation.x = Math.PI / 2;
-  roof.position.set(gx + (sx * d) / 2, h, 0);
-  grp.add(roof);
-  for (const z of [-w, w]) {
-    const side = new THREE.Mesh(new THREE.PlaneGeometry(d, h, 4, 6), netMat);
-    side.position.set(gx + (sx * d) / 2, h / 2, z);
-    grp.add(side);
-  }
+  // corner points: front-top (crossbar ends), front-bottom (post feet), back-bottom (on ground)
+  const FTL = new THREE.Vector3(gx, h, -w);
+  const FTR = new THREE.Vector3(gx, h, w);
+  const FBL = new THREE.Vector3(gx, 0, -w);
+  const FBR = new THREE.Vector3(gx, 0, w);
+  const BBL = new THREE.Vector3(bx, 0, -w);
+  const BBR = new THREE.Vector3(bx, 0, w);
+
+  // angled back struts (crossbar end → back-ground corner) + a ground bar across the back
+  const strut = (a: THREE.Vector3, b: THREE.Vector3, rad: number): void => {
+    const dir = new THREE.Vector3().subVectors(b, a);
+    const len = dir.length() || 1e-3;
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 8), postMat);
+    m.position.copy(a).addScaledVector(dir, 0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    m.castShadow = true;
+    grp.add(m);
+  };
+  strut(FTL, BBL, r * 0.6);
+  strut(FTR, BBR, r * 0.6);
+  strut(BBL, BBR, r * 0.6);
+
+  // wireframe net: sloping roof/back panel + two triangular sides (goal mouth open)
+  const panel = (pts: THREE.Vector3[]): void => {
+    const pos: number[] = [];
+    for (let i = 1; i < pts.length - 1; i++) {
+      pos.push(pts[0].x, pts[0].y, pts[0].z, pts[i].x, pts[i].y, pts[i].z, pts[i + 1].x, pts[i + 1].y, pts[i + 1].z);
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    grp.add(new THREE.Mesh(geo, netMat));
+  };
+  panel([FTL, FTR, BBR, BBL]); // roof sloping down to the back
+  panel([FTL, FBL, BBL]); // left side triangle
+  panel([FTR, FBR, BBR]); // right side triangle
+
   world.add(grp);
 }
