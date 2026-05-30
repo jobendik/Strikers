@@ -54,7 +54,11 @@ export function updateCamera(dt: number): void {
   const live = match.state === 'play' || match.state === 'celebrate';
   const fx = live ? clamp(ball.position.x * 0.6, -14, 14) : Math.sin(performance.now() * 0.00018) * 12;
 
-  if (match.state === 'celebrate') {
+  if (match.state === 'shootout') {
+    // a tight, dramatic angle behind the spot looking at the goal (always +X)
+    _camTarget.set(CFG.halfL - 20, 12, 17);
+    _look.set(CFG.halfL - 2, 1.3, ball.position.z * 0.4);
+  } else if (match.state === 'celebrate') {
     // cinematic push-in toward the goal that was just breached
     const gx = match.scoredBy === 0 ? CFG.halfL : -CFG.halfL;
     _camTarget.set(gx * 0.62, 17, 26);

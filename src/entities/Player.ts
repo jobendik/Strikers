@@ -13,7 +13,7 @@ import {
 import type { Group } from 'three';
 import { CFG } from '../config/constants';
 import { attrMul, SQUADS } from '../config/players';
-import { V3 } from '../core/math';
+import { V3, clamp } from '../core/math';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
 import { initPerception } from '../ai/perception';
@@ -57,6 +57,16 @@ export class Player extends Vehicle {
   marking = false;
   markTarget: Vector3 | null = null;
   supportTarget: Vector3 = V3();
+
+  /** Per-match contribution tally — feeds the Man-of-the-Match rating. */
+  statGoals = 0;
+  statAssists = 0;
+  statTackles = 0;
+  statSaves = 0;
+
+  /** Disciplinary state (Sim rules only): bookings, and whether sent off. */
+  yellows = 0;
+  sentOff = false;
 
   // steering behaviors
   arrive: ArriveBehavior;
@@ -139,7 +149,10 @@ export class Player extends Vehicle {
   homePos(): Vector3 {
     const e = this.entry;
     const b = this.team.inAttack ? e.att : e.def;
-    return this.team.side > 0 ? V3(b.x, 0, b.z) : V3(-b.x, 0, b.z);
+    // mentality shifts outfielders up/down the pitch (the keeper stays home)
+    const push = this.roleType === 'GK' ? 0 : this.team.mentalityPush();
+    const x = (this.team.side > 0 ? b.x : -b.x) + this.team.side * push;
+    return V3(clamp(x, -CFG.halfL + 2, CFG.halfL - 2), 0, b.z);
   }
 
   /** Deactivates every steering behavior. */

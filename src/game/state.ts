@@ -2,6 +2,7 @@ import { CFG } from '../config/constants';
 import { Ball } from '../entities/Ball';
 import { Team } from '../entities/Team';
 import type { Player } from '../entities/Player';
+import { flagOffside } from './rules';
 import type { InputState, MatchStateName } from '../config/types';
 
 /**
@@ -12,6 +13,18 @@ export interface MatchState {
   teams: [Team, Team];
   state: MatchStateName;
   timeLeft: number;
+  /** A drawn match must be settled by a penalty shootout (knockout / cup tie). */
+  settleDraws: boolean;
+  /** Sim rules on: offside + yellow/red cards (default off = pure arcade). */
+  simRules: boolean;
+  /** Match paused (pause menu open) — the loop freezes the simulation. */
+  paused: boolean;
+  /** Current half (1 or 2). */
+  half: number;
+  /** Added time accrued for the current half (seconds); played once timeLeft hits 0. */
+  stoppageAccrued: number;
+  /** Added-time seconds still to play; >0 only while in stoppage. */
+  stoppageLeft: number;
   score: [number, number];
   controlPlayer: Player | null;
   controlTeam: Team | null;
@@ -31,7 +44,30 @@ export interface MatchState {
   timeScale: number;
   input: InputState;
   joy: { x: number; z: number };
-  stats: { shots: [number, number]; passes: [number, number] };
+  stats: MatchStats;
+}
+
+/** Accumulated team match statistics (for the half-time / full-time cards). */
+export interface MatchStats {
+  shots: [number, number];
+  onTarget: [number, number];
+  passes: [number, number];
+  tackles: [number, number];
+  saves: [number, number];
+  /** Possession measured as seconds in control; rendered as a percentage. */
+  possession: [number, number];
+}
+
+/** A fresh, zeroed stats block. */
+export function freshStats(): MatchStats {
+  return {
+    shots: [0, 0],
+    onTarget: [0, 0],
+    passes: [0, 0],
+    tackles: [0, 0],
+    saves: [0, 0],
+    possession: [0, 0],
+  };
 }
 
 // Live bindings — populated by createGameState() before the loop starts.
@@ -49,6 +85,12 @@ export function createGameState(): void {
     teams: [home, away],
     state: 'menu',
     timeLeft: CFG.matchSeconds,
+    settleDraws: false,
+    simRules: false,
+    paused: false,
+    half: 1,
+    stoppageAccrued: 0,
+    stoppageLeft: 0,
     score: [0, 0],
     controlPlayer: null,
     controlTeam: null,
@@ -64,7 +106,7 @@ export function createGameState(): void {
     timeScale: 1,
     input: { x: 0, z: 0, sprint: false },
     joy: { x: 0, z: 0 },
-    stats: { shots: [0, 0], passes: [0, 0] },
+    stats: freshStats(),
   };
   ball.mesh.position.set(0, CFG.ballR, 0);
 }
@@ -77,6 +119,7 @@ export function createGameState(): void {
 export function setReceiver(p: Player | null): void {
   match.receivingPlayer = p;
   match.receiveTimer = p ? CFG.receiveSpan : 0;
+  flagOffside(p); // Sim rules: judge the receiver's offside position at the pass
 }
 
 /** Returns the opposing team. */

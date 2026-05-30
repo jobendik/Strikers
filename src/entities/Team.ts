@@ -1,5 +1,5 @@
 import { Regulator, Vector3 } from 'yuka';
-import { CFG, FORMATION } from '../config/constants';
+import { CFG, FORMATION, MENTALITY } from '../config/constants';
 import { V3, clamp, distSq } from '../core/math';
 import { ball, match, oppOf } from '../game/state';
 import { updatePerception } from '../ai/perception';
@@ -17,6 +17,8 @@ export class Team {
   name: string;
   isUser: boolean;
   inAttack = false;
+  /** 0 Defensive · 1 Balanced · 2 Attacking — biases the resting shape's depth. */
+  mentality = 1;
   players: Player[];
   gk: Player;
   bestSpot: Vector3 | null = null;
@@ -38,7 +40,12 @@ export class Team {
   }
 
   outfield(): Player[] {
-    return this.players.filter((p) => p.roleType !== 'GK');
+    return this.players.filter((p) => p.roleType !== 'GK' && !p.sentOff);
+  }
+
+  /** Resting-shape depth bias (world units) from the current mentality. */
+  mentalityPush(): number {
+    return MENTALITY[this.mentality]?.push ?? 0;
   }
 
   /** Buckland-style SupportSpotCalculator: scores candidate spots for the off-ball attacker. */
@@ -97,7 +104,7 @@ export class Team {
 
   update(_dt: number): void {
     // refresh perception for all players before any decision-making
-    for (const p of this.players) updatePerception(p);
+    for (const p of this.players) if (!p.sentOff) updatePerception(p);
 
     this.inAttack = match.controlTeam === this;
     const of = this.outfield();
@@ -129,6 +136,7 @@ export class Team {
     if (rcv && rcv.team === this && rcv.roleType !== 'GK') rcv.role = 'RECEIVE';
 
     for (const p of this.players) {
+      if (p.sentOff) continue;
       const role: PlayerRole = p.role;
       if (!p.fsm.in(role)) p.fsm.changeTo(role);
       p.fsm.update();

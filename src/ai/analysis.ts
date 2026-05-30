@@ -21,6 +21,7 @@ export function nearestOpp(p: Player): Player | null {
   let n: Player | null = null;
   let nd = Infinity;
   for (const o of oppOf(p.team).players) {
+    if (o.sentOff) continue;
     const d = distSq(o.position, p.position);
     if (d < nd) {
       nd = d;

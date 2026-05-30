@@ -1,6 +1,4 @@
 import { CFG } from '../config/constants';
-import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
 import { match } from '../game/state';
 
 const el = (id: string): HTMLElement => {
@@ -17,6 +15,9 @@ export function updateHUD(): void {
   const mm = Math.floor(tl / 60);
   const ss = Math.floor(tl % 60);
   el('clock').textContent = `${mm}:${String(ss).padStart(2, '0')}`;
+  // the half label doubles as the added-time indicator while stoppage is playing
+  el('half').textContent =
+    match.stoppageLeft > 0 ? `+${Math.ceil(match.stoppageLeft)}s` : match.half >= 2 ? '2ND HALF' : '1ST HALF';
   updatePlayerBadge();
 }
 
@@ -58,12 +59,54 @@ export function showGoalFx(i: number): void {
   fx.classList.add('show');
 }
 
-export function showFullTime(h: number, a: number, result: string, stats: string): void {
+export function showFullTime(h: number, a: number, result: string, stats: string, motm = ''): void {
   el('ftH').textContent = String(h);
   el('ftA').textContent = String(a);
   el('ftResult').textContent = result;
   el('ftStats').textContent = stats;
+  el('ftMotm').textContent = motm;
   setFullTimeVisible(true);
+}
+
+/** Show the half-time interval card with the running score + stats. */
+export function showHalfTime(h: number, a: number, stats: string): void {
+  el('htH').textContent = String(h);
+  el('htA').textContent = String(a);
+  el('htStats').textContent = stats;
+  setHalfTimeVisible(true);
+}
+
+/** Show/hide the shootout scoreboard banner. */
+export function showShootout(v: boolean): void {
+  el('shootout').classList.toggle('hidden', !v);
+}
+
+/** Show/hide the instant-replay label + skip control. */
+export function showReplayUI(v: boolean): void {
+  el('replay').classList.toggle('show', v);
+}
+
+/** Render the kick-by-kick shootout board (two rows of goal/miss marks + scores). */
+export function updateShootoutBoard(
+  goals: [number, number],
+  taken: [number, number],
+  marks: Array<Array<'goal' | 'miss'>>,
+  _starter: number,
+  current: number,
+  suddenDeath: boolean,
+): void {
+  el('soHead').textContent = suddenDeath ? 'SUDDEN DEATH' : 'PENALTIES';
+  const slots = Math.max(CFG.pen.bestOf, taken[0], taken[1]);
+  for (let i = 0; i < 2; i++) {
+    const row = el(`soRow${i}`);
+    let dots = '';
+    for (let j = 0; j < slots; j++) {
+      const m = marks[i][j];
+      dots += `<span class="so-dot ${m ?? 'empty'}"></span>`;
+    }
+    row.className = `so-row${i === current ? ' current' : ''}`;
+    row.innerHTML = `<span class="so-tag">${match.teams[i].name}</span>${dots}<span class="so-score">${goals[i]}</span>`;
+  }
 }
 
 export function setMenuVisible(v: boolean): void {
@@ -72,31 +115,20 @@ export function setMenuVisible(v: boolean): void {
 export function setFullTimeVisible(v: boolean): void {
   el('ft').classList.toggle('hidden', !v);
 }
+export function setHalfTimeVisible(v: boolean): void {
+  el('ht').classList.toggle('hidden', !v);
+}
+export function setPauseVisible(v: boolean): void {
+  el('pause').classList.toggle('hidden', !v);
+}
 
-/** Wire menu segmented controls and primary buttons. */
-export function initUI(callbacks: { onPlay: () => void; onAgain: () => void }): void {
-  const seg = (id: string, cb: (v: number) => void): void => {
-    const group = el(id);
-    group.querySelectorAll('button').forEach((b) =>
-      b.addEventListener('click', () => {
-        group.querySelectorAll('button').forEach((x) => x.classList.remove('on'));
-        b.classList.add('on');
-        cb(Number(b.getAttribute('data-v')));
-      }),
-    );
-  };
-  seg('segDiff', (v) => (CFG.diff = v));
-  seg('segLen', (v) => (CFG.matchSeconds = v));
-
+/**
+ * Wire the primary flow buttons. The menu's option controls (difficulty, length,
+ * match type, rules) and all settings live in {@link initSettings}, which owns
+ * persistence.
+ */
+export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onSecondHalf: () => void }): void {
   el('btnPlay').addEventListener('click', callbacks.onPlay);
   el('btnAgain').addEventListener('click', callbacks.onAgain);
-
-  let muted = false;
-  const muteBtn = el('muteBtn');
-  muteBtn.addEventListener('click', () => {
-    muted = !muted;
-    Audio.setMute(muted);
-    Haptics.setEnabled(!muted);
-    muteBtn.textContent = muted ? '🔇' : '🔊';
-  });
+  el('btnSecond').addEventListener('click', callbacks.onSecondHalf);
 }

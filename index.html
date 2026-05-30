@@ -26,13 +26,17 @@
     <div class="board">
       <div class="team-tag home-tag"><span class="dot"></span>STR</div>
       <div class="score"><span id="scoreH">0</span></div>
-      <div class="clock"><span id="clock">3:00</span><span class="lbl">1ST HALF</span></div>
+      <div class="clock"><span id="clock">3:00</span><span class="lbl" id="half">1ST HALF</span></div>
       <div class="score"><span id="scoreA">0</span></div>
       <div class="team-tag away-tag">UTD<span class="dot"></span></div>
     </div>
   </div>
   <button id="muteBtn" aria-label="Toggle sound">🔊</button>
+  <button id="pauseBtn" aria-label="Pause">⏸</button>
   <div class="toast" id="toast"></div>
+
+  <!-- Tactical radar -->
+  <canvas id="radar"></canvas>
 
   <!-- Controlled player badge -->
   <div id="pname"><span class="num" id="pnum">9</span><span class="nm" id="pnm">SOLA</span></div>
@@ -52,12 +56,27 @@
   <!-- Goal FX -->
   <div id="goalFx"><div class="g">GOAL!</div></div>
 
+  <!-- Instant replay -->
+  <div id="replay">
+    <div class="rep-tag"><span class="rec"></span>REPLAY</div>
+    <button id="skipReplay">SKIP ▸</button>
+  </div>
+  <div class="cinebar top"></div>
+  <div class="cinebar bottom"></div>
+
+  <!-- Penalty shootout scoreboard -->
+  <div id="shootout" class="hidden">
+    <div class="so-head" id="soHead">PENALTIES</div>
+    <div class="so-row0" id="soRow0"></div>
+    <div class="so-row1" id="soRow1"></div>
+  </div>
+
   <!-- Start menu -->
   <div class="overlay" id="menu">
     <div class="card">
       <div class="kicker">Yuka · Three.js · Agent AI</div>
       <h1>YUKA <span class="accent">STRIKERS</span></h1>
-      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Crimson Strikers</b>.<br>Steering, perception, fuzzy-logic &amp; named, attribute-driven agents power every player — with real aerial ball physics, curling shots, give-and-go runs, chips, crosses, through-balls &amp; slide tackles.</div>
+      <div class="sub">5-a-side AI football. You command the <b style="color:var(--home)">Strikers</b> in red; every other player is driven by steering, perception, fuzzy-logic &amp; named, attribute-driven agents — with real aerial physics, curling shots, give-and-go runs, diving keepers and penalty shootouts.</div>
       <div class="opts">
         <div class="opt-row"><div class="label">Difficulty</div>
           <div class="seg" id="segDiff">
@@ -69,15 +88,90 @@
             <button data-v="120">2 MIN</button><button data-v="180" class="on">3 MIN</button><button data-v="300">5 MIN</button>
           </div>
         </div>
+        <div class="opt-row"><div class="label">Mentality</div>
+          <div class="seg" id="segMentality">
+            <button data-v="0">DEFENSIVE</button><button data-v="1" class="on">BALANCED</button><button data-v="2">ATTACKING</button>
+          </div>
+        </div>
+        <div class="opt-row"><div class="label">Match type</div>
+          <div class="seg" id="segMode">
+            <button data-v="0" class="on">FRIENDLY</button><button data-v="1">KNOCKOUT</button>
+          </div>
+        </div>
+        <div class="opt-row"><div class="label">Rules</div>
+          <div class="seg" id="segRules">
+            <button data-v="0" class="on">ARCADE</button><button data-v="1">SIM</button>
+          </div>
+        </div>
       </div>
       <button class="cta" id="btnPlay">KICK OFF ▸</button>
-      <div class="sub" style="margin-top:18px;opacity:.65;font-size:12px">
-        Move with the joystick. <b>Hold SHOOT</b> to power up a strike — a soft tap dinks it over a rushing keeper, and
-        <b>leaning the stick</b> as you shoot <b>bends</b> the ball around him.
-        <b>Hold PASS</b> to loft a cross; flick PASS forward to slide a <b>through-ball</b> in behind.
-        Defending? <b>SHOOT</b> launches a slide tackle and heads high balls clear.<br>
-        Keyboard: WASD/Arrows · J pass (hold = lob) · K shoot (hold = power) · Shift sprint · Space switch
+      <div class="menu-links">
+        <button class="link" id="btnHowto">❔ HOW TO PLAY</button>
+        <button class="link" id="btnSettings">⚙ SETTINGS</button>
       </div>
+    </div>
+  </div>
+
+  <!-- How to play -->
+  <div class="overlay hidden" id="howto">
+    <div class="card">
+      <div class="kicker">How to play</div>
+      <h2 class="panel-title">CONTROLS</h2>
+      <div class="howto-grid">
+        <span class="k">Move</span><span class="v">Left joystick · WASD / Arrows</span>
+        <span class="k">Shoot</span><span class="v">⚽ / K — hold to power up, soft tap to place or chip a rushing keeper, lean the stick to curl it</span>
+        <span class="k">Pass</span><span class="v">➤ / J — hold to loft a cross, flick forward for a through-ball</span>
+        <span class="k">Off the ball</span><span class="v">⚽ / K slides in or heads a high ball clear</span>
+        <span class="k">Sprint</span><span class="v">» / Shift</span>
+        <span class="k">Switch player</span><span class="v">⇄ / Space (when defending)</span>
+        <span class="k">Penalties</span><span class="v">Aim with the joystick + SHOOT to strike; pick a corner + SHOOT to dive as keeper</span>
+      </div>
+      <div class="sub" style="font-size:12px;opacity:.7;margin-top:12px">KNOCKOUT settles a draw on penalties · SIM rules add offside &amp; cards · best played in landscape.</div>
+      <button class="cta small" id="btnHowtoDone">GOT IT ▸</button>
+    </div>
+  </div>
+
+  <!-- Settings -->
+  <div class="overlay hidden" id="settings">
+    <div class="card">
+      <div class="kicker">Settings</div>
+      <h2 class="panel-title">PREFERENCES</h2>
+      <div class="opts">
+        <div class="opt-row"><div class="label">Haptics</div>
+          <div class="seg" id="segHaptics"><button data-v="0">OFF</button><button data-v="1" class="on">ON</button></div>
+        </div>
+        <div class="opt-row"><div class="label">Graphics</div>
+          <div class="seg" id="segQuality"><button data-v="0">LITE</button><button data-v="1" class="on">HIGH</button></div>
+        </div>
+        <div class="opt-row"><div class="label">Layout</div>
+          <div class="seg" id="segLayout"><button data-v="0" class="on">RIGHT-HAND</button><button data-v="1">LEFT-HAND</button></div>
+        </div>
+      </div>
+      <div class="sub" style="font-size:12px;opacity:.7">LITE graphics turns off replays and lowers resolution on weaker phones. Left-hand swaps the joystick and buttons.</div>
+      <button class="cta small" id="btnSettingsDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Pause menu -->
+  <div class="overlay hidden" id="pause">
+    <div class="card">
+      <div class="kicker">Paused</div>
+      <h2 class="panel-title">MATCH PAUSED</h2>
+      <div class="pause-btns">
+        <button class="cta" id="btnResume">RESUME ▸</button>
+        <button class="link" id="btnRestart">↻ RESTART</button>
+        <button class="link" id="btnQuit">✕ QUIT TO MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Half time -->
+  <div class="overlay hidden" id="ht">
+    <div class="card">
+      <div class="kicker">Half Time</div>
+      <div class="scoreline"><span class="h" id="htH">0</span> <span style="color:#fff">–</span> <span class="a" id="htA">0</span></div>
+      <div class="sub" id="htStats"></div>
+      <button class="cta" id="btnSecond">2ND HALF ▸</button>
     </div>
   </div>
 
@@ -88,11 +182,12 @@
       <div class="resultword" id="ftResult">DRAW</div>
       <div class="scoreline"><span class="h" id="ftH">0</span> <span style="color:#fff">–</span> <span class="a" id="ftA">0</span></div>
       <div class="sub" id="ftStats"></div>
+      <div class="motm" id="ftMotm"></div>
       <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
     </div>
   </div>
 
-  <div class="credit">CRIMSON STRIKERS vs AZURE UNITED — Yuka steering · perception · fuzzy logic · FSM agents</div>
+  <div class="credit">YUKA STRIKERS — Yuka steering · perception · fuzzy logic · FSM agents · procedural audio</div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

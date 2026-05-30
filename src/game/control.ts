@@ -7,10 +7,28 @@ import { Haptics } from '../core/haptics';
 import { ball, match, oppOf, setReceiver, teamIndex } from './state';
 import { GROUND_Y, launchLob, planarToBall } from './aerial';
 import { findBestPass, nearestOpp } from '../ai/analysis';
+import { addStoppage } from './flow';
+import { foulCard, resolveOffside } from './rules';
 import { addShake } from './render';
 import { flashToast } from '../ui/hud';
 import { setPiece } from './physics';
 import type { Player } from '../entities/Player';
+
+/** Credit a player (and their team) with winning the ball — feeds match stats + MOTM. */
+function creditTackle(p: Player): void {
+  p.statTackles++;
+  match.stats.tackles[teamIndex(p.team)]++;
+}
+
+/**
+ * Credit a keeper with a save, count the opposition shot as on-target, and feed
+ * the MOTM rating. Called once per gathered shot in {@link resolveControl}.
+ */
+function creditSave(gk: Player): void {
+  gk.statSaves++;
+  match.stats.saves[teamIndex(gk.team)]++;
+  match.stats.onTarget[teamIndex(oppOf(gk.team))]++;
+}
 
 /** Give (or clear) ball possession. */
 export function setControl(p: Player | null): void {
@@ -19,8 +37,11 @@ export function setControl(p: Player | null): void {
   if (p) {
     p.kickCooldown = 0;
     ball.lastTouch = p.team;
+    ball.lastKicker = p; // last player to touch it — credits a scorer who walks it in
+    if (ball.passer && ball.passer.team !== p.team) ball.passer = null; // assist void on a turnover
     if (p.roleType === 'GK') match.gkHold = 0.9;
     setReceiver(null); // the pass has arrived (or possession changed) — receiver assignment is done
+    if (resolveOffside(p)) return; // Sim rules: an offside runner is flagged on first touch
   }
 }
 
@@ -32,6 +53,8 @@ export function kick(p: Player, dir: Vector3, power: number, type: 'kick' | 'pas
   ball.velocity.set(d.x * power, 0, d.z * power); // mass=1 -> speed=power (Buckland kick)
   ball.spin = spin;
   ball.lastTouch = p.team;
+  ball.lastKicker = p;
+  if (type === 'pass') ball.passer = p; // a shot/clearance leaves the assist setter intact
   p.kickCooldown = 0.32;
   match.controlPlayer = null;
   match.controlTeam = null;
@@ -58,6 +81,8 @@ export function lobKick(p: Player, target: Vector3, peak: number, type: 'kick' |
   launchLob(target, peak);
   ball.spin = spin;
   ball.lastTouch = p.team;
+  ball.lastKicker = p;
+  if (type === 'pass') ball.passer = p;
   p.kickCooldown = 0.32;
   match.controlPlayer = null;
   match.controlTeam = null;
@@ -80,6 +105,7 @@ export function headBall(p: Player, dir: Vector3, power: number): void {
   ball.velocity.set(d.x * power, Math.max(2, ball.velocity.y * 0.3 + 3.5), d.z * power);
   ball.spin = 0;
   ball.lastTouch = p.team;
+  ball.lastKicker = p;
   p.kickCooldown = 0.3;
   match.controlPlayer = null;
   match.controlTeam = null;
@@ -114,12 +140,15 @@ export function resolveSlides(_dt: number): void {
           for (const tt of match.teams) for (const pp of tt.players) pp.slide = 0;
           Audio.whistle();
           Haptics.whistle();
+          addStoppage(CFG.stoppagePerFoul);
+          foulCard(p, true); // a slide is a reckless challenge — more likely to be carded
           setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FOUL — FREE KICK', false);
           flashToast(p.team.isUser ? 'FOUL GIVEN AWAY' : 'FREE KICK WON');
           return;
         }
         setControl(null);
         ball.lastTouch = p.team; // the tackler got the last touch — credit possession
+        creditTackle(p);
         const ax = ball.position.x - p.position.x;
         const az = ball.position.z - p.position.z;
         const al = Math.hypot(ax, az) || 1;
@@ -194,6 +223,7 @@ export function resolveControl(dt: number): void {
     if (cd > CFG.controlR * 1.9) {
       setControl(null);
     } else if (!blocked && near && near.team !== c.team && nd < cd - 0.25) {
+      creditTackle(near);
       setControl(near);
       Audio.tackle();
       if (near.team.isUser) Haptics.tackle();
@@ -203,6 +233,7 @@ export function resolveControl(dt: number): void {
     if (near.roleType === 'GK' && ball.velocity.length() > 10) {
       const diving = near.dive > 0;
       const speed = ball.velocity.length();
+      creditSave(near); // a gathered fast ball was a shot on target
       // a screamer reached at full stretch may be parried rather than held —
       // the keeper paws it away from his near post for a dramatic rebound.
       if (diving && speed > CFG.gkParrySpeed && Math.random() < 0.5) {
@@ -255,10 +286,13 @@ export function updatePressure(dt: number): void {
     if (foul) {
       Audio.whistle();
       Haptics.whistle();
+      addStoppage(CFG.stoppagePerFoul);
+      if (o) foulCard(o, false);
       setPiece(V3(ball.position.x, 0, ball.position.z), c.team, 'FREE KICK', false);
       return;
     }
     setControl(null);
+    if (o) creditTackle(o);
     const ax = ball.position.x - (o ? o.position.x : 0);
     const az = ball.position.z - (o ? o.position.z : 0);
     const al = Math.hypot(ax, az) || 1;

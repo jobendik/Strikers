@@ -41,8 +41,13 @@ export const CFG = {
   staminaDrain: 0.05,
   staminaRegen: 0.06,
   foulChance: 0.07,
-  matchSeconds: 180,
+  matchSeconds: 180, // length of ONE half (the match is two halves — see flow.ts)
   diff: 1, // 0 easy · 1 pro · 2 legend
+
+  // --- match structure (two halves + half-time + stoppage) ---
+  stoppagePerGoal: 3.0, // seconds of added time accrued per goal
+  stoppagePerFoul: 1.4, // ...and per stoppage in play (foul / free kick)
+  stoppageMax: 30, // cap on a half's added time
 
   // --- aerial ball physics (Notblox-inspired 3D ball) ---
   gravity: 24, // world units / s² — tuned for snappy arcade arcs
@@ -102,6 +107,20 @@ export const CFG = {
   // --- game-feel juice ---
   goalSlowmo: 0.32, // time scale at the instant of a goal
   slowmoRecover: 1.7, // how fast time returns to normal (units/s of time-scale)
+
+  // --- penalty shootout (settles drawn knockout ties; reuses the diving keeper) ---
+  pen: {
+    spotOut: 9, // penalty spot distance from the goal line
+    power: 25, // base shot speed (scaled up by charge)
+    keeperReach: 1.45, // planar catch radius of the diving keeper at the ball
+    keeperSpeed: 13.5, // dive speed (u/s) — reaches a corner in time *if* he reads it
+    setupTime: 0.9, // pause before each kick can be taken
+    resultTime: 1.7, // how long a kick result is shown
+    flightTimeout: 2.4, // failsafe: an unresolved kick is recorded as a miss
+    aiKeeperRead: [0.42, 0.52, 0.62], // chance the AI keeper picks the right side, by diff
+    aiOnTarget: [0.78, 0.84, 0.9], // chance an AI penalty is on target, by diff
+    bestOf: 5, // kicks each before sudden death
+  },
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */
@@ -109,6 +128,18 @@ export const DIFF: DiffSetting[] = [
   { label: 'EASY', aiSpd: 0.88, react: 0.34, passSafe: 2.6, shootBias: 0.55, keeper: 0.74 },
   { label: 'PRO', aiSpd: 0.97, react: 0.22, passSafe: 2.1, shootBias: 0.78, keeper: 0.78 },
   { label: 'LEGEND', aiSpd: 1.05, react: 0.12, passSafe: 1.7, shootBias: 0.95, keeper: 0.82 },
+];
+
+/**
+ * Team mentality — shifts the whole resting shape up or down the pitch. The user
+ * picks theirs in the menu; the away side adapts to the scoreline (chases when
+ * behind, sits on a lead). `push` is the depth bias in world units along the
+ * team's attacking direction.
+ */
+export const MENTALITY = [
+  { label: 'DEFENSIVE', push: -3.4 },
+  { label: 'BALANCED', push: 0 },
+  { label: 'ATTACKING', push: 3.8 },
 ];
 
 /** Formation: GK + 2 DEF + 2 ATT. Home attacks +X; away is mirrored at build time. */

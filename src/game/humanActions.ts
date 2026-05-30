@@ -27,7 +27,7 @@ const _tmp = V3();
  * tackle (footballSimulationEngine action set).
  */
 export function userShoot(charge = 1): void {
-  if (match.state !== 'play' || !match.userPlayer) return;
+  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
   const p = match.userPlayer;
   const opp = oppOf(p.team);
 
@@ -112,7 +112,7 @@ function directionalMate(p: Player, power: number, opp: ReturnType<typeof oppOf>
  * forward. Falls back to the safest pass, then the nearest teammate.
  */
 export function userPass(lob = false): void {
-  if (match.state !== 'play' || !match.userPlayer) return;
+  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
   const p = match.userPlayer;
   if (match.controlPlayer !== p) return;
   const team = p.team;
@@ -185,7 +185,7 @@ export function userPass(lob = false): void {
 
 /** SWITCH — cycle control to the next-nearest outfield player (when defending). */
 export function switchPlayer(): void {
-  if (match.state !== 'play' || !match.userPlayer) return;
+  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
   if (match.controlTeam === match.teams[0]) return;
   const of = match.teams[0]
     .outfield()

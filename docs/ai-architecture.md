@@ -305,6 +305,65 @@ ball approaches either goal, and `roar()` punches a short excitement spike on
 shots, saves and goals. Like every other sound in the game it's generated at
 runtime — zero audio assets — and respects the mute toggle.
 
+## Fifth wave — completing the game
+
+A final pass turned the deep AI sandbox into a finished, shippable mobile game:
+real match structure, knockout drama, presentation polish, opt-in authenticity
+and the surrounding UX a player expects. None of it deepens the *core* AI — it
+wraps the existing simulation in the scaffolding of a complete product.
+
+> **Honest note on the starting point.** This wave was built on a branch that
+> sat at the *fourth-wave* state — a single Strikers-vs-United match with no
+> match structure, modes, penalties, mentality, pause or radar. Everything below
+> was added from that real baseline. As there is no browser in the build
+> environment, all of it is validated by `typecheck` + `build` and reasoned
+> about rather than playtested.
+
+| Capability | Before | Now |
+| --- | --- | --- |
+| Match structure | one period | two halves + half-time + accrued stoppage |
+| Settling a draw | a draw just ended | **penalty shootout** (knockout), best-of-5 + sudden death |
+| Goal presentation | slow-mo push-in only | **instant replay** from a ring buffer + dramatic camera |
+| Tactics | fixed shape | **mentality** (Def/Bal/Att) + adaptive away side |
+| Authenticity | none | opt-in **offside + cards** behind an Arcade/Sim toggle |
+| Match data | shots/passes | possession, on-target, tackles, saves + **Man of the Match** |
+| UX | menu only | **pause menu**, settings (haptics/graphics/left-handed), how-to, **radar**, persistence |
+
+### Penalty shootout — reusing the diving keeper ([`penalty.ts`](../src/game/penalty.ts))
+
+A drawn Knockout match drops into a self-contained 1-v-1 shootout
+(`match.state === 'shootout'`) that **reuses the aerial/free-ball physics and the
+diving keeper** but runs from its own update loop so the team FSMs stay out of
+the way. Best-of-five alternating kicks, then sudden death, with the standard
+"unreachable lead" early finish. The user both **takes** (aim with the joystick,
+SHOOT for power) and **keeps** (pick a corner, SHOOT to dive); the AI takes/keeps
+otherwise, reading the kick with a difficulty-scaled accuracy. A correct dive can
+still be beaten by a hard strike into the very corner, so it stays winnable.
+
+### Instant goal replay ([`replay.ts`](../src/game/replay.ts))
+
+Every live frame, the ball + player transforms are pushed into a ring buffer;
+on a goal the last few seconds are frozen into a clip and replayed in slow motion
+from a low camera by the goal, with letterbox bars and a SKIP. It is **pure
+presentation** — playback lifts the exact recorded transforms and never touches
+the simulation, and the LITE graphics tier disables it.
+
+### Mentality & adaptive opposition ([`constants.ts`](../src/config/constants.ts), [`flow.ts`](../src/game/flow.ts))
+
+`MENTALITY` biases a team's resting shape up or down the pitch; the user sets
+theirs from the menu, and the away side re-reads the scoreline after every goal —
+chasing the game when behind, protecting a two-goal lead — so a match swings
+tactically as it unfolds. This is the "Simple Soccer" team-state idea taken one
+level up, to *team intent*.
+
+### Opt-in Sim rules — offside + cards ([`rules.ts`](../src/game/rules.ts))
+
+Behind an **Arcade/Sim** toggle (Arcade default, so authenticity never frustrates
+casual play): a pass is judged for **offside** at the moment it is played — an
+offside runner who reaches it concedes a free kick — and fouls can be **booked**,
+with a second yellow or a rare straight red reducing a side to a man down. When
+`simRules` is off, none of this code path runs.
+
 ## Decision pipeline (per AI player, per frame)
 
 ```

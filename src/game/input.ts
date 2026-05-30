@@ -2,6 +2,9 @@ import { match } from './state';
 import { clamp } from '../core/math';
 import { Haptics } from '../core/haptics';
 import { switchPlayer, userPass, userShoot } from './humanActions';
+import { penaltyAction } from './penalty';
+import { skipReplay } from './replay';
+import { quitToMenu, restartMatch, resumeGame, togglePause } from './flow';
 
 const keys: Record<string, boolean> = {};
 let sprintBtn = false;
@@ -23,7 +26,8 @@ function shootUp(): void {
   if (!shooting) return;
   const charge = clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1);
   shooting = false;
-  userShoot(charge);
+  if (match.state === 'shootout') penaltyAction(charge);
+  else userShoot(charge);
 }
 function passDown(): void {
   passing = true;
@@ -56,6 +60,13 @@ export function initInput(): void {
       Haptics.tap();
     }
   });
+  bindButton('skipReplay', (down) => {
+    if (down) skipReplay();
+  });
+  bindButton('pauseBtn', (down) => down && togglePause());
+  bindButton('btnResume', (down) => down && resumeGame());
+  bindButton('btnRestart', (down) => down && restartMatch());
+  bindButton('btnQuit', (down) => down && quitToMenu());
 
   addEventListener('keydown', (e) => {
     const repeat = keys[e.code];
@@ -66,6 +77,10 @@ export function initInput(): void {
     if (e.code === 'Space') {
       e.preventDefault();
       switchPlayer();
+    }
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      e.preventDefault();
+      togglePause();
     }
   });
   addEventListener('keyup', (e) => {
