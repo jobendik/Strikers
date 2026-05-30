@@ -14,6 +14,7 @@ import { getPlayerData, savePlayerData } from './core/playerData';
 import { initWorldCupUI, refreshWorldCupUI } from './ui/worldcup';
 import { initDailyCard } from './ui/daily';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
+import { initCrazyGames, loadingStop } from './platform/crazygames';
 
 /* ============================================================================
    YUKA STRIKERS — AI Soccer
@@ -22,6 +23,11 @@ import { initProfileCard, refreshProfileCard } from './ui/profile';
    Architecture inspired by Buckland "Programming Game AI by Example" ch.4
    (Simple Soccer) and the Yuka "kickoff" demo.
    ========================================================================== */
+
+// CrazyGames SDK (B1): detect + init the platform SDK (no-op in local dev),
+// then swap the save to the platform data module + signal the loading handshake.
+// Fire-and-forget so boot never blocks; loadingStop() runs once the SDK resolves.
+void initCrazyGames().then(() => loadingStop());
 
 buildStadium();
 createGameState();

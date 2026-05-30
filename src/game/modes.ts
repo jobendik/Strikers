@@ -18,6 +18,7 @@ import {
 import { refreshWorldCupUI } from '../ui/worldcup';
 import { refreshDailyCard } from '../ui/daily';
 import { refreshProfileCard } from '../ui/profile';
+import { interstitial, happytime } from '../platform/crazygames';
 
 /*
  * Game-mode controller: team selection, the friendly/knockout one-off, and the
@@ -108,11 +109,21 @@ export function startGame(): void {
   startMatch();
 }
 
-/** The full-time card's primary button — next World Cup fixture, or back to menu. */
+/** The full-time card's primary button — next World Cup fixture, or back to menu.
+ *  Between World Cup matches an interstitial may run (B3) at this natural break —
+ *  never mid-match; it no-ops in local dev and resumes straight into the fixture. */
 export function onFullTimeButton(): void {
   if (pendingContinue && wcRun) {
     pendingContinue = false;
-    if (startWorldCupFixture(wcRun)) return;
+    const run = wcRun;
+    interstitial(() => {
+      // resume into the next fixture after the ad (or immediately, in dev)
+      if (!startWorldCupFixture(run)) {
+        refreshWorldCupUI();
+        returnToMenu();
+      }
+    });
+    return;
   }
   pendingContinue = false;
   refreshWorldCupUI(); // freshen the menu banner / tournament screen on the way back
@@ -276,6 +287,7 @@ function presentWorldCupResult(
 
   const result: 'win' | 'draw' | 'loss' = !decided ? 'draw' : userWon ? 'win' : 'loss';
   const stars = computeStars({ result, goalsFor: h, goalsAgainst: a, cleanSheet: a === 0, champion: o.status === 'champion' });
+  if (tone === 'win' || tone === 'champion') happytime(); // platform celebration on a big moment (B)
 
   showResultScreen({
     kicker,
@@ -353,6 +365,7 @@ export function presentResult(
     tone = 'loss';
   }
   const stars = computeStars({ result, goalsFor: h, goalsAgainst: a, cleanSheet: a === 0, champion: false });
+  if (tone === 'win') happytime(); // platform celebration on a win (B)
   const kicker = getSettings().mode === 'knockout' ? 'Knockout · Full Time' : 'Friendly · Full Time';
 
   showResultScreen({

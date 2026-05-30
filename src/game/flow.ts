@@ -6,6 +6,7 @@ import { setControl } from './control';
 import { abortShootout, startShootout } from './penalty';
 import { presentResult } from './modes';
 import { resetReplayBuffer } from './replay';
+import { gameplayStart, gameplayStop } from '../platform/crazygames';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
 import { addShake, clearTrail } from './render';
@@ -177,6 +178,7 @@ function endHalf(): void {
 /** Half-time — freeze play and show the interval card. */
 function halfTime(): void {
   match.state = 'halftime';
+  gameplayStop(); // a natural break — pause SDK gameplay reporting (B2)
   Audio.whistle();
   setReceiver(null);
   setPassRequest(null);
@@ -189,6 +191,7 @@ function halfTime(): void {
 /** Kick off the second half (taken by whoever didn't kick off the first). */
 export function startSecondHalf(): void {
   setHalfTimeVisible(false);
+  gameplayStart(); // back into play (B2)
   match.half = 2;
   match.timeLeft = CFG.matchSeconds;
   match.stoppageAccrued = 0;
@@ -258,6 +261,7 @@ export function fullTime(): void {
     return;
   }
   match.state = 'fulltime';
+  gameplayStop(); // match over (B2)
   Audio.whistle();
   setTimeout(() => Audio.whistle(), 220);
   presentResult(null, null, fullStatsLine(), motmLine()); // modes owns the card (cup vs one-off)
@@ -266,6 +270,7 @@ export function fullTime(): void {
 /** Resolve a tie decided on penalties — hand the shootout winner back to modes. */
 export function finishShootout(winner: number, penScore: [number, number]): void {
   match.state = 'fulltime';
+  gameplayStop(); // match over (B2)
   Audio.whistle();
   presentResult(winner, penScore, fullStatsLine(), motmLine());
 }
@@ -295,10 +300,12 @@ export function startMatch(): void {
   updateAwayMentality();
   kickOff(match.teams[firstHalfKicker]);
   updateHUD();
+  gameplayStart(); // a match is live — start SDK gameplay reporting (B2)
 }
 
 /** Return to the start menu (Play Again). */
 export function returnToMenu(): void {
+  gameplayStop(); // back to the menu — not in play (B2)
   setFullTimeVisible(false);
   setHalfTimeVisible(false);
   setMenuVisible(true);
@@ -316,12 +323,15 @@ export function togglePause(): void {
   if (!match.paused && !isLive()) return;
   match.paused = !match.paused;
   setPauseVisible(match.paused);
+  if (match.paused) gameplayStop(); // paused — not actively playing (B2)
+  else gameplayStart();
 }
 
 /** Resume from the pause menu. */
 export function resumeGame(): void {
   match.paused = false;
   setPauseVisible(false);
+  gameplayStart(); // resumed play (B2)
 }
 
 /** Restart the current match from the pause menu. */

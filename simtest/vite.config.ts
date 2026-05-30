@@ -20,7 +20,8 @@ const STUBS: Record<string, string> = {
   'rendering/scene': `export const renderer={setSize(){},setPixelRatio(){},render(){},shadowMap:{},domElement:{}};export const scene={add(){}};export const camera={position:{set(){},lerp(){}},lookAt(){},updateProjectionMatrix(){}};export const sun={position:{set(){}},target:{position:{set(){}}},shadow:{mapSize:{set(){}},camera:{}}};export const world={add(){}};export const handleResize=()=>{};`,
   'game/replay': `export const setReplayEnabled=()=>{};export const recordFrame=()=>{};export const resetReplayBuffer=()=>{};export const hasReplay=()=>false;export const isReplaying=()=>false;export const startReplay=()=>{};export const skipReplay=()=>{};export const updateReplay=()=>true;`,
   'game/penalty': `export const inShootout=()=>false;export const abortShootout=()=>{};export const startShootout=()=>{};export const penaltyAction=()=>{};export const updateShootout=()=>{};`,
-  'game/modes': `export const startGame=()=>{};export const onFullTimeButton=()=>{};export const presentResult=()=>{};`,
+  'game/modes': `export const startGame=()=>{};export const onFullTimeButton=()=>{};export const onResultMenu=()=>{};export const presentResult=()=>{};`,
+  'platform/crazygames': `export const initCrazyGames=async()=>{};export const available=()=>false;export const environment=()=>'local';export const loadingStart=()=>{};export const loadingStop=()=>{};export const gameplayStart=()=>{};export const gameplayStop=()=>{};export const happytime=()=>{};export const requestAd=(_t,cb)=>cb(false);export const interstitial=(cb)=>cb();export const rewarded=(cb)=>cb(false);`,
   'core/settings': `export const getSettings=()=>({team:'USA',mentality:1,diff:1,half:180,mode:'friendly',sim:false,sound:false,haptics:false,quality:'lite',lefty:false,titles:0});export const saveSettings=()=>{};export const applySettings=()=>{};export const initSettings=()=>{};`,
 };
 
