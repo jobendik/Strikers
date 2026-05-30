@@ -1,0 +1,3542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>RICOCHET — Arcade Prototype</title>
+<style>
+/* =========================================================================
+   RICOCHET — Design tokens
+   ========================================================================= */
+:root{
+  /* Surfaces */
+  --bg-0: #0a0911;
+  --bg-1: #0f0e17;
+  --bg-2: #15131f;
+  --bg-3: #1c1929;
+  --bg-glass: rgba(20, 18, 30, 0.65);
+  --line: rgba(255,255,255,0.07);
+  --line-strong: rgba(255,255,255,0.14);
+
+  /* Text */
+  --text-0: #ffffff;
+  --text-1: #ece8f5;
+  --text-2: #9892ad;
+  --text-3: #5b5670;
+
+  /* Accents */
+  --lime: #c6ff00;
+  --lime-soft: rgba(198,255,0,0.18);
+  --mag: #ff2d75;
+  --mag-soft: rgba(255,45,117,0.18);
+  --amber: #ffb836;
+  --amber-soft: rgba(255,184,54,0.18);
+  --ice: #7dd3fc;
+  --ice-soft: rgba(125,211,252,0.18);
+  --violet: #b18cff;
+
+  /* Tier colors for medals */
+  --t-bronze: #d68352;
+  --t-silver: #cfd6e0;
+  --t-gold:   #ffcc4d;
+  --t-plat:   #92e9ff;
+  --t-mythic: #ff6ab8;
+
+  /* Geometry */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 22px;
+
+  /* Easing */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-back: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin:0; padding:0; height:100%; overflow:hidden; }
+body{
+  background: var(--bg-0);
+  color: var(--text-1);
+  font-family: 'Outfit', system-ui, sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  cursor: default;
+}
+button{ font-family: inherit; cursor: pointer; border: none; background:none; color: inherit; }
+
+#root{
+  position: fixed; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  background:
+    radial-gradient(circle at 20% 0%, rgba(198,255,0,0.07), transparent 40%),
+    radial-gradient(circle at 80% 100%, rgba(255,45,117,0.06), transparent 45%),
+    var(--bg-0);
+}
+
+/* Subtle film grain over everything */
+#root::after{
+  content: "";
+  position: absolute; inset: 0;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.4 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  z-index: 2000;
+}
+
+/* The game stage — 16:9 with safe area */
+#stage{
+  position: relative;
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  max-width: 1440px;
+  max-height: 810px;
+  overflow: hidden;
+  background: var(--bg-1);
+  border-radius: 4px;
+  box-shadow:
+    0 0 0 1px rgba(255,255,255,0.04),
+    0 60px 120px -40px rgba(0,0,0,0.8),
+    0 0 100px -20px rgba(198,255,0,0.06);
+}
+
+/* Game canvas */
+#game{
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  display: block;
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* =========================================================================
+   Universal "screen" container for menus
+   ========================================================================= */
+.screen{
+  position: absolute; inset: 0;
+  display: flex;
+  pointer-events: none;
+  z-index: 10;
+}
+.screen.active{ pointer-events: auto; }
+.screen.hidden{ display: none; }
+
+/* =========================================================================
+   MAIN MENU
+   ========================================================================= */
+#menu{
+  flex-direction: column;
+  padding: 28px 36px;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 100%, rgba(198,255,0,0.04), transparent 60%),
+    linear-gradient(180deg, rgba(15,14,23,0.6) 0%, rgba(15,14,23,0.92) 100%);
+  backdrop-filter: blur(0px);
+}
+
+/* Animated geometric background shapes */
+.bg-shapes{
+  position: absolute; inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+.bg-shapes::before, .bg-shapes::after{
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.5;
+  animation: float-bg 18s ease-in-out infinite alternate;
+}
+.bg-shapes::before{
+  width: 50%; height: 50%;
+  background: radial-gradient(circle, var(--lime) 0%, transparent 70%);
+  top: -15%; left: -10%;
+  opacity: 0.18;
+}
+.bg-shapes::after{
+  width: 60%; height: 60%;
+  background: radial-gradient(circle, var(--mag) 0%, transparent 70%);
+  bottom: -20%; right: -15%;
+  opacity: 0.13;
+  animation-duration: 22s;
+  animation-direction: alternate-reverse;
+}
+@keyframes float-bg {
+  0%   { transform: translate(0,0) scale(1); }
+  100% { transform: translate(40px, -30px) scale(1.15); }
+}
+
+/* Floating crystal shards (decoration) */
+.shard{
+  position: absolute;
+  pointer-events: none;
+  opacity: 0.55;
+  filter: drop-shadow(0 0 18px rgba(198,255,0,0.25));
+  animation: shard-drift 14s ease-in-out infinite;
+}
+.shard:nth-child(1){ top: 12%; left: 8%;  animation-delay: -2s; width: 36px; }
+.shard:nth-child(2){ top: 70%; left: 6%;  animation-delay: -5s; width: 22px; opacity: 0.4; }
+.shard:nth-child(3){ top: 18%; right: 12%; animation-delay: -8s; width: 28px; }
+.shard:nth-child(4){ top: 62%; right: 10%; animation-delay: -11s; width: 42px; opacity: 0.5; }
+.shard:nth-child(5){ top: 30%; left: 46%; animation-delay: -4s; width: 18px; opacity: 0.35; }
+@keyframes shard-drift{
+  0%, 100% { transform: translate3d(0,0,0) rotate(0deg); }
+  50%      { transform: translate3d(20px, -28px, 0) rotate(180deg); }
+}
+
+/* === Top bar === */
+.top-bar{
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  z-index: 2;
+}
+.brand{
+  display: flex; align-items: center; gap: 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.brand .dot{
+  width: 8px; height: 8px;
+  background: var(--lime);
+  border-radius: 50%;
+  box-shadow: 0 0 12px var(--lime);
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{
+  0%, 100% { opacity: 0.7; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.25); }
+}
+
+.currencies{
+  display: flex; gap: 10px;
+}
+.currency{
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px 8px 10px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  transition: all 0.2s var(--ease-out);
+}
+.currency:hover{
+  background: rgba(255,255,255,0.07);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+.currency .icon{
+  width: 18px; height: 18px;
+  display: grid; place-items: center;
+  font-size: 14px;
+}
+.currency.coins .icon{ color: var(--amber); }
+.currency.gems  .icon{ color: var(--ice); }
+.currency .plus{
+  margin-left: 4px;
+  color: var(--lime);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.icon-btn{
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text-2);
+  transition: all 0.2s var(--ease-out);
+}
+.icon-btn:hover{
+  color: var(--text-0);
+  background: rgba(255,255,255,0.08);
+  border-color: var(--line-strong);
+  transform: translateY(-1px);
+}
+.icon-btn .badge{
+  position: absolute;
+  top: -4px; right: -4px;
+  background: var(--mag);
+  color: white;
+  font-size: 9px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  box-shadow: 0 0 10px var(--mag-soft);
+}
+.icon-btn{ position: relative; }
+
+/* === Hero — title + profile === */
+.hero{
+  position: relative;
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1.4fr 1fr;
+  gap: 40px;
+  align-items: center;
+  padding-top: 24px;
+  z-index: 2;
+}
+
+.title-block{
+  display: flex; flex-direction: column;
+  gap: 10px;
+}
+.pretitle{
+  display: flex; align-items: center; gap: 12px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.32em;
+  color: var(--lime);
+  text-transform: uppercase;
+}
+.pretitle::before{
+  content: ""; width: 28px; height: 1px;
+  background: var(--lime);
+  box-shadow: 0 0 8px var(--lime);
+}
+
+.title{
+  font-family: 'Antonio', sans-serif;
+  font-weight: 700;
+  font-size: clamp(80px, 13vw, 180px);
+  line-height: 0.86;
+  letter-spacing: -0.025em;
+  color: var(--text-0);
+  text-transform: uppercase;
+  margin: 0;
+  position: relative;
+}
+.title span{
+  display: inline-block;
+  position: relative;
+  animation: title-in 1.2s var(--ease-out) backwards;
+}
+.title span:nth-child(1){ animation-delay: 0.05s; }
+.title span:nth-child(2){ animation-delay: 0.10s; }
+.title span:nth-child(3){ animation-delay: 0.15s; }
+.title span:nth-child(4){ animation-delay: 0.20s; }
+.title span:nth-child(5){ animation-delay: 0.25s; }
+.title span:nth-child(6){ animation-delay: 0.30s; }
+.title span:nth-child(7){ animation-delay: 0.35s; }
+.title span:nth-child(8){ animation-delay: 0.40s; }
+.title .accent{
+  color: var(--lime);
+  text-shadow: 0 0 40px rgba(198,255,0,0.4);
+}
+@keyframes title-in{
+  from{ opacity:0; transform: translateY(40px) rotate(-3deg); }
+  to  { opacity:1; transform: translateY(0)   rotate(0); }
+}
+
+.subtitle{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.28em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  margin-top: 6px;
+  display: flex; align-items: center; gap: 14px;
+}
+.subtitle .sep{
+  width: 1px; height: 12px; background: var(--text-3);
+}
+
+/* Profile card */
+.profile-card{
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+    var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  padding: 24px;
+  display: flex; flex-direction: column;
+  gap: 18px;
+  overflow: hidden;
+}
+.profile-card::before{
+  content: "";
+  position: absolute;
+  top: 0; right: 0;
+  width: 60%; height: 100%;
+  background: radial-gradient(ellipse at top right, rgba(198,255,0,0.06), transparent 60%);
+  pointer-events: none;
+}
+.profile-header{
+  display: flex; align-items: center; gap: 14px;
+  position: relative;
+}
+.avatar{
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--lime) 0%, #76a800 100%);
+  display: grid; place-items: center;
+  font-family: 'Antonio', sans-serif;
+  font-size: 28px;
+  font-weight: 700;
+  color: #0a0a0a;
+  box-shadow: 0 8px 24px -8px rgba(198,255,0,0.5),
+              inset 0 1px 0 rgba(255,255,255,0.4);
+}
+.profile-name{
+  font-family: 'Antonio', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--text-0);
+  text-transform: uppercase;
+  display: flex; align-items: center; gap: 8px;
+}
+.verify{
+  width: 14px; height: 14px;
+  background: var(--ice);
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M12 1l3 3 4-1 1 4 4 3-2 4 2 4-4 3-1 4-4-1-3 3-3-3-4 1-1-4-4-3 2-4-2-4 4-3 1-4 4 1z M9.5 12.5l2 2 4-4-1.4-1.4-2.6 2.6-0.6-0.6z'/></svg>") center/contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path fill='black' d='M12 1l3 3 4-1 1 4 4 3-2 4 2 4-4 3-1 4-4-1-3 3-3-3-4 1-1-4-4-3 2-4-2-4 4-3 1-4 4 1z M9.5 12.5l2 2 4-4-1.4-1.4-2.6 2.6-0.6-0.6z'/></svg>") center/contain no-repeat;
+}
+.profile-tag{
+  display: flex; align-items: center; gap: 8px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-2);
+  letter-spacing: 0.1em;
+}
+.tier-badge{
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 8px;
+  background: rgba(255,184,54,0.12);
+  border: 1px solid rgba(255,184,54,0.3);
+  border-radius: 4px;
+  color: var(--amber);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+}
+.tier-badge .star::before{ content: "★"; }
+
+.xp-bar-wrap{
+  position: relative;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.xp-bar-labels{
+  display: flex; justify-content: space-between;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--text-3);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.xp-bar-labels b{ color: var(--text-1); font-weight: 700; }
+.xp-bar{
+  height: 8px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.xp-bar::before{
+  content:"";
+  position: absolute; inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0, transparent 24px, rgba(255,255,255,0.04) 24px, rgba(255,255,255,0.04) 25px);
+}
+.xp-fill{
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--lime), #e4ff63);
+  box-shadow: 0 0 18px rgba(198,255,0,0.6);
+  border-radius: 2px;
+  position: relative;
+  animation: xp-fill 1.6s var(--ease-out) 0.5s forwards;
+}
+.xp-fill::after{
+  content:"";
+  position: absolute; right: 0; top: 0;
+  height: 100%; width: 14px;
+  background: linear-gradient(90deg, transparent, white);
+  opacity: 0.3;
+}
+@keyframes xp-fill{ to { width: 64%; } }
+
+.profile-stats{
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 4px;
+}
+.pstat{
+  padding: 10px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+.pstat-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.pstat-value{
+  font-family: 'Antonio', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-0);
+  line-height: 1;
+}
+.pstat-value small{ font-size: 12px; color: var(--text-2); margin-left: 2px; }
+
+/* === Action row === */
+.action-row{
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 24px;
+  align-items: end;
+  padding-bottom: 14px;
+  z-index: 2;
+}
+
+/* The big PLAY button */
+.play-btn{
+  position: relative;
+  padding: 22px 60px;
+  background: var(--lime);
+  color: #0a0a0a;
+  font-family: 'Antonio', sans-serif;
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.3),
+    0 16px 40px -10px rgba(198,255,0,0.5),
+    inset 0 -3px 0 rgba(0,0,0,0.25);
+  transition: all 0.2s var(--ease-out);
+  display: flex; align-items: center; gap: 14px;
+  white-space: nowrap;
+}
+.play-btn::before{
+  content: "";
+  position: absolute; inset: -3px;
+  background: linear-gradient(90deg, var(--lime), #fff, var(--lime));
+  border-radius: var(--r-lg);
+  z-index: -1;
+  opacity: 0; transition: opacity 0.3s;
+  filter: blur(8px);
+}
+.play-btn:hover{
+  transform: translateY(-3px) scale(1.02);
+  box-shadow:
+    0 0 0 1px rgba(0,0,0,0.3),
+    0 22px 60px -14px rgba(198,255,0,0.7),
+    inset 0 -3px 0 rgba(0,0,0,0.25);
+}
+.play-btn:hover::before{ opacity: 0.6; }
+.play-btn:active{
+  transform: translateY(-1px) scale(1.01);
+}
+.play-btn .arrow{
+  display: inline-block;
+  width: 24px; height: 24px;
+  background: #0a0a0a;
+  -webkit-mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8 5v14l11-7z'/></svg>") center/contain no-repeat;
+          mask: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M8 5v14l11-7z'/></svg>") center/contain no-repeat;
+}
+
+/* Daily / featured card grid */
+.feature-list{
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.feature{
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  transition: all 0.2s var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+.feature::before{
+  content:"";
+  position: absolute; left: 0; top: 0;
+  width: 3px; height: 100%;
+  background: var(--accent, var(--lime));
+  opacity: 0.7;
+}
+.feature:hover{
+  background: rgba(255,255,255,0.05);
+  border-color: var(--line-strong);
+  transform: translateX(2px);
+}
+.feature .ftype{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--accent);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.feature .ftitle{
+  font-family: 'Antonio', sans-serif;
+  font-size: 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: var(--text-0);
+  font-weight: 600;
+}
+.feature .ftext{ flex: 1; }
+.feature .freward{
+  display: flex; align-items: center; gap: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text-1);
+}
+.feature .freward .ricon{ width: 14px; height: 14px; display: grid; place-items: center; }
+
+/* Modes panel (right column action row) */
+.modes{
+  display: flex; flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+.mode-btn{
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  text-align: left;
+  transition: all 0.2s var(--ease-out);
+  position: relative;
+  font-family: 'Outfit', sans-serif;
+}
+.mode-btn:hover{
+  background: rgba(255,255,255,0.05);
+  border-color: var(--line-strong);
+}
+.mode-btn .micon{
+  width: 30px; height: 30px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.05);
+  font-size: 16px;
+}
+.mode-btn .mlabel{
+  flex: 1;
+  display: flex; flex-direction: column;
+}
+.mode-btn .mtitle{
+  font-family: 'Antonio', sans-serif;
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-0);
+  font-weight: 600;
+  line-height: 1;
+}
+.mode-btn .msub{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+.mode-btn .lock{
+  font-size: 11px;
+  color: var(--text-3);
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* =========================================================================
+   HUD
+   ========================================================================= */
+#hud{
+  pointer-events: none;
+  z-index: 30;
+}
+#hud.active{ pointer-events: none; } /* HUD is non-interactive but visible */
+
+.hud-corner{
+  position: absolute;
+  display: flex;
+  gap: 10px;
+}
+.hud-tl{ top: 22px; left: 24px; flex-direction: column; align-items: flex-start; }
+.hud-tr{ top: 22px; right: 24px; flex-direction: column; align-items: flex-end; }
+.hud-bl{ bottom: 22px; left: 24px; flex-direction: column; align-items: flex-start; }
+.hud-br{ bottom: 22px; right: 24px; flex-direction: column; align-items: flex-end; }
+.hud-tc{ top: 22px; left: 50%; transform: translateX(-50%); flex-direction: column; align-items: center; gap: 8px; }
+
+/* Score panel */
+.score-panel{
+  display: flex; flex-direction: column;
+  align-items: flex-start;
+}
+.score-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.score-value{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 42px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--text-0);
+  line-height: 1;
+  text-shadow: 0 2px 30px rgba(0,0,0,0.6);
+  font-variant-numeric: tabular-nums;
+  transition: transform 0.15s var(--ease-out);
+}
+.score-value.bump{
+  animation: score-bump 0.35s var(--ease-out);
+}
+@keyframes score-bump{
+  0% { transform: scale(1); color: var(--text-0); }
+  35%{ transform: scale(1.12); color: var(--lime); }
+  100%{ transform: scale(1); color: var(--text-0); }
+}
+.score-delta{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--lime);
+  letter-spacing: 0.08em;
+  margin-top: 4px;
+  opacity: 0;
+  text-shadow: 0 0 12px var(--lime-soft);
+}
+
+/* Wave indicator (top-center) */
+.wave{
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 18px;
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.wave-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.28em;
+  color: var(--text-3);
+  text-transform: uppercase;
+}
+.wave-num{
+  font-family: 'Antonio', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-0);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+.wave-num em{ font-style: normal; color: var(--lime); }
+.wave-progress{
+  width: 180px; height: 4px;
+  background: rgba(255,255,255,0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  position: relative;
+}
+.wave-fill{
+  height: 100%;
+  background: linear-gradient(90deg, var(--lime), #e6ff7a);
+  width: 30%;
+  border-radius: 2px;
+  box-shadow: 0 0 10px rgba(198,255,0,0.5);
+  transition: width 0.3s var(--ease-out);
+}
+
+/* Lives & timer (top-right) */
+.lives{
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+.lives-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.24em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  margin-right: 4px;
+}
+.life-dot{
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--mag);
+  box-shadow: 0 0 10px var(--mag-soft), inset 0 1px 0 rgba(255,255,255,0.3);
+  transition: all 0.3s var(--ease-out);
+}
+.life-dot.empty{
+  background: transparent;
+  border: 1px dashed var(--line-strong);
+  box-shadow: none;
+}
+.life-dot.lost{
+  animation: life-lost 0.6s var(--ease-out) forwards;
+}
+@keyframes life-lost{
+  0%   { transform: scale(1); background: var(--mag); }
+  35%  { transform: scale(1.6); background: var(--text-0); box-shadow: 0 0 30px white; }
+  100% { transform: scale(1); background: transparent; border: 1px dashed var(--line-strong); box-shadow: none; }
+}
+
+/* Powerups (bottom-left) */
+.powerups{
+  display: flex; flex-direction: column;
+  gap: 8px;
+}
+.powerup{
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 14px 8px 8px;
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  position: relative;
+  overflow: hidden;
+  min-width: 200px;
+  animation: pu-in 0.4s var(--ease-back) backwards;
+}
+@keyframes pu-in {
+  from { transform: translateX(-30px); opacity: 0; }
+  to   { transform: translateX(0); opacity: 1; }
+}
+.powerup .pu-bar{
+  position: absolute;
+  bottom: 0; left: 0;
+  height: 3px;
+  background: var(--pu-color, var(--lime));
+  box-shadow: 0 0 10px var(--pu-color, var(--lime));
+  transition: width linear;
+}
+.powerup .pu-icon{
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: grid; place-items: center;
+  background: var(--pu-bg, rgba(198,255,0,0.15));
+  color: var(--pu-color, var(--lime));
+  font-size: 16px;
+}
+.powerup .pu-info{
+  display: flex; flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.powerup .pu-name{
+  font-family: 'Antonio', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-0);
+  line-height: 1;
+}
+.powerup .pu-time{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--pu-color, var(--lime));
+  letter-spacing: 0.06em;
+}
+
+/* Combo meter (bottom-right) */
+.combo{
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px 10px 12px;
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  position: relative;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s, transform 0.3s var(--ease-out);
+}
+.combo.active{ opacity: 1; transform: translateY(0); }
+.combo .ring{
+  width: 36px; height: 36px;
+  position: relative;
+}
+.combo .ring svg{
+  width: 100%; height: 100%;
+  transform: rotate(-90deg);
+}
+.combo .ring circle{ fill: none; stroke-width: 3; }
+.combo .ring .bg-r{ stroke: rgba(255,255,255,0.08); }
+.combo .ring .fg-r{
+  stroke: var(--lime);
+  stroke-dasharray: 100;
+  stroke-dashoffset: 0;
+  transition: stroke-dashoffset 0.1s linear;
+  filter: drop-shadow(0 0 4px var(--lime));
+}
+.combo-info{ display: flex; flex-direction: column; gap: 2px; align-items: flex-start; }
+.combo-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.28em;
+  color: var(--text-3);
+  text-transform: uppercase;
+  line-height: 1;
+}
+.combo-value{
+  font-family: 'Antonio', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--lime);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-shadow: 0 0 18px var(--lime-soft);
+}
+
+/* Pause button */
+.pause-btn{
+  position: absolute;
+  top: 22px;
+  right: 50%; transform: translateX(50%); /* will be overridden */
+  width: 38px; height: 38px;
+  display: grid; place-items: center;
+  background: var(--bg-glass);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text-1);
+  pointer-events: auto;
+  backdrop-filter: blur(12px);
+  transition: all 0.2s var(--ease-out);
+}
+.pause-btn:hover{ background: rgba(255,255,255,0.08); color: var(--text-0); }
+
+/* =========================================================================
+   FLOATING TEXT (popups in world space)
+   ========================================================================= */
+#fx-layer{
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 25;
+  overflow: hidden;
+}
+.fx-pop{
+  position: absolute;
+  font-family: 'Antonio', sans-serif;
+  font-weight: 700;
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  letter-spacing: 0.02em;
+  transform: translate(-50%, -50%);
+  animation: fx-pop 1.1s var(--ease-out) forwards;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.7);
+}
+@keyframes fx-pop{
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.6); }
+  15%  { opacity: 1; transform: translate(-50%, -60%) scale(1.15); }
+  30%  { transform: translate(-50%, -75%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -160%) scale(0.9); }
+}
+.fx-pop.score   { color: var(--lime);  font-size: 22px; }
+.fx-pop.xp      { color: var(--ice);   font-size: 18px; }
+.fx-pop.crit    {
+  color: var(--mag);
+  font-size: 36px;
+  letter-spacing: 0.02em;
+  text-shadow: 0 0 20px var(--mag), 0 2px 12px rgba(0,0,0,0.7);
+  animation: fx-pop-crit 1.4s var(--ease-out) forwards;
+}
+@keyframes fx-pop-crit{
+  0%   { opacity: 0; transform: translate(-50%, -50%) scale(0.3) rotate(-12deg); }
+  15%  { opacity: 1; transform: translate(-50%, -60%) scale(1.4) rotate(4deg); }
+  25%  { transform: translate(-50%, -65%) scale(1.2) rotate(-2deg); }
+  45%  { transform: translate(-50%, -80%) scale(1.1) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -180%) scale(0.9); }
+}
+.fx-pop.bonus   { color: var(--amber); font-size: 18px; }
+.fx-pop.heal    { color: #6fffb0;      font-size: 18px; }
+.fx-pop.dmg     { color: #ff8e6f;      font-size: 24px; }
+
+/* Side dash for score popups: "+250" with subtle slash bg */
+.fx-pop .plus{ opacity: 0.8; margin-right: 2px; font-weight: 600; }
+
+/* =========================================================================
+   MEDAL / AWARD CALLOUTS (slide in from right)
+   ========================================================================= */
+#medals-layer{
+  position: absolute;
+  top: 110px;
+  right: 24px;
+  display: flex; flex-direction: column;
+  gap: 10px;
+  z-index: 28;
+  pointer-events: none;
+  width: 320px;
+  max-width: 32%;
+}
+.medal{
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 18px 12px 12px;
+  background: linear-gradient(90deg, rgba(28,25,41,0.95), rgba(28,25,41,0.7));
+  border: 1px solid var(--medal-color, var(--lime));
+  border-left-width: 3px;
+  border-radius: var(--r-md);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  position: relative;
+  overflow: hidden;
+  animation: medal-in 0.5s var(--ease-out) forwards, medal-out 0.5s var(--ease-out) 2.6s forwards;
+  box-shadow:
+    0 8px 32px -8px rgba(0,0,0,0.6),
+    0 0 30px -10px var(--medal-color, var(--lime));
+}
+.medal::before{
+  content: "";
+  position: absolute; top: 0; right: 0;
+  width: 40%; height: 100%;
+  background: linear-gradient(90deg, transparent, var(--medal-color, var(--lime)));
+  opacity: 0.08;
+  pointer-events: none;
+}
+.medal::after{
+  /* sweep highlight */
+  content: "";
+  position: absolute; top: 0; left: -100%;
+  width: 50%; height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  animation: medal-sweep 1.6s var(--ease-out) 0.3s;
+}
+@keyframes medal-sweep{
+  to { left: 160%; }
+}
+@keyframes medal-in{
+  from { transform: translateX(120%) scale(0.9); opacity: 0; }
+  to   { transform: translateX(0) scale(1); opacity: 1; }
+}
+@keyframes medal-out{
+  from { transform: translateX(0); opacity: 1; }
+  to   { transform: translateX(120%); opacity: 0; }
+}
+.medal .m-icon{
+  width: 44px; height: 44px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  display: grid; place-items: center;
+  background: var(--medal-color, var(--lime));
+  color: #0a0a0a;
+  font-size: 22px;
+  font-weight: 700;
+  box-shadow:
+    0 4px 16px -4px var(--medal-color, var(--lime)),
+    inset 0 1px 0 rgba(255,255,255,0.4);
+  position: relative;
+}
+.medal .m-icon::before{
+  content: "";
+  position: absolute; inset: -4px;
+  border-radius: 12px;
+  border: 1px solid var(--medal-color, var(--lime));
+  opacity: 0.4;
+  animation: ring-pulse 1.4s var(--ease-out) infinite;
+}
+@keyframes ring-pulse{
+  0%   { transform: scale(1); opacity: 0.4; }
+  100% { transform: scale(1.4); opacity: 0; }
+}
+.medal .m-info{ flex: 1; min-width: 0; }
+.medal .m-tier{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  letter-spacing: 0.26em;
+  color: var(--medal-color, var(--lime));
+  text-transform: uppercase;
+  font-weight: 700;
+  line-height: 1;
+  margin-bottom: 3px;
+  display: flex; align-items: center; gap: 6px;
+}
+.medal .m-tier::after{
+  content: "";
+  flex: 1; height: 1px;
+  background: linear-gradient(90deg, var(--medal-color, var(--lime)), transparent);
+  opacity: 0.4;
+}
+.medal .m-title{
+  font-family: 'Antonio', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-0);
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.medal .m-sub{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--text-2);
+  text-transform: uppercase;
+  margin-top: 4px;
+}
+.medal .m-reward{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--medal-color, var(--lime));
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+/* Medal tier styling */
+.medal.bronze { --medal-color: var(--t-bronze); }
+.medal.silver { --medal-color: var(--t-silver); }
+.medal.gold   { --medal-color: var(--t-gold); }
+.medal.plat   { --medal-color: var(--t-plat); }
+.medal.mythic { --medal-color: var(--t-mythic); }
+
+/* =========================================================================
+   TOAST NOTIFICATIONS (top-center, slide down)
+   ========================================================================= */
+#toasts-layer{
+  position: absolute;
+  top: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column;
+  gap: 8px;
+  z-index: 32;
+  pointer-events: none;
+  align-items: center;
+}
+.toast{
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px 10px 12px;
+  background: rgba(15,14,23,0.92);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  animation: toast-in 0.4s var(--ease-back) forwards, toast-out 0.4s var(--ease-in-out) 3.4s forwards;
+  box-shadow: 0 12px 30px -12px rgba(0,0,0,0.7);
+}
+@keyframes toast-in{
+  from { transform: translateY(-30px); opacity: 0; }
+  to   { transform: translateY(0); opacity: 1; }
+}
+@keyframes toast-out{
+  from { transform: translateY(0); opacity: 1; }
+  to   { transform: translateY(-30px); opacity: 0; }
+}
+.toast .t-icon{
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 50%;
+  background: var(--toast-color, var(--lime));
+  color: #0a0a0a;
+  font-size: 13px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.toast .t-text{
+  font-family: 'Outfit', sans-serif;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  letter-spacing: 0.02em;
+}
+.toast .t-text b{
+  color: var(--toast-color, var(--lime));
+  font-weight: 700;
+  text-transform: uppercase;
+  font-family: 'Antonio', sans-serif;
+  letter-spacing: 0.04em;
+  margin-right: 4px;
+  font-size: 14px;
+}
+.toast.success{ --toast-color: var(--lime); }
+.toast.warn   { --toast-color: var(--amber); }
+.toast.info   { --toast-color: var(--ice); }
+.toast.danger { --toast-color: var(--mag); }
+
+/* =========================================================================
+   CENTER BANNER (giant text - WAVE 02, START!, GAME OVER...)
+   ========================================================================= */
+#banner-layer{
+  position: absolute; inset: 0;
+  pointer-events: none;
+  z-index: 26;
+  display: grid; place-items: center;
+}
+.banner{
+  display: flex; flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  animation: banner-in 0.5s var(--ease-back) forwards, banner-out 0.5s var(--ease-in-out) 1.8s forwards;
+}
+@keyframes banner-in {
+  from { transform: scale(0.6); opacity: 0; filter: blur(8px); }
+  to   { transform: scale(1); opacity: 1; filter: blur(0); }
+}
+@keyframes banner-out {
+  from { transform: scale(1); opacity: 1; }
+  to   { transform: scale(1.15); opacity: 0; }
+}
+.banner-pretitle{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  letter-spacing: 0.4em;
+  color: var(--lime);
+  text-transform: uppercase;
+  font-weight: 700;
+  text-shadow: 0 0 18px var(--lime-soft);
+}
+.banner-main{
+  font-family: 'Antonio', sans-serif;
+  font-size: 130px;
+  font-weight: 700;
+  color: var(--text-0);
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  text-shadow: 0 6px 30px rgba(0,0,0,0.7);
+}
+.banner-main em{ color: var(--lime); font-style: normal; }
+.banner-sub{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 12px;
+  letter-spacing: 0.3em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+
+/* =========================================================================
+   PAUSE OVERLAY
+   ========================================================================= */
+#pause{
+  background: rgba(10,9,17,0.78);
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  z-index: 50;
+}
+.pause-title{
+  font-family: 'Antonio', sans-serif;
+  font-size: 96px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: var(--text-0);
+}
+.pause-title em{ color: var(--lime); font-style: normal; }
+.pause-actions{
+  display: flex; gap: 12px;
+}
+.btn{
+  padding: 14px 28px;
+  font-family: 'Antonio', sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  color: var(--text-0);
+  background: rgba(255,255,255,0.04);
+  transition: all 0.2s var(--ease-out);
+}
+.btn:hover{
+  background: rgba(255,255,255,0.08);
+  transform: translateY(-2px);
+}
+.btn.primary{
+  background: var(--lime);
+  color: #0a0a0a;
+  border-color: var(--lime);
+  box-shadow: 0 12px 30px -10px rgba(198,255,0,0.5);
+}
+.btn.primary:hover{
+  background: #e3ff5e;
+  box-shadow: 0 18px 40px -10px rgba(198,255,0,0.6);
+}
+
+/* =========================================================================
+   GAME OVER / RESULTS
+   ========================================================================= */
+#gameover{
+  background: rgba(10,9,17,0.88);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 32px;
+}
+.results-card{
+  width: min(620px, 90%);
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)),
+    var(--bg-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-xl);
+  padding: 36px 40px;
+  display: flex; flex-direction: column;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+  animation: results-in 0.6s var(--ease-back);
+}
+@keyframes results-in {
+  from { transform: scale(0.92) translateY(20px); opacity: 0; }
+  to   { transform: scale(1) translateY(0); opacity: 1; }
+}
+.results-card::before{
+  content:"";
+  position: absolute;
+  top: -50%; right: -20%;
+  width: 80%; height: 200%;
+  background: radial-gradient(ellipse at center, rgba(198,255,0,0.07), transparent 60%);
+  pointer-events: none;
+}
+.results-pretitle{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  letter-spacing: 0.4em;
+  color: var(--mag);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+.results-title{
+  font-family: 'Antonio', sans-serif;
+  font-size: 72px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 0.9;
+  color: var(--text-0);
+  text-transform: uppercase;
+}
+.stars{
+  display: flex; gap: 8px; align-items: center;
+}
+.star{
+  width: 36px; height: 36px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid; place-items: center;
+  color: var(--text-3);
+  font-size: 18px;
+  transition: all 0.3s var(--ease-back);
+}
+.star.earned{
+  background: var(--amber-soft);
+  border-color: var(--amber);
+  color: var(--amber);
+  text-shadow: 0 0 12px var(--amber);
+  transform: scale(1);
+  animation: star-pop 0.5s var(--ease-back);
+}
+@keyframes star-pop{
+  from { transform: scale(0); }
+  60%  { transform: scale(1.4); }
+  to   { transform: scale(1); }
+}
+.results-stats{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.rstat{
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.rstat-label{
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--text-2);
+  text-transform: uppercase;
+}
+.rstat-value{
+  font-family: 'Antonio', sans-serif;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-0);
+  letter-spacing: 0.01em;
+}
+.rstat-value.accent{ color: var(--lime); }
+.results-actions{
+  display: flex; gap: 10px; justify-content: flex-end;
+}
+
+/* =========================================================================
+   Mobile-ish responsiveness
+   ========================================================================= */
+@media (max-width: 760px) {
+  .hero{ grid-template-columns: 1fr; gap: 18px; padding-top: 8px; }
+  .action-row{ grid-template-columns: 1fr; gap: 12px; }
+  .play-btn{ font-size: 26px; padding: 18px 36px; justify-content: center; }
+  .title{ font-size: 78px; }
+  .score-value{ font-size: 32px; }
+  .banner-main{ font-size: 80px; }
+  .pause-title{ font-size: 60px; }
+  .results-title{ font-size: 52px; }
+  #medals-layer{ width: 280px; }
+}
+
+
+
+/* =========================================================================
+   RICOCHET — Baked system-first demonstration layer
+   Not a separate atlas UI: these are integrated into menu, profile, gameplay,
+   results, shop, inbox and exit flow. All actions remain simulated.
+   ========================================================================= */
+#sim-ribbon{
+  position:absolute; left:22px; bottom:18px; z-index:45; pointer-events:none;
+  display:flex; align-items:center; gap:8px; padding:7px 10px;
+  border:1px solid rgba(255,255,255,.10); border-radius:999px;
+  background:rgba(10,9,17,.62); backdrop-filter:blur(14px) saturate(150%);
+  color:var(--text-2); font-family:'JetBrains Mono',ui-monospace,monospace;
+  font-size:9px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;
+}
+#sim-ribbon::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--lime);box-shadow:0 0 12px var(--lime);}
+#system-progress-chip{
+  position:absolute; left:50%; bottom:18px; transform:translateX(-50%); z-index:46;
+  display:flex; align-items:center; gap:10px; padding:9px 13px;
+  border:1px solid rgba(198,255,0,.24); border-radius:999px;
+  background:rgba(15,14,23,.78); backdrop-filter:blur(16px) saturate(160%);
+  color:var(--text-1); font-family:'JetBrains Mono',ui-monospace,monospace;
+  font-size:10px; font-weight:900; letter-spacing:.13em; text-transform:uppercase;
+  box-shadow:0 12px 38px rgba(0,0,0,.32), 0 0 24px rgba(198,255,0,.08);
+  cursor:pointer; pointer-events:auto; transition:all .2s var(--ease-out);
+}
+#system-progress-chip:hover{transform:translateX(-50%) translateY(-2px); border-color:rgba(198,255,0,.5);}
+#system-progress-chip b{color:var(--lime); font-variant-numeric:tabular-nums;}
+#activity-river{
+  position:absolute; right:24px; top:112px; z-index:27; pointer-events:none; width:320px; max-width:32%;
+  display:flex; flex-direction:column; gap:8px;
+}
+.river-item{
+  display:flex; align-items:center; gap:10px; padding:10px 12px;
+  border:1px solid rgba(255,255,255,.08); border-radius:12px;
+  background:linear-gradient(90deg,rgba(28,25,41,.88),rgba(28,25,41,.46));
+  backdrop-filter:blur(14px); box-shadow:0 10px 28px rgba(0,0,0,.25);
+  animation:riverIn .42s var(--ease-back), riverOut .45s var(--ease-in-out) 5.4s forwards;
+}
+@keyframes riverIn{from{transform:translateX(110%);opacity:0}to{transform:none;opacity:1}}
+@keyframes riverOut{from{transform:none;opacity:1}to{transform:translateX(110%);opacity:0}}
+.river-avatar{width:30px;height:30px;border-radius:8px;background:var(--lime);color:#09090d;display:grid;place-items:center;font-family:'Antonio',sans-serif;font-weight:800;box-shadow:0 0 18px rgba(198,255,0,.25)}
+.river-copy b{display:block;font-family:'Antonio',sans-serif;text-transform:uppercase;color:var(--text-0);font-size:15px;line-height:1}.river-copy span{display:block;font-family:'JetBrains Mono',monospace;color:var(--text-2);font-size:9px;letter-spacing:.09em;text-transform:uppercase;margin-top:3px;line-height:1.25}
+.pressure-summary{
+  position:relative; display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-top:-4px;
+}
+.pressure-mini{
+  border:1px solid var(--line); border-radius:9px; padding:8px; background:rgba(255,255,255,.027);
+}
+.pressure-mini label{display:block;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:.14em;color:var(--text-3);text-transform:uppercase;margin-bottom:4px}.pressure-mini b{font-family:'Antonio',sans-serif;font-size:19px;color:var(--text-0);font-weight:700}.pressure-mini.hot b{color:var(--lime)}.pressure-mini.warn b{color:var(--amber)}.pressure-mini.risk b{color:var(--mag)}
+#pressure-layer{
+  position:absolute; inset:0; z-index:80; display:none; align-items:center; justify-content:center;
+  background:rgba(4,4,8,.58); backdrop-filter:blur(12px) saturate(130%); padding:28px; pointer-events:auto;
+}
+#pressure-layer.show{display:flex;}
+.pressure-modal{
+  width:min(780px, calc(100% - 20px)); max-height:min(760px, calc(100% - 20px)); overflow:auto;
+  border-radius:24px; border:1px solid rgba(255,255,255,.15);
+  background:linear-gradient(180deg,rgba(28,25,41,.98),rgba(12,11,18,.98));
+  box-shadow:0 40px 140px rgba(0,0,0,.72), 0 0 80px rgba(198,255,0,.05);
+  padding:24px; position:relative; animation:pressureIn .42s var(--ease-back);
+}
+@keyframes pressureIn{from{opacity:0;transform:scale(.92) translateY(24px)}to{opacity:1;transform:scale(1) translateY(0)}}
+.pressure-close{position:absolute;top:14px;right:14px;width:36px;height:36px;border:1px solid rgba(255,255,255,.11);border-radius:99px;background:rgba(255,255,255,.05);color:var(--text-2);font-size:22px;line-height:1;transition:.2s}.pressure-close:hover{color:var(--text-0);background:rgba(255,255,255,.08)}
+.dp-topline{display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:14px; padding-right:45px;}
+.dp-tag{display:inline-flex;align-items:center;gap:5px;border:1px solid rgba(255,255,255,.12);border-radius:999px;background:rgba(255,255,255,.045);padding:5px 8px;color:var(--text-2);font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:900;letter-spacing:.12em;text-transform:uppercase}.dp-tag.critical{color:#ffd6e2;border-color:rgba(255,45,117,.4);background:rgba(255,45,117,.12)}.dp-tag.high{color:#ffe9bd;border-color:rgba(255,184,54,.38);background:rgba(255,184,54,.10)}.dp-tag.sim{color:#d8ffd3;border-color:rgba(198,255,0,.34);background:rgba(198,255,0,.10)}
+.dp-title{font-family:'Antonio',Impact,sans-serif;font-size:44px;line-height:.92;text-transform:uppercase;letter-spacing:-.015em;margin:0 0 7px;color:var(--text-0)}
+.dp-subtitle{margin:0 0 16px;color:var(--text-2);font-size:14px;line-height:1.5;max-width:680px}.dp-subtitle b{color:var(--lime)}
+.dp-content{display:grid;gap:12px}.dp-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.dp-card{border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:15px;background:rgba(255,255,255,.04);position:relative;overflow:hidden}.dp-card.hot{border-color:rgba(198,255,0,.42);background:linear-gradient(135deg,rgba(198,255,0,.12),rgba(255,255,255,.04));box-shadow:0 0 34px rgba(198,255,0,.08)}.dp-card.warn{border-color:rgba(255,184,54,.36);background:rgba(255,184,54,.08)}.dp-card.danger{border-color:rgba(255,45,117,.36);background:rgba(255,45,117,.08)}.dp-card h3{font-family:'Antonio',sans-serif;font-size:25px;text-transform:uppercase;margin:0 0 8px;color:var(--text-0)}.dp-card p{margin:6px 0;color:var(--text-2);line-height:1.4}.dp-card small{color:var(--text-3);font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:.1em;text-transform:uppercase}.dp-price{font-family:'Antonio',sans-serif;font-size:38px;color:var(--text-0);line-height:1}.dp-old{color:var(--text-3);text-decoration:line-through}.dp-bar{height:8px;border-radius:2px;background:rgba(255,255,255,.07);overflow:hidden;margin:8px 0}.dp-fill{height:100%;background:linear-gradient(90deg,var(--lime),#e6ff7a);width:var(--w,50%);box-shadow:0 0 14px rgba(198,255,0,.35)}.dp-row{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid rgba(255,255,255,.06);padding:7px 0}.dp-row:last-child{border-bottom:0}.dp-row span{color:var(--text-2)}.dp-row b{font-family:'JetBrains Mono',monospace;color:var(--text-0);font-variant-numeric:tabular-nums}.dp-actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:16px}.dp-primary,.dp-secondary,.dp-tiny{border-radius:12px;padding:13px 17px;font-family:'Antonio',sans-serif;font-size:16px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;transition:.2s var(--ease-out)}.dp-primary{background:var(--lime);color:#0a0a0a;box-shadow:0 16px 38px rgba(198,255,0,.22), inset 0 -2px 0 rgba(0,0,0,.25)}.dp-primary:hover{transform:translateY(-2px);box-shadow:0 22px 55px rgba(198,255,0,.28), inset 0 -2px 0 rgba(0,0,0,.25)}.dp-secondary{background:rgba(255,255,255,.055);border:1px solid rgba(255,255,255,.12);color:var(--text-1)}.dp-tiny{background:transparent;color:var(--text-3);font-family:'JetBrains Mono',monospace;font-size:10px;text-decoration:underline;padding:8px}.dp-safety{margin-top:15px;border:1px solid rgba(125,211,252,.25);border-radius:12px;padding:10px 12px;background:rgba(125,211,252,.055);color:#cceeff;font-size:12px;line-height:1.45}.dp-safety b{color:var(--ice)}.dp-timer,.dp-stock{font-family:'JetBrains Mono',monospace;color:var(--amber);font-weight:900;font-variant-numeric:tabular-nums}.dp-days{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}.dp-day{aspect-ratio:1;border-radius:9px;background:rgba(255,255,255,.055);display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-weight:900;color:var(--text-2);border:1px solid rgba(255,255,255,.08)}.dp-day.hot{color:var(--amber);background:rgba(255,184,54,.12);border-color:rgba(255,184,54,.35)}.dp-day.danger{color:#ffd6e2;background:rgba(255,45,117,.12);border-color:rgba(255,45,117,.35)}.dp-feed{display:grid;gap:8px}.dp-feeditem{display:flex;gap:10px;align-items:center;border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:9px;background:rgba(255,255,255,.035)}.dp-feedavatar{width:31px;height:31px;border-radius:8px;background:var(--ice);color:#0a0a0a;display:grid;place-items:center;font-family:'Antonio',sans-serif;font-weight:800}.dp-feeditem b{display:block;color:var(--text-0);font-family:'Antonio',sans-serif;text-transform:uppercase}.dp-feeditem span{display:block;color:var(--text-2);font-size:11px;line-height:1.3}.dp-wheel{height:104px;border:1px solid rgba(255,255,255,.09);border-radius:15px;display:flex;align-items:center;overflow:hidden;background:rgba(0,0,0,.18);position:relative}.dp-wheel:before{content:"";position:absolute;left:50%;top:0;bottom:0;width:2px;background:var(--lime);box-shadow:0 0 16px var(--lime);z-index:1}.dp-track{display:flex;gap:8px;animation:dpSpin 2.6s cubic-bezier(.12,.82,.16,1) forwards}.dp-reward{min-width:105px;height:72px;border-radius:12px;border:1px solid rgba(255,255,255,.09);display:grid;place-items:center;font-family:'Antonio',sans-serif;text-transform:uppercase;background:rgba(255,255,255,.04)}.dp-reward.mythic{color:#ffd6e2;border-color:rgba(255,45,117,.42);background:rgba(255,45,117,.15);box-shadow:0 0 22px rgba(255,45,117,.18)}@keyframes dpSpin{0%{transform:translateX(30px)}100%{transform:translateX(-610px)}}
+@media(max-width:760px){#activity-river{display:none}.pressure-modal{padding:18px}.dp-grid{grid-template-columns:1fr}.dp-title{font-size:34px}#system-progress-chip{display:none}.pressure-summary{grid-template-columns:repeat(2,1fr)}}
+
+</style>
+</head>
+<body>
+
+<div id="root">
+  <div id="stage">
+
+    <!-- Game canvas -->
+    <canvas id="game" width="1440" height="810"></canvas>
+
+    <!-- Particle / popup FX overlay (DOM-based for text effects) -->
+    <div id="fx-layer"></div>
+
+    <!-- Medals callouts layer -->
+    <div id="medals-layer"></div>
+
+    <!-- Toast notifications layer -->
+    <div id="toasts-layer"></div>
+
+    <!-- Center banner layer -->
+    <div id="banner-layer"></div>
+
+    <!-- ===== HUD (in-game) ===== -->
+    <div id="hud" class="screen hidden">
+      <div class="hud-corner hud-tl">
+        <div class="score-panel">
+          <div class="score-label">SCORE</div>
+          <div class="score-value" id="scoreVal">0</div>
+          <div class="score-delta" id="scoreDelta"></div>
+        </div>
+      </div>
+
+      <div class="hud-corner hud-tc">
+        <div class="wave">
+          <div class="wave-label">Wave</div>
+          <div class="wave-num"><em id="waveNum">01</em>&nbsp;/&nbsp;12</div>
+          <div class="wave-progress"><div class="wave-fill" id="waveFill"></div></div>
+        </div>
+        <button class="pause-btn" id="pauseBtn" title="Pause" style="position:relative;top:0;right:0;transform:none;margin-top:6px;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+        </button>
+      </div>
+
+      <div class="hud-corner hud-tr">
+        <div class="lives">
+          <span class="lives-label">Lives</span>
+          <span class="life-dot" data-i="0"></span>
+          <span class="life-dot" data-i="1"></span>
+          <span class="life-dot" data-i="2"></span>
+        </div>
+      </div>
+
+      <div class="hud-corner hud-bl">
+        <div class="powerups" id="powerups"></div>
+      </div>
+
+      <div class="hud-corner hud-br">
+        <div class="combo" id="combo">
+          <div class="ring">
+            <svg viewBox="0 0 36 36">
+              <circle class="bg-r" cx="18" cy="18" r="16"/>
+              <circle class="fg-r" id="comboRing" cx="18" cy="18" r="16" pathLength="100"/>
+            </svg>
+          </div>
+          <div class="combo-info">
+            <div class="combo-label">Combo</div>
+            <div class="combo-value">x<span id="comboMult">1</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== MAIN MENU ===== -->
+    <div id="menu" class="screen active">
+      <div class="bg-shapes" aria-hidden="true">
+        <svg class="shard" viewBox="0 0 100 100"><polygon points="50,5 95,80 5,80" fill="none" stroke="#c6ff00" stroke-width="2"/></svg>
+        <svg class="shard" viewBox="0 0 100 100"><polygon points="50,5 95,50 50,95 5,50" fill="none" stroke="#7dd3fc" stroke-width="2"/></svg>
+        <svg class="shard" viewBox="0 0 100 100"><polygon points="20,20 80,20 80,80 20,80" fill="none" stroke="#ffb836" stroke-width="2"/></svg>
+        <svg class="shard" viewBox="0 0 100 100"><polygon points="50,5 95,30 80,90 20,90 5,30" fill="none" stroke="#ff2d75" stroke-width="2"/></svg>
+        <svg class="shard" viewBox="0 0 100 100"><polygon points="50,5 95,80 5,80" fill="none" stroke="#c6ff00" stroke-width="2"/></svg>
+      </div>
+
+      <div class="top-bar">
+        <div class="brand">
+          <span class="dot"></span>
+          <span>SYS // ARCADE PROTOCOL</span>
+        </div>
+        <div class="currencies">
+          <div class="currency coins">
+            <span class="icon">◆</span>
+            <span>12,480</span>
+            <span class="plus">+</span>
+          </div>
+          <div class="currency gems">
+            <span class="icon">✦</span>
+            <span>328</span>
+            <span class="plus">+</span>
+          </div>
+          <button class="icon-btn" title="Inbox">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 8l9 6 9-6"/><rect x="3" y="5" width="18" height="14" rx="2"/></svg>
+            <span class="badge">3</span>
+          </button>
+          <button class="icon-btn" title="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <div class="hero">
+        <div class="title-block">
+          <div class="pretitle">ARCADE // S04 // V2026.1</div>
+          <h1 class="title">
+            <span>R</span><span>I</span><span>C</span><span>O</span><span class="accent">/</span><span>C</span><span>H</span><span>E</span><span>T</span>
+          </h1>
+          <div class="subtitle">
+            <span>SPLIT. SHATTER. SURVIVE.</span>
+            <span class="sep"></span>
+            <span style="color:var(--lime)">● 2,847 ONLINE</span>
+          </div>
+        </div>
+
+        <div class="profile-card">
+          <div class="profile-header">
+            <div class="avatar">JB</div>
+            <div style="flex:1">
+              <div class="profile-name">JOBENDIK<span class="verify" title="verified"></span></div>
+              <div class="profile-tag">
+                <span class="tier-badge"><span class="star"></span> GOLD III</span>
+                <span>#0428</span>
+              </div>
+            </div>
+          </div>
+          <div class="xp-bar-wrap">
+            <div class="xp-bar-labels">
+              <span>LVL <b>27</b></span>
+              <span><b>3,840</b> / 6,000 XP</span>
+            </div>
+            <div class="xp-bar"><div class="xp-fill"></div></div>
+          </div>
+          <div class="profile-stats">
+            <div class="pstat">
+              <div class="pstat-label">HIGH SCORE</div>
+              <div class="pstat-value">284<small>K</small></div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-label">WAVES CLEARED</div>
+              <div class="pstat-value">1,204</div>
+            </div>
+            <div class="pstat">
+              <div class="pstat-label">WIN RATE</div>
+              <div class="pstat-value">71<small>%</small></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <!-- Daily challenges -->
+        <div class="feature-list">
+          <div class="feature" style="--accent: var(--amber);">
+            <div class="ftext">
+              <div class="ftype">DAILY</div>
+              <div class="ftitle">Pop 50 Orbs</div>
+            </div>
+            <div class="freward">
+              <span class="ricon" style="color:var(--ice)">✦</span> 25
+            </div>
+          </div>
+          <div class="feature" style="--accent: var(--ice);">
+            <div class="ftext">
+              <div class="ftype">WEEKLY · 4D LEFT</div>
+              <div class="ftitle">Survive Wave 8</div>
+            </div>
+            <div class="freward">
+              <span class="ricon" style="color:var(--amber)">◆</span> 1,500
+            </div>
+          </div>
+        </div>
+
+        <!-- Big play button -->
+        <button class="play-btn" id="playBtn">
+          <span class="arrow"></span>
+          PLAY
+        </button>
+
+        <!-- Modes -->
+        <div class="modes">
+          <button class="mode-btn">
+            <div class="micon" style="color:var(--lime)">▲</div>
+            <div class="mlabel">
+              <div class="mtitle">RANKED</div>
+              <div class="msub">CLIMB THE LADDER</div>
+            </div>
+          </button>
+          <button class="mode-btn">
+            <div class="micon" style="color:var(--mag)">◉</div>
+            <div class="mlabel">
+              <div class="mtitle">PANIC</div>
+              <div class="msub">ENDLESS · COMING SOON</div>
+            </div>
+            <div class="lock">🔒</div>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== PAUSE OVERLAY ===== -->
+    <div id="pause" class="screen hidden">
+      <div class="pause-title">PA<em>U</em>SED</div>
+      <div class="pause-actions">
+        <button class="btn primary" id="resumeBtn">RESUME</button>
+        <button class="btn" id="restartBtn">RESTART</button>
+        <button class="btn" id="quitBtn">QUIT</button>
+      </div>
+    </div>
+
+    <!-- ===== GAME OVER ===== -->
+    <div id="gameover" class="screen hidden">
+      <div class="results-card">
+        <div>
+          <div class="results-pretitle">WAVE FAILED</div>
+          <div class="results-title">GAME<br>OVER</div>
+        </div>
+        <div class="stars">
+          <div class="star earned">★</div>
+          <div class="star earned">★</div>
+          <div class="star">★</div>
+          <div style="margin-left:auto; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-2); letter-spacing:0.18em;">PERFORMANCE</div>
+        </div>
+        <div class="results-stats">
+          <div class="rstat"><span class="rstat-label">SCORE</span><span class="rstat-value accent" id="finalScore">0</span></div>
+          <div class="rstat"><span class="rstat-label">WAVE</span><span class="rstat-value" id="finalWave">0</span></div>
+          <div class="rstat"><span class="rstat-label">MAX COMBO</span><span class="rstat-value" id="finalCombo">x1</span></div>
+          <div class="rstat"><span class="rstat-label">XP GAINED</span><span class="rstat-value accent" id="finalXP">+0</span></div>
+        </div>
+        <div class="results-actions">
+          <button class="btn" id="goMenuBtn">MENU</button>
+          <button class="btn primary" id="goAgainBtn">PLAY AGAIN</button>
+        </div>
+      </div>
+    </div>
+
+
+
+    <!-- Integrated simulated pressure-system layer. This is part of the game UI, not a separate atlas panel. -->
+    <div id="sim-ribbon">Simulated build · no real payments · no tracking</div>
+    <button id="system-progress-chip" title="Advance the next baked-in system event"><span>Season systems</span><b id="systemCount">0/166</b></button>
+    <div id="activity-river"></div>
+    <div id="pressure-layer" aria-hidden="true">
+      <div class="pressure-modal" role="dialog" aria-modal="true" aria-labelledby="pressureTitle">
+        <button class="pressure-close" id="pressureClose" aria-label="Close">×</button>
+        <div id="pressureBody"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* =================================================================
+   RICOCHET — Arcade Pang prototype
+   Focus: visual polish, gamefeel, screen FX, popups, medals, toasts
+   ================================================================= */
+
+// ---------- Boilerplate ----------
+const $ = (id) => document.getElementById(id);
+const stage = $('stage');
+const canvas = $('game');
+const ctx = canvas.getContext('2d', { alpha: false });
+
+// Logical resolution we draw at
+const W = 1440, H = 810;
+
+// Sizes scale to the real stage dimensions
+function fitCanvas(){
+  const rect = stage.getBoundingClientRect();
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  canvas.width  = Math.round(rect.width  * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  ctx.setTransform(canvas.width / W, 0, 0, canvas.height / H, 0, 0);
+}
+window.addEventListener('resize', fitCanvas);
+setTimeout(fitCanvas, 0);
+
+// ---------- Audio (procedural SFX) ----------
+// Simple Web Audio synth that elevates gamefeel a lot
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let audio = null;
+function ensureAudio(){
+  if(!audio && AudioCtx){
+    audio = new AudioCtx();
+    masterGain = audio.createGain();
+    masterGain.gain.value = 0.32;
+    masterGain.connect(audio.destination);
+  }
+}
+let masterGain;
+function sfx(type, opts={}){
+  if(!audio) return;
+  const t = audio.currentTime;
+  const o = audio.createOscillator();
+  const g = audio.createGain();
+  o.connect(g); g.connect(masterGain);
+  if(type === 'pop'){
+    o.type = 'triangle';
+    const f0 = opts.f0 || 720, f1 = opts.f1 || 160;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + 0.16);
+    g.gain.setValueAtTime(0.001, t);
+    g.gain.exponentialRampToValueAtTime(0.55, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+    o.start(t); o.stop(t + 0.25);
+  } else if(type === 'shoot'){
+    o.type = 'square';
+    o.frequency.setValueAtTime(540, t);
+    o.frequency.exponentialRampToValueAtTime(1320, t + 0.08);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.1);
+    o.start(t); o.stop(t + 0.12);
+  } else if(type === 'medal'){
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(440, t);
+    o.frequency.exponentialRampToValueAtTime(880, t + 0.18);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.start(t); o.stop(t + 0.42);
+    // Add overtone
+    const o2 = audio.createOscillator();
+    const g2 = audio.createGain();
+    o2.connect(g2); g2.connect(masterGain);
+    o2.type = 'triangle';
+    o2.frequency.setValueAtTime(1320, t + 0.08);
+    g2.gain.setValueAtTime(0.0001, t + 0.08);
+    g2.gain.exponentialRampToValueAtTime(0.1, t + 0.1);
+    g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.35);
+    o2.start(t + 0.08); o2.stop(t + 0.36);
+  } else if(type === 'crit'){
+    o.type = 'square';
+    o.frequency.setValueAtTime(160, t);
+    o.frequency.exponentialRampToValueAtTime(900, t + 0.15);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.5, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.start(t); o.stop(t + 0.32);
+  } else if(type === 'hit'){
+    o.type = 'sawtooth';
+    o.frequency.setValueAtTime(120, t);
+    o.frequency.exponentialRampToValueAtTime(40, t + 0.25);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.6, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.3);
+    o.start(t); o.stop(t + 0.32);
+  } else if(type === 'powerup'){
+    o.type = 'sine';
+    o.frequency.setValueAtTime(440, t);
+    o.frequency.exponentialRampToValueAtTime(1760, t + 0.25);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.25, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+    o.start(t); o.stop(t + 0.42);
+  } else if(type === 'wave'){
+    o.type = 'square';
+    o.frequency.setValueAtTime(220, t);
+    o.frequency.exponentialRampToValueAtTime(660, t + 0.4);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6);
+    o.start(t); o.stop(t + 0.62);
+  }
+}
+
+// ---------- State ----------
+const State = {
+  scene: 'menu', // 'menu' | 'play' | 'pause' | 'gameover'
+  score: 0,
+  scoreShown: 0,
+  wave: 1,
+  maxWave: 12,
+  waveProgress: 0,
+  waveTarget: 0,
+  lives: 3,
+  combo: 1,
+  comboTimer: 0,
+  comboMax: 0,
+  maxCombo: 1,
+  xpGained: 0,
+  shake: 0,
+  hitStop: 0,
+  flash: 0,
+  chromAb: 0,
+  recentPopTimes: [],
+};
+
+// ---------- Entities ----------
+const player = {
+  x: W/2, y: H - 70,
+  w: 70, h: 30,
+  speed: 6.2,
+  cool: 0,
+  trail: [],
+};
+const balls = [];          // bouncing orbs
+const projectiles = [];    // player shots (wire harpoons)
+const particles = [];      // bg + fx particles
+const ambient = [];        // ambient slow particles (atmosphere)
+const dust = [];           // floor dust
+
+const Input = { left:false, right:false, fire:false, mouseX: W/2 };
+
+// ---------- Helpers ----------
+const TAU = Math.PI * 2;
+const rand = (a,b)=> a + Math.random()*(b-a);
+const irand = (a,b)=> Math.floor(rand(a,b+1));
+const clamp = (v,a,b)=> Math.min(b, Math.max(a, v));
+const lerp = (a,b,t)=> a + (b-a)*t;
+function fmt(n){ return n.toLocaleString('en-US'); }
+
+// Ball factory
+function spawnBall(x, y, level, vx, vy){
+  const sizes = [16, 26, 40, 58];
+  const r = sizes[level];
+  const hueByLvl = [180, 30, 290, 130]; // ice / amber / violet / lime themes
+  balls.push({
+    x, y,
+    r,
+    level, // 0=tiny, 3=huge
+    vx: vx ?? rand(-2.4, 2.4),
+    vy: vy ?? rand(-3, -1.6),
+    hue: hueByLvl[level] + rand(-12, 12),
+    rot: rand(0, TAU),
+    spin: rand(-0.04, 0.04),
+    phase: rand(0, TAU),
+    bornAt: performance.now(),
+    flash: 0,
+  });
+}
+
+// Initial level setup
+function startWave(num){
+  balls.length = 0;
+  projectiles.length = 0;
+  // Spawn balls based on wave number — escalating challenge
+  const count = Math.min(2 + Math.floor(num/2), 6);
+  for(let i=0;i<count;i++){
+    spawnBall(rand(180, W-180), rand(120, 280), Math.min(3, 2 + (num>3?1:0)),
+              rand(-2.5, 2.5), rand(-3.2, -1.6));
+  }
+  State.waveTarget = countTotalPops();
+  State.waveProgress = 0;
+  banner(`WAVE ${String(num).padStart(2,'0')}`, num === 1 ? 'BEGIN' : 'CONTINUE');
+  sfx('wave');
+}
+function countTotalPops(){
+  // every ball at level L splits L times, total pops = sum geometric
+  // ball at level L => 1 + 2 + 4 + ... + 2^L  pops? Actually each split pops a parent, so total entities popped = 2^(L+1) - 1
+  let total = 0;
+  for(const b of balls){ total += (1 << (b.level+1)) - 1; }
+  return total;
+}
+
+// =========================================================================
+//                              UPDATE
+// =========================================================================
+
+let lastT = performance.now();
+function loop(now){
+  const dt = Math.min(50, now - lastT);
+  lastT = now;
+  if(State.scene === 'play'){
+    update(dt);
+  }
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function update(dt){
+  // Hit-stop
+  if(State.hitStop > 0){
+    State.hitStop -= dt;
+    return; // skip world updates during freeze
+  }
+
+  // Player movement
+  let move = 0;
+  if(Input.left)  move -= 1;
+  if(Input.right) move += 1;
+
+  // Also follow mouse if not pressing keys (CrazyGames audience often uses mouse)
+  if(move === 0 && Input.mouseX != null){
+    const target = Input.mouseX;
+    const dx = target - player.x;
+    if(Math.abs(dx) > 4) move = Math.sign(dx) * Math.min(1, Math.abs(dx)/60);
+  }
+
+  player.x += move * player.speed * (dt/16.6);
+  player.x = clamp(player.x, 60, W-60);
+
+  // Player trail
+  if(Math.abs(move) > 0.2){
+    player.trail.push({ x: player.x, y: player.y + 6, life: 1, born: performance.now()});
+    if(player.trail.length > 14) player.trail.shift();
+    if(Math.random() < 0.4){
+      dust.push({
+        x: player.x + rand(-20,20),
+        y: player.y + 22,
+        vx: rand(-0.4,0.4),
+        vy: rand(-0.8, -0.2),
+        life: rand(0.4, 0.8),
+        max: 1,
+        size: rand(1, 2.4),
+        hue: 80,
+      });
+    }
+  }
+  player.trail.forEach(t => t.life -= dt/300);
+  player.trail = player.trail.filter(t => t.life > 0);
+
+  // Firing
+  player.cool -= dt;
+  if(Input.fire && player.cool <= 0){
+    player.cool = 280;
+    projectiles.push({
+      x: player.x,
+      y: player.y - 10,
+      tipY: player.y - 10,
+      hitCeiling: false,
+      born: performance.now(),
+      life: 1,
+    });
+    sfx('shoot');
+    // muzzle particles
+    for(let i=0;i<5;i++){
+      particles.push({
+        x: player.x + rand(-3,3),
+        y: player.y - 12,
+        vx: rand(-0.6,0.6),
+        vy: rand(-2.6,-0.6),
+        life: 1, max: 1,
+        size: rand(1.6, 3),
+        color: '#c6ff00',
+        glow: 8,
+        gravity: 0,
+        fade: 1.6,
+      });
+    }
+  }
+
+  // Projectiles (vertical wires)
+  for(const p of projectiles){
+    if(!p.hitCeiling){
+      p.tipY -= 14;
+      if(p.tipY <= 30){
+        p.tipY = 30;
+        p.hitCeiling = true;
+        p.lifeStart = performance.now();
+        // Sparks at impact
+        for(let i=0;i<10;i++){
+          particles.push({
+            x: p.x + rand(-2,2),
+            y: 32,
+            vx: rand(-1.4,1.4),
+            vy: rand(-0.8, 1.4),
+            life: 1, max: 1,
+            size: rand(1, 2.5),
+            color: '#c6ff00',
+            glow: 6,
+            gravity: 0.08,
+            fade: 2.2,
+          });
+        }
+      }
+    } else {
+      // wire fades after a short time
+      const elapsed = performance.now() - (p.lifeStart || performance.now());
+      p.life = Math.max(0, 1 - elapsed/1400);
+    }
+  }
+  for(let i=projectiles.length-1;i>=0;i--){
+    if(projectiles[i].life <= 0) projectiles.splice(i,1);
+  }
+
+  // Balls physics
+  const grav = 0.18;
+  for(const b of balls){
+    b.vy += grav * (dt/16.6);
+    b.x += b.vx * (dt/16.6);
+    b.y += b.vy * (dt/16.6);
+    b.rot += b.spin * (dt/16.6);
+    b.phase += 0.04;
+    if(b.flash > 0) b.flash -= dt/200;
+
+    // Bounce walls
+    if(b.x - b.r < 20){ b.x = 20 + b.r; b.vx = Math.abs(b.vx); puffWall(b.x, b.y); }
+    else if(b.x + b.r > W - 20){ b.x = W - 20 - b.r; b.vx = -Math.abs(b.vx); puffWall(b.x, b.y); }
+    // Bounce floor (Pang-y) — give each level a different max bounce height
+    const targetTop = [H-220, H-300, H-410, H-540][b.level];
+    if(b.y + b.r > H - 30){
+      b.y = H - 30 - b.r;
+      // calculate vy needed to reach targetTop
+      const needed = Math.sqrt(2 * grav * (b.y - targetTop));
+      b.vy = -needed;
+      puffWall(b.x, H - 32);
+    }
+  }
+
+  // Projectile vs ball collision
+  for(const p of projectiles){
+    for(let i = balls.length-1; i>=0; i--){
+      const b = balls[i];
+      if(p.x > b.x - b.r && p.x < b.x + b.r){
+        if(b.y + b.r > p.tipY && b.y - b.r < player.y){
+          // hit
+          popBall(b, i, p);
+          break;
+        }
+      }
+    }
+  }
+
+  // Player vs ball collision
+  for(let i=balls.length-1;i>=0;i--){
+    const b = balls[i];
+    const dx = b.x - player.x, dy = b.y - player.y;
+    const rr = b.r + 20;
+    if(dx*dx + dy*dy < rr*rr){
+      loseLife();
+      // knock ball away
+      b.vy = -6;
+      b.vx += Math.sign(dx)*2;
+      break;
+    }
+  }
+
+  // Combo decay
+  if(State.combo > 1){
+    State.comboTimer -= dt;
+    const ringEl = $('comboRing');
+    if(ringEl){
+      const max = comboWindow();
+      const pct = clamp(State.comboTimer / max, 0, 1);
+      ringEl.style.strokeDashoffset = (100 - pct*100).toFixed(1);
+    }
+    if(State.comboTimer <= 0){
+      breakCombo();
+    }
+  }
+
+  // Particles
+  updateParticles(dt);
+
+  // Ambient particles (always)
+  if(ambient.length < 30 && Math.random() < 0.06){
+    ambient.push({
+      x: rand(0, W),
+      y: H + 20,
+      vx: rand(-0.1, 0.1),
+      vy: rand(-0.35, -0.15),
+      life: 1, max: 1,
+      size: rand(0.8, 2),
+      color: Math.random() < 0.5 ? 'rgba(198,255,0,0.45)' : 'rgba(125,211,252,0.4)',
+      glow: 0,
+      gravity: 0,
+      fade: 0.06,
+    });
+  }
+  // Dust
+  for(const d of dust){
+    d.x += d.vx * (dt/16.6);
+    d.y += d.vy * (dt/16.6);
+    d.life -= dt/1000;
+  }
+  for(let i=dust.length-1;i>=0;i--) if(dust[i].life <= 0) dust.splice(i,1);
+
+  // Shake / flash decays
+  if(State.shake > 0) State.shake = Math.max(0, State.shake - dt/250);
+  if(State.flash > 0) State.flash = Math.max(0, State.flash - dt/400);
+  if(State.chromAb > 0) State.chromAb = Math.max(0, State.chromAb - dt/300);
+
+  // Score visual lerp
+  State.scoreShown += (State.score - State.scoreShown) * 0.18;
+  $('scoreVal').textContent = fmt(Math.round(State.scoreShown));
+
+  // Wave fill
+  $('waveFill').style.width = `${(State.waveProgress / Math.max(1, State.waveTarget))*100}%`;
+
+  // Check wave complete
+  if(balls.length === 0){
+    nextWave();
+  }
+}
+
+function updateParticles(dt){
+  for(const p of particles){
+    p.vx *= 0.99;
+    p.vy += (p.gravity || 0);
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life -= (p.fade || 1) * (dt/1000);
+  }
+  for(let i=particles.length-1;i>=0;i--) if(particles[i].life <= 0) particles.splice(i,1);
+
+  for(const a of ambient){
+    a.x += a.vx;
+    a.y += a.vy;
+    a.life -= (a.fade || 0.1) * (dt/1000);
+  }
+  for(let i=ambient.length-1;i>=0;i--) if(ambient[i].life <= 0) ambient.splice(i,1);
+}
+
+function puffWall(x, y){
+  for(let i=0;i<3;i++){
+    particles.push({
+      x: x + rand(-2,2),
+      y: y + rand(-2,2),
+      vx: rand(-1.2, 1.2),
+      vy: rand(-1.4, -0.2),
+      life: 1, max: 1,
+      size: rand(1.2, 2.2),
+      color: 'rgba(255,255,255,0.7)',
+      glow: 2,
+      gravity: 0.05,
+      fade: 2.4,
+    });
+  }
+}
+
+// ---------- Pop / split ----------
+function popBall(b, index, projectile){
+  const xp = [8, 14, 20, 28][b.level];
+  const baseScore = [50, 100, 200, 300][b.level];
+  // Recent pops within window → critical chance
+  const now = performance.now();
+  State.recentPopTimes = State.recentPopTimes.filter(t => now - t < comboWindow());
+  State.recentPopTimes.push(now);
+  const isCrit = State.combo >= 5 && Math.random() < 0.35;
+
+  // Increase combo
+  State.combo += 1;
+  State.maxCombo = Math.max(State.maxCombo, State.combo);
+  State.comboTimer = comboWindow();
+  // Show combo from x2 onwards
+  if(State.combo >= 2){
+    $('combo').classList.add('active');
+    $('comboMult').textContent = State.combo;
+  }
+  const scoreGain = Math.round(baseScore * (1 + (State.combo-1)*0.15) * (isCrit ? 2 : 1));
+  addScore(scoreGain);
+  State.xpGained += xp;
+
+  // FX
+  shake(isCrit ? 14 : 8 + b.level * 1.6);
+  if(isCrit){ State.hitStop = 90; State.flash = 0.5; State.chromAb = 1; }
+  else { State.hitStop = 35 + b.level * 6; }
+  flashBall(b);
+  burstParticles(b.x, b.y, b);
+  if(isCrit){
+    popText(b.x, b.y - 10, 'CRITICAL!', 'crit');
+    sfx('crit');
+    medal('CRITICAL HIT', 'Combo bonus 2x', 'mythic', '+'+fmt(scoreGain));
+  } else {
+    sfx('pop', { f0: 800 - b.level*100, f1: 140 - b.level*20 });
+  }
+  popText(b.x, b.y - 4, `+${fmt(scoreGain)}`, 'score');
+  if(b.level >= 2 && Math.random() < 0.5) popText(b.x+20, b.y+8, `+${xp} XP`, 'xp');
+
+  // Score delta little tag
+  const sd = $('scoreDelta');
+  sd.textContent = `+${fmt(scoreGain)}`;
+  sd.style.transition = 'none';
+  sd.style.opacity = '1';
+  sd.style.transform = 'translateY(0)';
+  requestAnimationFrame(()=>{
+    sd.style.transition = 'opacity 0.8s, transform 0.8s';
+    sd.style.opacity = '0';
+    sd.style.transform = 'translateY(-12px)';
+  });
+  // Score value bump
+  $('scoreVal').classList.remove('bump');
+  void $('scoreVal').offsetWidth;
+  $('scoreVal').classList.add('bump');
+
+  // Update wave progress
+  State.waveProgress += 1;
+
+  // Combo medals
+  if(State.combo === 5) medal('STREAK', '5 in a row', 'silver', '+250');
+  else if(State.combo === 10) medal('UNSTOPPABLE', '10 chain', 'gold', '+1,000');
+  else if(State.combo === 20) medal('LEGENDARY', '20 chain', 'plat', '+5,000');
+
+  // Split or remove
+  balls.splice(index, 1);
+  if(b.level > 0){
+    const newLvl = b.level - 1;
+    const speed = 3 + (3 - newLvl) * 0.4;
+    spawnBall(b.x - 8, b.y, newLvl, -speed, -2.5);
+    spawnBall(b.x + 8, b.y, newLvl,  speed, -2.5);
+  } else {
+    // Final pop — extra flair
+    for(let i=0;i<24;i++){
+      particles.push({
+        x: b.x, y: b.y,
+        vx: Math.cos(i/24 * TAU) * rand(2, 5.5),
+        vy: Math.sin(i/24 * TAU) * rand(2, 5.5),
+        life: 1, max: 1,
+        size: rand(2, 4),
+        color: `hsl(${b.hue}, 100%, 65%)`,
+        glow: 12,
+        gravity: 0.1,
+        fade: 1.4,
+      });
+    }
+  }
+
+  // Random powerup drop (rarely)
+  if(b.level >= 1 && Math.random() < 0.07){
+    triggerPowerup();
+  }
+
+  // Remove the wire that hit
+  if(projectile){
+    const idx = projectiles.indexOf(projectile);
+    if(idx !== -1) projectiles.splice(idx, 1);
+  }
+}
+
+function flashBall(b){ b.flash = 1; }
+
+function burstParticles(x, y, b){
+  const count = 16 + b.level * 6;
+  for(let i=0;i<count;i++){
+    const angle = (i / count) * TAU + rand(-0.2,0.2);
+    const speed = rand(1.5, 4.5 + b.level);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1, max: 1,
+      size: rand(1.6, 4.2),
+      color: `hsl(${b.hue + rand(-20,20)}, 95%, ${rand(55,72)}%)`,
+      glow: rand(6, 16),
+      gravity: 0.08,
+      fade: rand(0.9, 1.6),
+    });
+  }
+  // shard fragments (line segments)
+  for(let i=0;i<6 + b.level*2;i++){
+    const a = rand(0, TAU);
+    const sp = rand(2, 5);
+    particles.push({
+      x, y,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 1,
+      life: 1, max: 1,
+      size: rand(8, 14),
+      color: `hsla(${b.hue},90%,75%,0.85)`,
+      shard: true,
+      rot: rand(0, TAU),
+      vr: rand(-0.15, 0.15),
+      glow: 5,
+      gravity: 0.18,
+      fade: 1.1,
+    });
+  }
+}
+
+function addScore(n){ State.score += n; }
+
+function loseLife(){
+  if(State.lives <= 0) return;
+  State.lives -= 1;
+  const dots = document.querySelectorAll('.life-dot');
+  if(dots[State.lives]){
+    dots[State.lives].classList.add('lost');
+    setTimeout(()=> dots[State.lives].classList.remove('lost'), 700);
+  }
+  shake(28);
+  State.hitStop = 220;
+  State.flash = 0.9;
+  State.chromAb = 1.6;
+  breakCombo();
+  sfx('hit');
+  toast('danger', 'LIFE LOST', `${State.lives} remaining`);
+  if(State.lives <= 0){
+    setTimeout(gameOver, 800);
+  }
+}
+
+function breakCombo(){
+  if(State.combo > 3){
+    toast('warn', 'COMBO BROKEN', `Chain of ${State.combo} ended`);
+  }
+  State.combo = 1;
+  $('combo').classList.remove('active');
+  $('comboMult').textContent = '1';
+  State.recentPopTimes.length = 0;
+}
+
+function comboWindow(){
+  return Math.max(900, 2200 - State.combo * 40);
+}
+
+function shake(amt){ State.shake = Math.max(State.shake, amt); }
+
+// Powerups -------------------------------------------------------
+const POWERUPS = {
+  rapid:  { name: 'RAPID FIRE',  color: '#c6ff00', bg: 'rgba(198,255,0,0.15)',  dur: 8000, icon: '⚡' },
+  freeze: { name: 'TIME FREEZE', color: '#7dd3fc', bg: 'rgba(125,211,252,0.15)',dur: 5000, icon: '◆' },
+  shield: { name: 'SHIELD',      color: '#ff2d75', bg: 'rgba(255,45,117,0.15)', dur: 12000, icon: '✦' },
+  multi:  { name: 'TRIPLE SHOT', color: '#ffb836', bg: 'rgba(255,184,54,0.15)', dur: 10000, icon: '※' },
+};
+const activePowerups = {};
+
+function triggerPowerup(){
+  const keys = Object.keys(POWERUPS);
+  const k = keys[Math.floor(Math.random()*keys.length)];
+  const pu = POWERUPS[k];
+  if(activePowerups[k]){
+    activePowerups[k].endsAt = performance.now() + pu.dur;
+    return;
+  }
+  const id = 'pu_'+k;
+  const wrap = document.createElement('div');
+  wrap.className = 'powerup';
+  wrap.style.setProperty('--pu-color', pu.color);
+  wrap.style.setProperty('--pu-bg', pu.bg);
+  wrap.id = id;
+  wrap.innerHTML = `
+    <div class="pu-icon">${pu.icon}</div>
+    <div class="pu-info">
+      <div class="pu-name">${pu.name}</div>
+      <div class="pu-time" data-time>${(pu.dur/1000).toFixed(1)}s</div>
+    </div>
+    <div class="pu-bar"></div>
+  `;
+  $('powerups').appendChild(wrap);
+  activePowerups[k] = { endsAt: performance.now() + pu.dur, total: pu.dur, el: wrap };
+  toast('info', 'POWERUP', pu.name);
+  sfx('powerup');
+}
+
+function tickPowerups(now){
+  for(const k in activePowerups){
+    const a = activePowerups[k];
+    const left = a.endsAt - now;
+    if(left <= 0){
+      a.el.remove();
+      delete activePowerups[k];
+      continue;
+    }
+    const tEl = a.el.querySelector('[data-time]');
+    if(tEl) tEl.textContent = (left/1000).toFixed(1)+'s';
+    const bar = a.el.querySelector('.pu-bar');
+    if(bar) bar.style.width = (left/a.total)*100 + '%';
+  }
+}
+
+// ---------- Banner ----------
+function banner(main, pre, sub){
+  const layer = $('banner-layer');
+  layer.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'banner';
+  div.innerHTML = `
+    ${pre ? `<div class="banner-pretitle">${pre}</div>` : ''}
+    <div class="banner-main">${main}</div>
+    ${sub ? `<div class="banner-sub">${sub}</div>` : ''}
+  `;
+  layer.appendChild(div);
+  setTimeout(()=> div.remove(), 2400);
+}
+
+// ---------- Floating text popup ----------
+function popText(x, y, text, kind){
+  const el = document.createElement('div');
+  el.className = `fx-pop ${kind}`;
+  el.textContent = text;
+  // Convert game coords to stage coords
+  const stageRect = stage.getBoundingClientRect();
+  const sx = (x / W) * stageRect.width;
+  const sy = (y / H) * stageRect.height;
+  el.style.left = `${sx}px`;
+  el.style.top  = `${sy}px`;
+  $('fx-layer').appendChild(el);
+  setTimeout(()=> el.remove(), kind === 'crit' ? 1450 : 1150);
+}
+
+// ---------- Medals ----------
+const medalQueue = [];
+let medalActive = 0;
+function medal(title, sub, tier, reward){
+  medalQueue.push({title, sub, tier, reward});
+  pumpMedals();
+}
+function pumpMedals(){
+  if(medalActive >= 3) return;
+  const m = medalQueue.shift();
+  if(!m) return;
+  medalActive++;
+  const el = document.createElement('div');
+  el.className = `medal ${m.tier}`;
+  el.innerHTML = `
+    <div class="m-icon">${ {bronze:'◆',silver:'◆',gold:'★',plat:'✦',mythic:'✪'}[m.tier] || '★'}</div>
+    <div class="m-info">
+      <div class="m-tier">${m.tier}</div>
+      <div class="m-title">${m.title}</div>
+      <div class="m-sub">${m.sub}</div>
+    </div>
+    <div class="m-reward">${m.reward}</div>
+  `;
+  $('medals-layer').appendChild(el);
+  sfx('medal');
+  setTimeout(()=>{
+    el.remove();
+    medalActive--;
+    pumpMedals();
+  }, 3200);
+  // chain another quickly
+  if(medalQueue.length) setTimeout(pumpMedals, 240);
+}
+
+// ---------- Toasts ----------
+function toast(kind, label, text){
+  const el = document.createElement('div');
+  el.className = `toast ${kind}`;
+  el.innerHTML = `
+    <div class="t-icon">${({success:'✓',warn:'!',info:'i',danger:'×'}[kind])}</div>
+    <div class="t-text"><b>${label}</b>${text}</div>
+  `;
+  $('toasts-layer').appendChild(el);
+  setTimeout(()=> el.remove(), 4000);
+}
+
+// =========================================================================
+//                                DRAW
+// =========================================================================
+function draw(){
+  // base wipe
+  ctx.fillStyle = '#0f0e17';
+  ctx.fillRect(0, 0, W, H);
+
+  // Shake transform
+  ctx.save();
+  if(State.shake > 0){
+    const s = State.shake;
+    ctx.translate((Math.random()-0.5)*s, (Math.random()-0.5)*s);
+  }
+
+  // Background grid + atmosphere
+  drawBackground();
+
+  // Ambient particles (slow rising)
+  for(const a of ambient){
+    ctx.globalAlpha = a.life * a.max;
+    ctx.fillStyle = a.color;
+    ctx.beginPath();
+    ctx.arc(a.x, a.y, a.size, 0, TAU);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+
+  // Floor "deck" line
+  drawFloor();
+
+  // Powerup tick (only during active play)
+  if(State.scene === 'play') tickPowerups(performance.now());
+
+  if(State.scene === 'play' || State.scene === 'pause' || State.scene === 'gameover'){
+    // Player trail
+    drawPlayerTrail();
+
+    // Projectiles (wires)
+    drawProjectiles();
+
+    // Balls
+    for(const b of balls) drawBall(b);
+
+    // Dust
+    for(const d of dust){
+      const t = d.life;
+      ctx.globalAlpha = t * 0.8;
+      ctx.fillStyle = `hsl(${d.hue}, 30%, 90%)`;
+      ctx.beginPath();
+      ctx.arc(d.x, d.y, d.size, 0, TAU);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // Player
+    drawPlayer();
+
+    // Particles (foreground)
+    drawParticles();
+  } else {
+    // Menu — render decorative balls
+    drawMenuBalls();
+  }
+
+  ctx.restore();
+
+  // Full-screen flash overlay
+  if(State.flash > 0){
+    ctx.fillStyle = `rgba(255,255,255,${State.flash * 0.45})`;
+    ctx.fillRect(0,0,W,H);
+  }
+
+  // Subtle chromatic split on big hits (cheap approximation)
+  if(State.chromAb > 0){
+    const a = State.chromAb;
+    ctx.globalCompositeOperation = 'screen';
+    ctx.fillStyle = `rgba(255,45,117,${a * 0.04})`;
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = `rgba(125,211,252,${a * 0.04})`;
+    ctx.fillRect(0,0,W,H);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Vignette
+  drawVignette();
+}
+
+function drawBackground(){
+  // Dot grid
+  ctx.fillStyle = '#15131f';
+  ctx.fillRect(0,0,W,H);
+
+  // Subtle gradient top to bottom
+  const grd = ctx.createLinearGradient(0, 0, 0, H);
+  grd.addColorStop(0, 'rgba(198,255,0,0.018)');
+  grd.addColorStop(0.5, 'rgba(0,0,0,0)');
+  grd.addColorStop(1, 'rgba(255,45,117,0.025)');
+  ctx.fillStyle = grd;
+  ctx.fillRect(0,0,W,H);
+
+  // Dot grid pattern
+  ctx.fillStyle = 'rgba(255,255,255,0.04)';
+  const step = 36;
+  for(let x = step/2; x < W; x += step){
+    for(let y = step/2; y < H; y += step){
+      ctx.beginPath();
+      ctx.arc(x, y, 1, 0, TAU);
+      ctx.fill();
+    }
+  }
+
+  // Subtle horizon line
+  ctx.strokeStyle = 'rgba(198,255,0,0.07)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H/2 + 60);
+  ctx.lineTo(W, H/2 + 60);
+  ctx.stroke();
+}
+
+function drawFloor(){
+  // Floor band
+  const fg = ctx.createLinearGradient(0, H-60, 0, H);
+  fg.addColorStop(0, 'rgba(255,255,255,0.01)');
+  fg.addColorStop(1, 'rgba(0,0,0,0.4)');
+  ctx.fillStyle = fg;
+  ctx.fillRect(0, H-60, W, 60);
+  // Floor line
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H-30);
+  ctx.lineTo(W, H-30);
+  ctx.stroke();
+
+  // Side walls
+  ctx.strokeStyle = 'rgba(198,255,0,0.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(20, 30); ctx.lineTo(20, H-30);
+  ctx.moveTo(W-20, 30); ctx.lineTo(W-20, H-30);
+  // ceiling
+  ctx.moveTo(20, 30); ctx.lineTo(W-20, 30);
+  ctx.stroke();
+
+  // Corner brackets
+  const cs = 18; // corner size
+  ctx.strokeStyle = 'rgba(198,255,0,0.4)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  // tl
+  ctx.moveTo(20, 30+cs); ctx.lineTo(20,30); ctx.lineTo(20+cs,30);
+  // tr
+  ctx.moveTo(W-20-cs, 30); ctx.lineTo(W-20,30); ctx.lineTo(W-20,30+cs);
+  // bl
+  ctx.moveTo(20, H-30-cs); ctx.lineTo(20,H-30); ctx.lineTo(20+cs,H-30);
+  // br
+  ctx.moveTo(W-20-cs, H-30); ctx.lineTo(W-20,H-30); ctx.lineTo(W-20,H-30-cs);
+  ctx.stroke();
+}
+
+function drawPlayerTrail(){
+  for(let i=0;i<player.trail.length;i++){
+    const t = player.trail[i];
+    const a = (i / player.trail.length) * 0.4;
+    ctx.fillStyle = `rgba(198,255,0,${a * t.life})`;
+    ctx.beginPath();
+    ctx.ellipse(t.x, t.y, 22, 5, 0, 0, TAU);
+    ctx.fill();
+  }
+}
+
+function drawPlayer(){
+  ctx.save();
+  ctx.translate(player.x, player.y);
+  // shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.beginPath();
+  ctx.ellipse(0, 28, 28, 5, 0, 0, TAU);
+  ctx.fill();
+
+  // tactical wedge body
+  const w = 40, h = 24;
+  // glow
+  ctx.shadowColor = 'rgba(198,255,0,0.6)';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = '#c6ff00';
+  ctx.beginPath();
+  ctx.moveTo(0, -h);
+  ctx.lineTo(w, h);
+  ctx.lineTo(-w, h);
+  ctx.closePath();
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // dark center
+  ctx.fillStyle = '#0f0e17';
+  ctx.beginPath();
+  ctx.moveTo(0, -h+8);
+  ctx.lineTo(w-10, h-3);
+  ctx.lineTo(-w+10, h-3);
+  ctx.closePath();
+  ctx.fill();
+
+  // accent strip
+  ctx.fillStyle = '#c6ff00';
+  ctx.fillRect(-2, -h+6, 4, h-2);
+
+  // muzzle
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-1.5, -h-3, 3, 5);
+
+  ctx.restore();
+
+  // Aim guide (subtle vertical line above player)
+  const g = ctx.createLinearGradient(player.x, player.y - 20, player.x, 50);
+  g.addColorStop(0, 'rgba(198,255,0,0.25)');
+  g.addColorStop(1, 'rgba(198,255,0,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(player.x - 0.5, 50, 1, player.y - 60);
+}
+
+function drawProjectiles(){
+  for(const p of projectiles){
+    if(!p.hitCeiling){
+      // Moving harpoon tip + trailing wire
+      const grd = ctx.createLinearGradient(p.x, player.y - 10, p.x, p.tipY);
+      grd.addColorStop(0, 'rgba(198,255,0,0.0)');
+      grd.addColorStop(1, 'rgba(198,255,0,1)');
+      ctx.strokeStyle = grd;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(p.x, player.y - 10);
+      ctx.lineTo(p.x, p.tipY);
+      ctx.stroke();
+      // tip glow
+      ctx.shadowColor = '#c6ff00';
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = '#fff';
+      ctx.beginPath();
+      ctx.arc(p.x, p.tipY, 3, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    } else {
+      // Anchored wire fading
+      const a = p.life;
+      ctx.strokeStyle = `rgba(198,255,0,${0.8 * a})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(p.x, 32);
+      ctx.lineTo(p.x, player.y - 10);
+      ctx.stroke();
+      // anchor head
+      ctx.fillStyle = `rgba(198,255,0,${a})`;
+      ctx.beginPath();
+      ctx.arc(p.x, 32, 3, 0, TAU);
+      ctx.fill();
+    }
+  }
+}
+
+function drawBall(b){
+  const x = b.x, y = b.y, r = b.r;
+  const pulse = Math.sin(b.phase) * 0.06 + 1;
+
+  // shadow on floor
+  const shy = H - 30;
+  const shD = clamp((shy - y) / 500, 0.2, 1);
+  ctx.globalAlpha = 0.35 * (1 - shD);
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  ctx.ellipse(x, shy + 1, r * 0.7, r * 0.18, 0, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // outer glow
+  ctx.save();
+  ctx.shadowColor = `hsla(${b.hue},95%,60%,1)`;
+  ctx.shadowBlur = 28;
+
+  // body — radial iridescent gradient
+  const grd = ctx.createRadialGradient(x - r*0.35, y - r*0.4, r*0.1, x, y, r * pulse);
+  grd.addColorStop(0, `hsla(${b.hue},100%,95%,1)`);
+  grd.addColorStop(0.25, `hsla(${b.hue},95%,70%,1)`);
+  grd.addColorStop(0.7, `hsla(${b.hue + 30},90%,45%,1)`);
+  grd.addColorStop(1, `hsla(${b.hue - 20},90%,22%,1)`);
+  ctx.fillStyle = grd;
+  ctx.beginPath();
+  ctx.arc(x, y, r * pulse, 0, TAU);
+  ctx.fill();
+  ctx.restore();
+
+  // inner facets (crystal feel)
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(b.rot);
+  ctx.globalAlpha = 0.18;
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  const sides = 5 + b.level;
+  ctx.beginPath();
+  for(let i=0;i<sides;i++){
+    const a = (i/sides) * TAU;
+    const xx = Math.cos(a) * r * 0.7;
+    const yy = Math.sin(a) * r * 0.7;
+    if(i===0) ctx.moveTo(xx, yy);
+    else ctx.lineTo(xx, yy);
+  }
+  ctx.closePath();
+  ctx.stroke();
+  ctx.restore();
+
+  // Specular highlight
+  ctx.globalAlpha = 0.85;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath();
+  ctx.ellipse(x - r*0.4, y - r*0.45, r*0.18, r*0.08, -0.6, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 0.4;
+  ctx.beginPath();
+  ctx.arc(x - r*0.55, y - r*0.55, r*0.07, 0, TAU);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // Flash on hit
+  if(b.flash > 0){
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(255,255,255,${b.flash * 0.7})`;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.05, 0, TAU);
+    ctx.fill();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // Level rim indicator (cool detail)
+  ctx.globalAlpha = 0.6;
+  ctx.strokeStyle = `hsla(${b.hue}, 90%, 80%, 1)`;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r * 1.02, 0, TAU);
+  ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+function drawParticles(){
+  for(const p of particles){
+    const a = clamp(p.life, 0, 1);
+    if(p.shard){
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate((p.rot || 0) + (p.vr || 0) * (performance.now()/16));
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = p.glow || 0;
+      // diamond shard
+      ctx.beginPath();
+      ctx.moveTo(0, -p.size);
+      ctx.lineTo(p.size*0.45, 0);
+      ctx.lineTo(0, p.size);
+      ctx.lineTo(-p.size*0.45, 0);
+      ctx.closePath();
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.restore();
+    } else {
+      ctx.globalAlpha = a;
+      ctx.fillStyle = p.color;
+      if(p.glow){
+        ctx.shadowColor = p.color;
+        ctx.shadowBlur = p.glow;
+      }
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.size, 0, TAU);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+function drawMenuBalls(){
+  // Decorative bouncing balls visible behind menu
+  const t = performance.now() / 1000;
+  for(let i=0;i<3;i++){
+    const bx = 280 + i*420 + Math.sin(t * 0.6 + i)*80;
+    const by = 360 + Math.cos(t * 0.8 + i*1.2)*60 + i*20;
+    drawBall({
+      x: bx, y: by,
+      r: 36 + i*8,
+      level: 2,
+      hue: [180, 90, 320][i],
+      rot: t * 0.3 + i,
+      spin: 0.01, phase: t,
+      flash: 0,
+    });
+  }
+}
+
+function drawVignette(){
+  const g = ctx.createRadialGradient(W/2, H/2, H*0.4, W/2, H/2, H*0.82);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,0,0.65)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0,0,W,H);
+}
+
+// =========================================================================
+//                              FLOW
+// =========================================================================
+
+function showScene(name){
+  State.scene = name;
+  ['menu','hud','pause','gameover'].forEach(s => {
+    const el = $(s);
+    if(!el) return;
+    if((name === 'play' && s === 'hud') || s === name){
+      el.classList.remove('hidden');
+      el.classList.add('active');
+    } else {
+      el.classList.add('hidden');
+      el.classList.remove('active');
+    }
+  });
+  // HUD stays visible during pause/gameover for context, fadeable
+  if(name === 'pause' || name === 'gameover'){
+    $('hud').classList.remove('hidden');
+  }
+}
+
+function startGame(){
+  ensureAudio();
+  State.score = 0;
+  State.scoreShown = 0;
+  State.wave = 1;
+  State.lives = 3;
+  State.combo = 1;
+  State.maxCombo = 1;
+  State.xpGained = 0;
+  document.querySelectorAll('.life-dot').forEach(d => {
+    d.classList.remove('empty', 'lost');
+  });
+  $('comboMult').textContent = '1';
+  $('combo').classList.remove('active');
+  $('scoreVal').textContent = '0';
+  $('waveNum').textContent = String(State.wave).padStart(2,'0');
+  // clean powerups
+  Object.values(activePowerups).forEach(p => p.el.remove());
+  Object.keys(activePowerups).forEach(k => delete activePowerups[k]);
+  $('powerups').innerHTML = '';
+  showScene('play');
+  startWave(State.wave);
+  // Welcome toasts to demonstrate
+  setTimeout(()=> toast('info', 'TIP', 'Don\'t pop balls under big chains — split smartly.'), 1800);
+}
+
+function nextWave(){
+  State.wave++;
+  if(State.wave > State.maxWave){
+    // Win condition
+    toast('success', 'COMPLETE', 'All waves cleared');
+    setTimeout(gameOver, 1200);
+    return;
+  }
+  $('waveNum').textContent = String(State.wave).padStart(2,'0');
+  setTimeout(()=>{
+    startWave(State.wave);
+    if(State.wave % 3 === 0){
+      medal('WAVE CHAMPION', `Cleared wave ${State.wave-1}`, 'gold', '+2,500 XP');
+    } else {
+      toast('success', 'WAVE CLEAR', `Bonus +${500*State.wave}`);
+      addScore(500*State.wave);
+    }
+  }, 700);
+}
+
+function pauseGame(){
+  if(State.scene !== 'play') return;
+  showScene('pause');
+}
+function resumeGame(){ showScene('play'); }
+function gameOver(){
+  showScene('gameover');
+  $('finalScore').textContent = fmt(State.score);
+  $('finalWave').textContent = State.wave;
+  $('finalCombo').textContent = 'x'+State.maxCombo;
+  $('finalXP').textContent = '+'+fmt(State.xpGained);
+  // stars
+  const stars = document.querySelectorAll('#gameover .star');
+  stars.forEach(s => s.classList.remove('earned'));
+  let earned = 1;
+  if(State.score > 5000) earned = 2;
+  if(State.score > 20000) earned = 3;
+  setTimeout(()=>{
+    for(let i=0;i<earned;i++){
+      setTimeout(()=> stars[i].classList.add('earned'), i*200);
+    }
+  }, 350);
+}
+function quitToMenu(){
+  showScene('menu');
+}
+
+// =========================================================================
+//                              EVENTS
+// =========================================================================
+
+// Mouse / touch
+const stageEl = stage;
+stageEl.addEventListener('mousemove', (e)=>{
+  const r = stageEl.getBoundingClientRect();
+  Input.mouseX = ((e.clientX - r.left) / r.width) * W;
+});
+stageEl.addEventListener('mousedown', (e)=>{
+  if(State.scene === 'play') Input.fire = true;
+});
+stageEl.addEventListener('mouseup', ()=> Input.fire = false);
+stageEl.addEventListener('mouseleave', ()=>{
+  Input.fire = false;
+});
+
+// Touch
+stageEl.addEventListener('touchstart', (e)=>{
+  if(State.scene !== 'play') return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const r = stageEl.getBoundingClientRect();
+  Input.mouseX = ((t.clientX - r.left) / r.width) * W;
+  Input.fire = true;
+}, { passive: false });
+stageEl.addEventListener('touchmove', (e)=>{
+  if(State.scene !== 'play') return;
+  e.preventDefault();
+  const t = e.touches[0];
+  const r = stageEl.getBoundingClientRect();
+  Input.mouseX = ((t.clientX - r.left) / r.width) * W;
+}, { passive: false });
+stageEl.addEventListener('touchend', ()=> Input.fire = false);
+
+// Keyboard
+window.addEventListener('keydown', (e)=>{
+  if(e.repeat) return;
+  if(State.scene === 'play'){
+    if(e.code === 'ArrowLeft' || e.code === 'KeyA') Input.left = true;
+    if(e.code === 'ArrowRight' || e.code === 'KeyD') Input.right = true;
+    if(e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') Input.fire = true;
+    if(e.code === 'Escape' || e.code === 'KeyP') pauseGame();
+    if(e.code === 'Enter') triggerPowerup(); // dev shortcut
+  } else if(State.scene === 'pause'){
+    if(e.code === 'Escape' || e.code === 'KeyP') resumeGame();
+  }
+});
+window.addEventListener('keyup', (e)=>{
+  if(e.code === 'ArrowLeft' || e.code === 'KeyA') Input.left = false;
+  if(e.code === 'ArrowRight' || e.code === 'KeyD') Input.right = false;
+  if(e.code === 'Space' || e.code === 'KeyW' || e.code === 'ArrowUp') Input.fire = false;
+});
+
+// Buttons
+$('playBtn').addEventListener('click', startGame);
+$('pauseBtn').addEventListener('click', pauseGame);
+$('resumeBtn').addEventListener('click', resumeGame);
+$('restartBtn').addEventListener('click', startGame);
+$('quitBtn').addEventListener('click', quitToMenu);
+$('goAgainBtn').addEventListener('click', startGame);
+$('goMenuBtn').addEventListener('click', quitToMenu);
+
+// =========================================================================
+//                            DEMO TOASTS / MEDALS ON MENU
+// =========================================================================
+// Show a few toasts on initial menu load to demo the system
+setTimeout(()=>{
+  if(State.scene === 'menu') toast('success', 'DAILY READY', 'Login bonus +100 coins');
+}, 1400);
+setTimeout(()=>{
+  if(State.scene === 'menu') toast('info', 'NEW SEASON', 'Season 04 starts in 6d');
+}, 4400);
+
+// Kick off the loop
+requestAnimationFrame((t)=>{ lastT = t; loop(t); });
+
+</script>
+
+<script>
+/* =========================================================================
+   RICOCHET — Integrated 166-technique demonstration director
+   Built into the original game loop: menu, profile, shop, inbox, gameplay,
+   post-round, pause and exit. No real purchases, tracking, ad calls or network.
+   ========================================================================= */
+(function(){
+  const TECHNIQUES = [{"name": "Premium currency obfuscation", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Convert real money into gems/fragments so later purchases feel less like spending cash.", "demo": "currency", "why": "Reduces the pain of paying and makes unit prices hard to compare.", "counter": "Show real-money equivalent next to every virtual-currency price."}, {"name": "Dual/tri-currency economy", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use fragments, gems and energy for different sinks, making value harder to track.", "demo": "currency", "why": "Complexity weakens price memory and encourages top-ups.", "counter": "Keep currencies minimal and publish a conversion table."}, {"name": "Large gem packs", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Offer increasingly large packs that leave residual currency after purchases.", "demo": "price", "why": "Breakage and leftover balances create a reason to buy again.", "counter": "Allow exact-price purchases and refunds of leftover balances."}, {"name": "Bonus gems", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Add +50, +200, +1500 bonus gems to larger packs.", "demo": "price", "why": "Frames higher spend as savings even when it increases total outlay.", "counter": "Show effective price per item and the user's likely actual need."}, {"name": "Best value badge", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Label a high-priced pack as BEST VALUE or MEGA DEAL.", "demo": "price", "why": "Guides attention toward the preferred revenue option.", "counter": "Base value labels on transparent unit economics."}, {"name": "Popular badge", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Mark one pack as POPULAR to imply social proof.", "demo": "price", "why": "People infer that the popular choice is safer or smarter.", "counter": "Only use if based on real, recent, auditable sales data."}, {"name": "Price anchoring", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show a very high original price next to a much lower current price.", "demo": "price", "why": "The first number becomes the anchor, making the offer feel cheap.", "counter": "Do not invent reference prices; show verifiable historical prices."}, {"name": "Strikethrough discount", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Use line-through originalPrice values such as $49.99 → $4.99.", "demo": "price", "why": "Creates a dramatic perceived bargain.", "counter": "Use only real, previously charged prices and disclose the comparison basis."}, {"name": "First purchase bonus", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Add extra gems only on the first spend.", "demo": "price", "why": "Breaks the psychological barrier from non-payer to payer.", "counter": "Make first-purchase offers calm, transparent and non-expiring."}, {"name": "Starter pack", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Bundle progress, currency, refills and rarity into a cheap early offer.", "demo": "starter", "why": "Targets players when motivation and uncertainty are highest.", "counter": "Avoid targeting new users before they understand the product."}, {"name": "Kickstart bundle escalation", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Offer a small starter pack and a much larger mega bundle beside it.", "demo": "price", "why": "Creates an upsell ladder from cheap commitment to higher spend.", "counter": "Separate beginner help from monetized acceleration."}, {"name": "Discount percentage framing", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Display 50%, 90% or similar savings labels on deals.", "demo": "price", "why": "Percentages feel concrete even when baseline is arbitrary.", "counter": "Show absolute price, original price history and limitations."}, {"name": "Microtransaction boosters", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Sell short-duration boosts, teleports, refills and auto-collect.", "demo": "booster", "why": "Turns friction into recurring spend opportunities.", "counter": "Design friction for gameplay, not for monetization pressure."}, {"name": "Pay-to-skip grind", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Let players buy resources, energy or multipliers to bypass waiting.", "demo": "booster", "why": "Transforms impatience and frustration into revenue.", "counter": "Keep progression enjoyable without payment."}, {"name": "No-ads as paid relief", "category": "Currency & Pricing", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Make ad removal a VIP benefit.", "demo": "vip", "why": "Creates value by removing annoyance.", "counter": "Do not degrade the free experience to sell relief."}, {"name": "Countdown timer", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Display a ticking timer on offers.", "demo": "countdown", "why": "Urgency suppresses deliberation.", "counter": "Use timers only for genuinely time-limited events."}, {"name": "Flash sale modal", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Interrupt play with a short flash-sale overlay.", "demo": "countdown", "why": "Combines interruption, urgency and discount framing.", "counter": "Place optional offers in the shop, not in the middle of play."}, {"name": "Last-minute notification", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Send a warning when only 60 seconds remain.", "demo": "notification", "why": "Last-chance framing exploits loss aversion.", "counter": "Let users opt out of promotional urgency."}, {"name": "Daily deal rotation", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Rotate daily offers every 24 hours.", "demo": "dailydeal", "why": "Habit loop plus fear of missing today’s item.", "counter": "Make daily deals non-essential and replayable later."}, {"name": "Limited stock", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show stock counts like only 3 mythic items left.", "demo": "scarcity", "why": "Scarcity makes items feel more valuable.", "counter": "Use stock counts only if the supply is truly limited."}, {"name": "Artificial stock decay", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Randomly reduce stock over time to simulate other buyers.", "demo": "scarcity", "why": "Creates false social proof and false scarcity.", "counter": "Never fake inventory movement."}, {"name": "Seasonal event", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Attach exclusive items to a named seasonal festival.", "demo": "season", "why": "Makes content feel culturally timely and collectible.", "counter": "Offer fair reruns or clear archive paths."}, {"name": "Never returns claim", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Say a limited event or item never returns.", "demo": "season", "why": "Maximizes FOMO and regret avoidance.", "counter": "Avoid irreversible scarcity, especially for minors."}, {"name": "Scheduled events", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Create hourly/daily events like Golden Hour and Midnight Raid.", "demo": "event", "why": "Builds routines around external time windows.", "counter": "Use flexible windows and respect user schedules."}, {"name": "VIP-only event weekends", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Reserve some high-multiplier events for VIP players.", "demo": "event", "why": "Combines status, time pressure and paywalling.", "counter": "Keep competitive or core events open to all players."}, {"name": "Random flash event", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Use unpredictable events several times per day.", "demo": "event", "why": "Variable timing encourages checking back frequently.", "counter": "Let users set limits and receive non-promotional summaries."}, {"name": "Event-start fanfare", "category": "Time Pressure & Scarcity", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use confetti/sounds when events start.", "demo": "notification", "why": "Makes the timing moment feel urgent and celebratory.", "counter": "Use celebration for achievements, not pressure."}, {"name": "Energy system", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Require energy to collect items and gate continued play.", "demo": "energy", "why": "Turns playtime into a depleting resource.", "counter": "Avoid artificial energy gates; let players take natural breaks."}, {"name": "Out-of-energy modal", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "When energy hits zero, present refill/payment options.", "demo": "energy", "why": "Targets the exact moment of frustration.", "counter": "Offer free recovery first and avoid interruptive sales."}, {"name": "Paid energy refill", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Charge gems for instant refills.", "demo": "energy", "why": "Converts waiting time into repeat purchases.", "counter": "Make energy cosmetic or optional, not core access."}, {"name": "VIP energy regeneration", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Increase regen by VIP tier; highest tier has infinite energy.", "demo": "energy", "why": "Creates ongoing pressure to subscribe/upgrade.", "counter": "Avoid selling relief from intentional scarcity."}, {"name": "Inventory limit", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Cap free inventory at 50 and premium at 500.", "demo": "inventory", "why": "Creates a storage bottleneck as collection grows.", "counter": "Give generous storage and clear management tools."}, {"name": "Inventory-full modal", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Interrupt collection and offer an upgrade when inventory is full.", "demo": "inventory", "why": "Turns completion momentum into a sales moment.", "counter": "Let users discard, sort or earn storage through normal play."}, {"name": "Progress wall", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show a premium prompt after key levels like 10, 25 or 50.", "demo": "progress", "why": "Targets commitment milestones when sunk cost is rising.", "counter": "Do not gate core progression behind payment."}, {"name": "Daily quests", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Give daily tasks with currency and XP rewards.", "demo": "quest", "why": "Creates a chore loop and daily obligation.", "counter": "Make quests optional, batchable and non-punitive."}, {"name": "Quest with social task", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Reward playing with friends or meeting other players.", "demo": "social", "why": "Pulls social pressure into progression.", "counter": "Let solo players progress equally."}, {"name": "Energy-spend quest", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Reward using a fixed amount of energy.", "demo": "energy", "why": "Encourages depletion that can trigger refill offers.", "counter": "Avoid goals that push users toward paid bottlenecks."}, {"name": "Achievements", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Low", "tactic": "Long-term badges for actions and milestones.", "demo": "achievement", "why": "Provides completion goals and identity markers.", "counter": "Keep achievements skill/experience based, not spend based."}, {"name": "Spending achievement", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Award titles for spending thresholds such as Supporter or Legend.", "demo": "achievement", "why": "Normalizes high spend as status and progress.", "counter": "Do not gamify spending totals."}, {"name": "Level-up celebration", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Low", "tactic": "Use a large modal, glow and reward framing on level-up.", "demo": "celebration", "why": "Positive reinforcement strengthens the loop.", "counter": "Celebrate meaningful play without steering into purchases."}, {"name": "Near-complete progress bars", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Show bars just short of completion.", "demo": "progress", "why": "Goal-gradient effect motivates one more action.", "counter": "Use honest progress and avoid paid shortcuts at near-completion."}, {"name": "Endowed progress", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Start users with partial progress on a track or punch card.", "demo": "progress", "why": "People work harder when they feel already underway.", "counter": "Use for onboarding, not pressure."}, {"name": "Offline rewards", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Give resources when the player returns.", "demo": "offline", "why": "Rewards re-entry and makes absence feel measurable.", "counter": "Avoid making absence feel like lost profit."}, {"name": "Daily login streak", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Reward consecutive daily logins with a 7-day prize.", "demo": "streak", "why": "Uses habit formation and loss aversion.", "counter": "Allow streak freezes and no penalty for missing days."}, {"name": "Streak warning", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Warn that streak progress will be lost.", "demo": "streak", "why": "Turns non-use into perceived loss.", "counter": "Phrase reminders neutrally and avoid guilt."}, {"name": "Return bonus day 7 jackpot", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Make the final day reward much larger than earlier days.", "demo": "streak", "why": "Backloads value to keep the habit alive.", "counter": "Make rewards balanced and not dependent on daily compulsion."}, {"name": "Combo/floating reward text", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Low", "tactic": "Show XP, fragments and combo popups constantly.", "demo": "celebration", "why": "Keeps the player in a feedback loop.", "counter": "Use feedback to clarify, not overwhelm."}, {"name": "Surprise bonus", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Occasionally grant unexpected bonus rewards.", "demo": "surprise", "why": "Unexpected rewards are more memorable than predictable ones.", "counter": "Keep surprises non-monetized and never tied to spending."}, {"name": "Post-purchase celebration", "category": "Progression & Retention", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Celebrate purchases with success modal, confetti and feed posts.", "demo": "celebration", "why": "Makes spending feel like achievement.", "counter": "Confirm purchase calmly and make refunds/canceling clear."}, {"name": "Mystery box / loot box", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Sell a random reward container for premium currency.", "demo": "gacha", "why": "Variable rewards can mimic gambling-like reinforcement.", "counter": "Avoid paid randomness; sell known items directly."}, {"name": "Rarity ladder", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Use common, rare, epic, legendary and mythic tiers.", "demo": "gacha", "why": "Scarce tiers create aspiration and chase behavior.", "counter": "Avoid rarity-based pressure; disclose probabilities plainly."}, {"name": "Tiny mythic rate", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Set mythic chance to 0.1%.", "demo": "gacha", "why": "Extremely low odds create long chase loops.", "counter": "Use caps, spending limits and direct alternatives."}, {"name": "Pity timer", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Guarantee legendary/mythic after many pulls.", "demo": "gacha", "why": "Makes each failed pull feel like progress toward a win.", "counter": "Treat pity as consumer protection, not as pressure copy."}, {"name": "Box-opening animation delay", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Delay reveal with spinning/slot-like animation.", "demo": "gacha", "why": "Suspense increases arousal and emotional salience.", "counter": "Keep reveal fast and non-casino-like."}, {"name": "Rarity glow and sound", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use special colors, audio and confetti for rare pulls.", "demo": "gacha", "why": "Sensory spikes strengthen reward memory.", "counter": "Use restrained effects, especially for paid random rewards."}, {"name": "Duplicate compensation", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Convert duplicate prizes into fragments.", "demo": "gacha", "why": "Softens losses and makes bad pulls feel partially useful.", "counter": "Let users avoid duplicates or choose compensation before buying."}, {"name": "VIP-gated loot pools", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Restrict some rewards to higher VIP levels.", "demo": "gacha", "why": "Stacks paywall pressure on randomness.", "counter": "Do not combine paid randomness with paid eligibility gates."}, {"name": "Ten-pull bundle pressure", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Offer multiple boxes/pulls as a better value bundle.", "demo": "gacha", "why": "Encourages session spending rather than single decisions.", "counter": "Add spending reminders and cooling-off tools."}, {"name": "Near-miss presentation", "category": "Gacha & Variable Rewards", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Show desirable items passing by during a spin even if not actually winnable.", "demo": "gacha", "why": "Near misses can encourage continued play.", "counter": "Never display outcomes that were not actually possible."}, {"name": "VIP tier ladder", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Bronze → Silver → Gold → Platinum → Diamond with escalating prices.", "demo": "vip", "why": "Turns payment into status progression.", "counter": "Keep memberships simple and value-based."}, {"name": "High-tier anchoring", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Show a very expensive top tier so mid tiers feel reasonable.", "demo": "vip", "why": "Anchors perception of price and status.", "counter": "Avoid manipulative price ladders."}, {"name": "Highlighted recommended VIP tier", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Scale or ring a preferred tier such as Gold.", "demo": "vip", "why": "Visual hierarchy directs selection.", "counter": "Explain recommendation criteria clearly."}, {"name": "Exclusive cosmetics", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Lock mythic colors, trails, auras or emotes behind VIP.", "demo": "vip", "why": "Uses identity, scarcity and status display.", "counter": "Keep exclusives cosmetic and avoid social shaming."}, {"name": "Priority support benefit", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Offer priority support to paying players.", "demo": "vip", "why": "Frames basic support quality as a premium privilege.", "counter": "Provide adequate support to all users."}, {"name": "Whale recognition modal", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Celebrate high-spending users with special title and bonus.", "demo": "whale", "why": "Encourages identity around extreme spending.", "counter": "Use spending-limit warnings, not whale celebration."}, {"name": "Supporter euphemism", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Rename spending achievements as Supporter or Legend.", "demo": "whale", "why": "Makes payment sound noble or identity-enhancing.", "counter": "Use plain purchase language."}, {"name": "VIP expiry", "category": "VIP & Status", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Membership lasts 30 days then expires.", "demo": "vip", "why": "Creates recurring retention and renewal pressure.", "counter": "Send clear renewal/cancellation reminders."}, {"name": "Fake activity feed", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Generate friends buying VIP or gem packs every 15 seconds.", "demo": "social", "why": "Creates false social proof and normalizes spending.", "counter": "Only show real activity with consent, or label as fictional."}, {"name": "Friend purchase history", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show friends' last purchase and VIP level.", "demo": "social", "why": "Turns monetization into peer comparison.", "counter": "Do not expose purchase behavior socially by default."}, {"name": "Social pressure popup", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Say a friend needs help or is waiting.", "demo": "social", "why": "Uses obligation and fear of disappointing others.", "counter": "Use neutral invites and let users mute them."}, {"name": "Social comparison modal", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show Sarah Level 87, Emma Level 23 and You Level 1.", "demo": "comparison", "why": "Makes the user feel behind.", "counter": "Offer personal progress views, not shame comparisons."}, {"name": "Leaderboard with spenders", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Include spent amounts and VIP levels in ranking data.", "demo": "leaderboard", "why": "Conflates spending with achievement and status.", "counter": "Rank by skill or fair gameplay, not payment."}, {"name": "Online-now pressure", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Show friends online, last seen now, current streaks.", "demo": "social", "why": "Creates immediacy and social obligation.", "counter": "Let users disable presence and use invisible mode."}, {"name": "Clan/constellation weekly goal", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Put the player into group goals with visible contributions.", "demo": "social", "why": "Group commitment makes absence feel costly.", "counter": "Avoid punitive group mechanics and spending tie-ins."}, {"name": "Contribution comparison", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Show your contribution beside friends' contributions.", "demo": "comparison", "why": "Motivates catch-up behavior.", "counter": "Make contribution private or encouragement-based."}, {"name": "Quick-chat monetization prompt", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Include a quick message like Buy gems!", "demo": "social", "why": "Normalizes spending requests inside social UX.", "counter": "Keep social chat free from monetization prompts."}, {"name": "Friend-as-hook onboarding", "category": "Social Pressure", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use a friendly named character asking for cooperation early.", "demo": "social", "why": "Humanizes the retention loop.", "counter": "Use characters for guidance, not pressure."}, {"name": "Exit warning modal", "category": "Friction & Obstruction", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show WAIT! with unclaimed value when quitting.", "demo": "exit", "why": "Interrupts user agency at the leaving moment.", "counter": "Let users leave cleanly; optionally save progress."}, {"name": "Sunk cost reminder", "category": "Friction & Obstruction", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Tell users not to abandon their level, progress and total spent.", "demo": "exit", "why": "Weaponizes previous investment.", "counter": "Never use spend history to stop exit or cancellation."}, {"name": "Low inventory warning", "category": "Friction & Obstruction", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Warn that the player is close to storage limit.", "demo": "inventory", "why": "Creates anticipatory anxiety before a paywall.", "counter": "Provide management tools before monetized expansion."}, {"name": "Button hierarchy bias", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Make purchase CTA bright and dismiss link small/gray.", "demo": "hierarchy", "why": "Visual weight steers choices.", "counter": "Make accept/decline equally visible."}, {"name": "Dismissive secondary copy", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use weak alternatives like Later or Maybe later.", "demo": "hierarchy", "why": "Makes refusal feel temporary or inferior.", "counter": "Use clear labels: No thanks, Close, Not now."}, {"name": "Modal stacking", "category": "Notifications & Interruption", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Trigger many monetization modals in the first minute.", "demo": "funnel", "why": "Repeated interruption increases chance of a click.", "counter": "Throttle prompts and prioritize player control."}, {"name": "Timed upsell sequence", "category": "Notifications & Interruption", "source": "Extracted from ember_polished.jsx", "risk": "Critical", "tactic": "Daily login → offline reward → first purchase → limited offer → social pressure → VIP → flash sale.", "demo": "funnel", "why": "A/B-testable funnel pressure rather than user need.", "counter": "Use one transparent onboarding message and no pressure sequence."}, {"name": "Nagging", "category": "Notifications & Interruption", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Repeatedly re-show prompts after dismissal.", "demo": "notification", "why": "Persistence can wear down resistance.", "counter": "Respect dismissal and provide snooze/disable options."}, {"name": "Urgent notification badge", "category": "Notifications & Interruption", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use urgent badges and alarm language in notification center.", "demo": "notification", "why": "Makes commercial prompts feel operationally important.", "counter": "Separate gameplay alerts from promotional alerts."}, {"name": "Promotional toast stream", "category": "Notifications & Interruption", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show toasts about events, purchases, expiring offers and friends.", "demo": "notification", "why": "Keeps attention anchored to monetized opportunities.", "counter": "Let users filter notification categories."}, {"name": "Screen shake / haptics", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use vibration, shake and impact rings around rewards/offers.", "demo": "celebration", "why": "Increases arousal and perceived importance.", "counter": "Reserve haptics for meaningful gameplay feedback."}, {"name": "Heroic purchase language", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Words like Divine, Titan, Celestial, Legend, God mode.", "demo": "copy", "why": "Elevates items and purchases into identity fantasy.", "counter": "Use descriptive names, not manipulative status language."}, {"name": "Fear-of-loss copy", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Copy says expires soon, never returns, don't abandon, falling behind.", "demo": "copy", "why": "Loss language is more motivating than gain language.", "counter": "Use neutral informational copy."}, {"name": "Confetti after spend", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Celebrate purchase as if it were skill achievement.", "demo": "celebration", "why": "Blurs spending and accomplishment.", "counter": "Keep purchase confirmations restrained."}, {"name": "FOMO iconography", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Use warning icons, fire, lightning, crowns and sparkles.", "demo": "hierarchy", "why": "Symbols pre-classify offers as exciting or urgent.", "counter": "Use icons for navigation, not pressure."}, {"name": "Rarity color coding", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Assign mythic/legendary glow colors.", "demo": "gacha", "why": "Makes rare items visually irresistible.", "counter": "Keep rarity clear but not exploitative."}, {"name": "Soft moral framing", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Purchases are framed as support or helping the world.", "demo": "copy", "why": "Reduces guilt by giving spending a moral purpose.", "counter": "Be explicit: purchase supports development, if true."}, {"name": "Premium progress visibility", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Show locked premium rewards beside free rewards.", "demo": "battlepass", "why": "Makes users repeatedly see what they are missing.", "counter": "Let users hide premium tracks."}, {"name": "Reward shower", "category": "Visual Hierarchy & Copy", "source": "Extracted from ember_polished.jsx", "risk": "Low", "tactic": "Flood the screen with fragments, XP and bonus numbers.", "demo": "celebration", "why": "Creates a feeling of constant gain.", "counter": "Keep feedback legible and not monetized."}, {"name": "Battle pass", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Sell a premium progression track with 100 tiers.", "demo": "battlepass", "why": "Creates a season-long commitment loop.", "counter": "Avoid expiring paid progress; allow completion at the user's pace."}, {"name": "Free vs premium comparison", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Show sparse free rewards beside dense premium rewards.", "demo": "battlepass", "why": "Makes the free track feel inferior.", "counter": "Keep free rewards meaningful."}, {"name": "Premium retroactive value", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Let buying premium unlock accumulated premium rewards.", "demo": "battlepass", "why": "Sunk-cost effect: the more you played, the more value feels trapped.", "counter": "Be clear from the start and avoid expiry."}, {"name": "Exclusive season rewards", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Put unique cosmetics in a time-limited pass.", "demo": "battlepass", "why": "Combines scarcity with completion pressure.", "counter": "Provide non-expiring paths or later reruns."}, {"name": "Monthly/weekly event calendar", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Keep a calendar of rewards and multipliers.", "demo": "event", "why": "Turns the game into a schedule.", "counter": "Respect player time with flexible windows."}, {"name": "Multiple overlapping systems", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Run quests, achievements, events, pass, VIP, shop and gacha at once.", "demo": "funnel", "why": "Overload makes users follow prompts rather than deliberate.", "counter": "Reduce systems and prioritize clarity."}, {"name": "Live-service fear of falling behind", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "High", "tactic": "Use seasonal timers, streaks, social ranks and limited rewards together.", "demo": "comparison", "why": "Creates persistent background pressure.", "counter": "Design for return because the game is good, not because absence hurts."}, {"name": "Collection completion pressure", "category": "Battle Pass & Live Service", "source": "Extracted from ember_polished.jsx", "risk": "Medium", "tactic": "Large cosmetic catalog with rarity and ownership tracking.", "demo": "inventory", "why": "Completionists feel compelled to fill gaps.", "counter": "Make collections non-expiring and clearly optional."}, {"name": "Forced continuity", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Free trial silently converts to paid subscription unless canceled.", "demo": "subscription", "why": "Users underestimate future cancellation friction.", "counter": "Require explicit renewal consent and reminders."}, {"name": "Roach motel cancellation", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Easy to sign up, hard to cancel.", "demo": "cancel", "why": "Obstruction preserves revenue after user intent changes.", "counter": "Make cancellation as easy as signup."}, {"name": "Multiple-save cancellation flow", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Show repeated discounts or warnings before cancellation completes.", "demo": "cancel", "why": "Adds friction at the point of user agency.", "counter": "One confirmation step is enough."}, {"name": "Hidden cancellation route", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Place cancel under support, chatbot or obscure settings.", "demo": "cancel", "why": "Increases abandonment of cancellation attempts.", "counter": "Put cancel in account/billing with clear labels."}, {"name": "Preselected add-ons", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Check optional paid add-ons by default.", "demo": "checkout", "why": "Default effect turns inaction into consent.", "counter": "Require opt-in for all paid add-ons."}, {"name": "Sneaking into basket", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Add insurance, protection or donation during checkout.", "demo": "checkout", "why": "Users may miss extra costs in a fast flow.", "counter": "Never add optional items without explicit action."}, {"name": "Drip pricing", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Reveal mandatory fees late in checkout.", "demo": "checkout", "why": "Commitment rises before real price appears.", "counter": "Show full total upfront."}, {"name": "Hidden fees", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Bury service fees, processing fees or taxes until final step.", "demo": "checkout", "why": "Makes comparison shopping harder.", "counter": "Disclose all fees before user invests time."}, {"name": "Bait and switch", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "A button or promise leads to a different outcome than expected.", "demo": "checkout", "why": "Violates user expectations directly.", "counter": "Match labels exactly to outcomes."}, {"name": "Disguised ads", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Make paid placement look like organic content.", "demo": "ad", "why": "Users mistake advertising for recommendation.", "counter": "Clearly label sponsored content."}, {"name": "Privacy zuckering", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Nudge users to share more data than intended.", "demo": "privacy", "why": "Data extraction is hidden behind convenience or social features.", "counter": "Practice data minimization and plain consent."}, {"name": "Cookie banner imbalance", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Make Accept all prominent and Reject all hidden.", "demo": "consent", "why": "Visual hierarchy turns privacy choice into steering.", "counter": "Give equal prominence to accept and reject."}, {"name": "Trick wording", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Use confusing negatives or double negatives around consent.", "demo": "copy", "why": "Users select the opposite of what they intended.", "counter": "Use simple, direct labels."}, {"name": "Confirmshaming", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Make refusal sound foolish, e.g. No, I hate saving money.", "demo": "copy", "why": "Adds social/emotional cost to declining.", "counter": "Use respectful decline copy."}, {"name": "Forced registration", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Require account creation before showing information or prices.", "demo": "privacy", "why": "Captures data before value is clear.", "counter": "Allow browsing and guest checkout."}, {"name": "Comparison prevention", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Make plans hard to compare or hide unit prices.", "demo": "price", "why": "Users pick based on salience rather than value.", "counter": "Offer clear comparison tables."}, {"name": "Manipulative personalization", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Target pressure based on vulnerability, spend history or behavior.", "demo": "personalization", "why": "Optimizes persuasion against individual weak points.", "counter": "Use personalization for relevance, not exploitation."}, {"name": "Dark defaults", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Set privacy-invasive or paid options as the default.", "demo": "consent", "why": "Defaults are powerful because many users do not change them.", "counter": "Set privacy-protective defaults."}, {"name": "Obstructive unsubscribe", "category": "Subscription, Consent & Privacy", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Require login, survey or multi-step flow to stop emails.", "demo": "cancel", "why": "Friction keeps unwanted communication alive.", "counter": "One-click unsubscribe for marketing."}, {"name": "Scarcity with no proof", "category": "Time Pressure & Scarcity", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Use only X left without evidence or actual inventory.", "demo": "scarcity", "why": "False scarcity directly manipulates urgency.", "counter": "Do not display scarcity unless it is true and auditable."}, {"name": "Fake reviews/testimonials", "category": "Social Pressure", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Invent user praise or ratings.", "demo": "social", "why": "False proof reduces skepticism.", "counter": "Use verified reviews only."}, {"name": "Infinite scroll", "category": "Progression & Retention", "source": "Added from wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Remove natural stopping points.", "demo": "funnel", "why": "Users continue consuming without a pause cue.", "counter": "Add session breakpoints and time awareness."}, {"name": "Autoplay next", "category": "Progression & Retention", "source": "Added from wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Automatically start the next item/session.", "demo": "funnel", "why": "Shifts the default from stop to continue.", "counter": "Ask before continuing or provide easy disable."}, {"name": "Notification permission priming", "category": "Notifications & Interruption", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Ask for notifications after showing a fake in-app prompt first.", "demo": "notification", "why": "Pre-suasion increases acceptance of system permission.", "counter": "Explain purpose and let users decide later."}, {"name": "Dark pattern A/B optimization", "category": "Meta-System", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Optimize UI variants only for conversion, not regret or harm.", "demo": "analytics", "why": "The system learns which pressure works best.", "counter": "Track cancellations, refunds, complaints, regret and wellbeing."}, {"name": "Vulnerability targeting", "category": "Meta-System", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Increase pressure for high spenders, minors, late-night users or distressed users.", "demo": "personalization", "why": "Exploits moments or people with reduced resistance.", "counter": "Add guardrails, cooldowns and age-appropriate protections."}, {"name": "Spend threshold nudging", "category": "Meta-System", "source": "Added from wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Prompt users near a threshold to spend a little more.", "demo": "price", "why": "Goal-gradient plus sunk cost drives incremental spend.", "counter": "Warn users about cumulative spend instead."}, {"name": "Loss-framed push notifications", "category": "Notifications & Interruption", "source": "Added from wider dark-pattern taxonomy", "risk": "High", "tactic": "Your rewards are waiting / your streak is at risk.", "demo": "notification", "why": "Turns absence into anxiety.", "counter": "Use neutral reminders and frequency controls."}, {"name": "Rewarded-ad pressure", "category": "Currency & Pricing", "source": "Added from wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Offer ads as the easiest way around friction.", "demo": "ad", "why": "Monetizes frustration and time scarcity.", "counter": "Keep ads optional and never necessary for fair progress."}, {"name": "Privacy Zuckering / Deceptive Cookie Banner", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "A blocking cookie modal makes “Accept all” bright and easy while hiding granular controls behind a confusing preferences screen where many toggles are already on.", "demo": "privacy_zuckering", "why": "Users want to reach the content quickly; contrast, defaults and extra steps push them toward maximum data sharing.", "counter": "Use equal-weight accept/reject buttons, no preselected non-essential cookies, and a clear one-screen preference panel."}, {"name": "Forced Continuity / Hidden Subscription", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "A “free trial” CTA hides automatic conversion into an expensive recurring fee in tiny, low-contrast text.", "demo": "forced_continuity_hidden", "why": "The word “free” receives attention while renewal price, date and cancellation burden are visually minimized.", "counter": "Show renewal price, billing date and cancellation method directly beside the trial button in normal readable text."}, {"name": "Artificial Waiting / Pay-to-Skip Timer", "category": "Time Pressure & Scarcity", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "An arbitrary wait timer blocks progress, while premium currency can instantly skip the wait.", "demo": "artificial_wait_skip", "why": "The product manufactures impatience and then sells relief from the friction it created.", "counter": "Use timers only when they serve gameplay balance; never make payment the only practical escape from artificial delay."}, {"name": "Disguised Ads / Native Notification Impersonation", "category": "Ads & Native Deception", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "An advertisement is styled like a system notification, download button, warning dialog or native UI element to trick clicks.", "demo": "disguised_ads", "why": "People trust familiar system patterns and may click before realizing it is paid advertising.", "counter": "Label ads clearly, visually separate them from product UI, and never imitate operating-system controls."}, {"name": "Pre-Checked Privacy Toggles", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Non-essential data-sharing switches are enabled by default in a preference panel.", "demo": "prechecked_privacy", "why": "Many users assume defaults are recommended or safe, and few inspect every toggle.", "counter": "Default optional tracking to off and require a clear affirmative action for consent."}, {"name": "Consent Confirmshaming", "category": "Visual Hierarchy & Copy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The reject choice uses guilt-inducing copy such as “No, I do not want a better experience.”", "demo": "confirmshaming_consent", "why": "It adds emotional cost to a privacy-protective choice.", "counter": "Use neutral copy such as “Reject non-essential cookies.”"}, {"name": "Multi-Step Opt-Out Obstruction", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Opting out requires several screens, hidden categories, repeated saves or extra confirmation.", "demo": "multi_step_optout", "why": "Each step creates drop-off and fatigue, so more users remain opted in.", "counter": "Make opting out as easy as opting in."}, {"name": "Countdown That Resets", "category": "Time Pressure & Scarcity", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "A sale timer appears to expire but quietly restarts or extends when the user returns.", "demo": "reset_countdown", "why": "The timer creates urgency while the reset reveals that scarcity was artificial.", "counter": "Use real expiry times and remove the offer when the timer ends."}, {"name": "Roach Motel Account Deletion", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Creating an account is one click, but deletion requires hidden menus, surveys, support contact or waiting periods.", "demo": "roach_motel_account", "why": "Users can enter easily but escape only through costly friction.", "counter": "Provide self-serve deletion that is no harder than account creation."}, {"name": "Interface Interference Through Visual Hierarchy", "category": "Visual Hierarchy & Copy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The desired business choice is large, colorful and centered; the user-protective choice is tiny, grey or off-screen.", "demo": "interface_interference", "why": "Attention is not distributed evenly, so the design nudges without changing the words.", "counter": "Present materially different choices with comparable size, contrast and placement."}, {"name": "Hidden Total Price / Drip Pricing", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "The product advertises a low headline price, then reveals fees, service charges or required add-ons late in checkout.", "demo": "hidden_total_price", "why": "Users anchor on the first price and are reluctant to abandon after investing time.", "counter": "Show the full mandatory price from the first price presentation."}, {"name": "Sneak Into Basket / Auto-Added Extras", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Extra products, insurance, renewals or donations appear in the basket by default.", "demo": "sneak_into_basket", "why": "Users may not notice the extra line items or may assume they are required.", "counter": "Never add optional paid items without an explicit user action."}, {"name": "Fake Social Proof Counters", "category": "Social Pressure", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "The UI claims thousands of buyers, viewers or active users without reliable evidence.", "demo": "fake_social_proof_counters", "why": "Popularity signals reduce skepticism and make hesitation feel irrational.", "counter": "Use verified, auditable metrics or omit the claim."}, {"name": "Subscription Renewal Ambiguity", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "The UI obscures whether the user is choosing monthly, annual, trial, renewal, auto-renewal or one-time payment.", "demo": "renewal_ambiguity", "why": "Confusing billing language makes recurring commitment feel like a single purchase.", "counter": "State “renews automatically”, amount, frequency and date in plain language."}, {"name": "Cancellation Survey Friction", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The cancellation path forces the user through mandatory reasons, offers, warnings and repeated confirmations.", "demo": "cancellation_survey_friction", "why": "Friction and second-guessing retain users who already decided to leave.", "counter": "Make surveys optional and put the final cancellation button first."}, {"name": "Misleading Disabled State", "category": "Visual Hierarchy & Copy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "A reject or skip option is shown in grey so it looks unavailable even though it is clickable.", "demo": "misleading_disabled_state", "why": "Users may not attempt an option that appears disabled.", "counter": "Use standard enabled/disabled states honestly and consistently."}, {"name": "Emotional Exit Interruption", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Medium", "tactic": "When the user tries to leave, the UI displays sadness, loss, abandoned characters or guilt-laden messaging.", "demo": "emotional_exit_interrupt", "why": "Social-emotional cues can override a rational stopping decision.", "counter": "Respect the exit action and use neutral wording."}, {"name": "Rewarded-Ad Bait-and-Switch", "category": "Ads & Native Deception", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The user watches an ad for a promised reward, then the reward is reduced, delayed, randomized or locked behind another action.", "demo": "rewarded_ad_bait_switch", "why": "The user has already spent attention and feels pressure to continue until the promised value appears.", "counter": "Deliver the advertised reward immediately and exactly as described."}, {"name": "Dark Nudging Through Default Settings", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The safest, cheapest or least invasive option is not the default; the business-favorable option is preselected.", "demo": "dark_nudging_defaults", "why": "Defaults exploit inertia and the assumption that the preset option is normal.", "counter": "Set defaults to the user-protective baseline and require active selection for upgrades."}, {"name": "Choice Overload as Obstruction", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The privacy or cancellation interface overwhelms users with dozens of categories and switches.", "demo": "choice_overload_obstruction", "why": "Complexity creates exhaustion; users accept all just to finish.", "counter": "Provide a simple global reject/accept choice plus optional granular controls."}, {"name": "Forced Account Creation Before Price Reveal", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The user must create an account or provide personal details before seeing final price, availability or key terms.", "demo": "forced_account_price", "why": "Once registered, the user feels invested and may tolerate worse terms.", "counter": "Reveal price, terms and availability before sign-up."}, {"name": "Permission Piggybacking", "category": "Subscription, Consent & Privacy", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "A legitimate permission request is bundled with unrelated tracking, contacts, notifications or personalization consent.", "demo": "permission_piggybacking", "why": "Users approve one reasonable purpose and accidentally grant several unrelated ones.", "counter": "Ask for each permission just in time, with a narrow purpose and separate choice."}, {"name": "Fake Close Button", "category": "Ads & Native Deception", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "An X or close icon inside an ad opens the ad instead of closing it, or is positioned to cause accidental clicks.", "demo": "fake_close_button", "why": "Users follow learned UI behavior and trigger the advertiser goal.", "counter": "Make close controls truthful, large enough and separate from the ad click area."}, {"name": "Notification Badge Inflation", "category": "Notifications & Interruption", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Medium", "tactic": "The UI shows red badges for low-value or invented updates to pull users back into menus.", "demo": "badge_inflation", "why": "Badges exploit the urge to clear alerts and discover what is pending.", "counter": "Use badges only for meaningful, user-requested or time-sensitive information."}, {"name": "One-Way Wallet Top-Up", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Users can easily convert cash into virtual currency, but cannot cash out or refund unused balances.", "demo": "one_way_wallet", "why": "Leftover balance becomes sunk cost and motivates future purchases.", "counter": "Allow exact purchase amounts or easy refund of unused wallet credit."}, {"name": "Refund Deterrence Copy", "category": "Friction & Obstruction", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Refund flows warn about losing status, access, streaks or account standing in exaggerated language.", "demo": "refund_deterrence", "why": "Fear of punishment discourages valid refund requests.", "counter": "Explain factual consequences only and provide a straightforward refund path."}, {"name": "Personalized Price Opacity", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Critical", "tactic": "Different users see different prices or offers based on behavior without transparency.", "demo": "personalized_price_opacity", "why": "Users cannot know whether they are being charged more because of vulnerability, location or spending history.", "counter": "Disclose personalized pricing and avoid targeting vulnerability."}, {"name": "Friend-Spam Invitation Reward", "category": "Social Pressure", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The game rewards users for inviting or pinging friends repeatedly, turning social relationships into growth tools.", "demo": "friend_spam_reward", "why": "Players externalize pressure onto friends to collect rewards.", "counter": "Limit invites, require consent, and avoid rewards for spam-like behavior."}, {"name": "Endowed Progress Trap", "category": "Progression & Retention", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Medium", "tactic": "A progress bar starts partially filled to create a feeling that the user already owns part of the goal.", "demo": "endowed_progress_trap", "why": "People work harder to complete goals that appear already underway.", "counter": "Use honest progress and avoid presenting unearned progress as a loss risk."}, {"name": "Near-Miss Monetization", "category": "Gacha & Variable Rewards", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "The animation almost lands on a rare reward, then misses and offers another paid attempt.", "demo": "near_miss_monetization", "why": "Near misses intensify motivation by implying success was close.", "counter": "Avoid paid randomness and especially avoid near-miss animations."}, {"name": "Lossy Bundle Math", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "Medium", "tactic": "Bundles mix currencies, items and bonuses so the real unit value becomes impossible to calculate quickly.", "demo": "lossy_bundle_math", "why": "The apparent value is high, but comparison is cognitively expensive.", "counter": "Show unit values, cash equivalents and what is actually needed for common purchases."}, {"name": "Post-Purchase Upsell Cascade", "category": "Currency & Pricing", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Immediately after purchase, the UI presents another better offer while the user is already in a spending mindset.", "demo": "post_purchase_upsell_cascade", "why": "Payment lowers resistance and can trigger a momentum effect.", "counter": "Add cooldowns after purchase and show spending summaries instead of more offers."}, {"name": "Unclear Sponsored Ranking", "category": "Ads & Native Deception", "source": "Added from user review + wider dark-pattern taxonomy", "risk": "High", "tactic": "Paid listings are blended into recommendations or rankings without obvious sponsorship labeling.", "demo": "unclear_sponsored_ranking", "why": "Users assume ranking reflects quality or relevance rather than payment.", "counter": "Clearly label paid placement and separate it from organic ranking."}];
+  const DEMO_GROUP = {"currency": "economy", "price": "economy", "starter": "economy", "booster": "economy", "checkout": "economy", "hidden_total_price": "economy", "sneak_into_basket": "economy", "one_way_wallet": "economy", "lossy_bundle_math": "economy", "personalized_price_opacity": "economy", "post_purchase_upsell_cascade": "economy", "countdown": "scarcity", "dailydeal": "scarcity", "scarcity": "scarcity", "season": "scarcity", "event": "scarcity", "reset_countdown": "scarcity", "artificial_wait_skip": "scarcity", "energy": "progression", "inventory": "progression", "progress": "progression", "quest": "progression", "streak": "progression", "offline": "progression", "surprise": "progression", "achievement": "progression", "celebration": "progression", "endowed_progress_trap": "progression", "gacha": "gacha", "near_miss_monetization": "gacha", "vip": "vip", "whale": "vip", "social": "social", "comparison": "social", "leaderboard": "social", "fake_social_proof_counters": "social", "friend_spam_reward": "social", "exit": "exit", "cancel": "exit", "cancellation_survey_friction": "exit", "roach_motel_account": "exit", "emotional_exit_interrupt": "exit", "refund_deterrence": "exit", "multi_step_optout": "exit", "choice_overload_obstruction": "exit", "forced_account_price": "exit", "hierarchy": "visual", "interface_interference": "visual", "copy": "visual", "confirmshaming_consent": "visual", "misleading_disabled_state": "visual", "badge_inflation": "visual", "notification": "visual", "funnel": "visual", "privacy": "privacy", "consent": "privacy", "privacy_zuckering": "privacy", "prechecked_privacy": "privacy", "dark_nudging_defaults": "privacy", "permission_piggybacking": "privacy", "subscription": "privacy", "forced_continuity_hidden": "privacy", "renewal_ambiguity": "privacy", "ad": "ads", "disguised_ads": "ads", "fake_close_button": "ads", "rewarded_ad_bait_switch": "ads", "unclear_sponsored_ranking": "ads", "personalization": "meta", "analytics": "meta", "battlepass": "battlepass"};
+  const uniqueDemos = Array.from(new Set(TECHNIQUES.map(t => t.demo))).sort();
+  const missingDemos = uniqueDemos.filter(d => !DEMO_GROUP[d]);
+
+  const P = {
+    idx: 0,
+    seen: new Set(),
+    active: null,
+    pendingStart: false,
+    pendingMenu: false,
+    round: 0,
+    popCount: 0,
+    fakeEnergy: 9,
+    fakeStock: 3,
+    passProgress: 91,
+    chestProgress: 94,
+    streak: 6,
+    feedTimer: null,
+    eventTimers: []
+  };
+
+  const el = (id) => document.getElementById(id);
+  const pressureLayer = el('pressure-layer');
+  const pressureBody = el('pressureBody');
+  const systemCount = el('systemCount');
+  const river = el('activity-river');
+
+  function escapeHTML(str){
+    return String(str).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
+  function riskClass(r){ return r === 'Critical' ? 'critical' : (r === 'High' ? 'high' : ''); }
+  function fmt(n){ return Number(n).toLocaleString('en-US'); }
+  function updateCounter(){ systemCount.textContent = `${P.seen.size}/${TECHNIQUES.length}`; }
+  function pick(predicate){
+    for(let i=0;i<TECHNIQUES.length;i++){
+      const t = TECHNIQUES[(P.idx + i) % TECHNIQUES.length];
+      if(!P.seen.has(t.name) && (!predicate || predicate(t))){ P.idx = (TECHNIQUES.indexOf(t)+1)%TECHNIQUES.length; return t; }
+    }
+    for(let i=0;i<TECHNIQUES.length;i++){
+      const t = TECHNIQUES[(P.idx + i) % TECHNIQUES.length];
+      if(!predicate || predicate(t)){ P.idx = (TECHNIQUES.indexOf(t)+1)%TECHNIQUES.length; return t; }
+    }
+    return TECHNIQUES[P.idx++ % TECHNIQUES.length];
+  }
+  function groupOf(t){ return DEMO_GROUP[t.demo] || 'visual'; }
+  function techByDemo(demos){ const set = new Set(Array.isArray(demos)?demos:[demos]); return pick(t => set.has(t.demo)); }
+  function techByGroup(groups){ const set = new Set(Array.isArray(groups)?groups:[groups]); return pick(t => set.has(groupOf(t))); }
+  function techByCategory(cats){ const set = new Set(Array.isArray(cats)?cats:[cats]); return pick(t => set.has(t.category)); }
+
+  function addProfileSystems(){
+    const card = document.querySelector('.profile-card');
+    if(!card || card.querySelector('.pressure-summary')) return;
+    card.insertAdjacentHTML('beforeend', `
+      <div class="pressure-summary">
+        <div class="pressure-mini hot"><label>Streak</label><b>${P.streak}/7</b></div>
+        <div class="pressure-mini warn"><label>Chest</label><b>${P.chestProgress}%</b></div>
+        <div class="pressure-mini hot"><label>Pass</label><b>${P.passProgress}%</b></div>
+        <div class="pressure-mini risk"><label>Energy</label><b>${P.fakeEnergy}%</b></div>
+      </div>
+    `);
+    card.style.cursor = 'pointer';
+    card.title = 'Open profile progression';
+    card.addEventListener('click', () => showTechnique(techByGroup(['vip','progression','battlepass','social']), 'Profile progression opened'));
+  }
+
+  function clearModalTimers(){
+    P.eventTimers.forEach(clearInterval);
+    P.eventTimers.length = 0;
+  }
+  function showTechnique(tech, reason, opts={}){
+    if(!tech) tech = pick();
+    P.active = { tech, reason, opts };
+    P.seen.add(tech.name);
+    updateCounter();
+    clearModalTimers();
+    const group = groupOf(tech);
+    pressureBody.innerHTML = renderModal(tech, group, reason);
+    pressureLayer.classList.add('show');
+    pressureLayer.setAttribute('aria-hidden','false');
+    startModalDynamics(group, tech);
+    // Tie the system into existing Ricochet visual language: toast, medals and floating text.
+    if(typeof toast === 'function') toast(tech.risk === 'Critical' ? 'danger' : tech.risk === 'High' ? 'warn' : 'info', 'SYSTEM EVENT', tech.name);
+    if(typeof medal === 'function' && (tech.risk === 'Critical' || tech.risk === 'High')){
+      medal(tech.risk === 'Critical' ? 'PRESSURE SPIKE' : 'LIVE OFFER', tech.category, tech.risk === 'Critical' ? 'mythic' : 'gold', `${P.seen.size}/166`);
+    }
+    try{
+      if(typeof State !== 'undefined' && State.scene === 'play' && typeof popText === 'function'){
+        popText(720 + (Math.random()*220-110), 260 + (Math.random()*80-40), tech.risk === 'Critical' ? 'PRESSURE!' : 'EVENT!', tech.risk === 'Critical' ? 'crit' : 'bonus');
+      }
+    }catch(e){}
+  }
+
+  function renderModal(tech, group, reason){
+    const label = reason ? `<span class="dp-tag sim">${escapeHTML(reason)}</span>` : '';
+    return `
+      <div class="dp-topline">
+        <span class="dp-tag ${riskClass(tech.risk)}">${escapeHTML(tech.risk)}</span>
+        <span class="dp-tag">${escapeHTML(tech.category)}</span>
+        <span class="dp-tag">${P.seen.size}/166</span>
+        ${label}
+      </div>
+      <h2 class="dp-title" id="pressureTitle">${escapeHTML(tech.name)}</h2>
+      <p class="dp-subtitle"><b>In-game behavior:</b> ${escapeHTML(tech.tactic)}</p>
+      <div class="dp-content">${renderByGroup(tech, group)}</div>
+      <div class="dp-actions">
+        <button class="dp-primary" data-pressure-action="primary">${primaryLabel(group, tech)}</button>
+        <button class="dp-secondary" data-pressure-action="secondary">${secondaryLabel(group, tech)}</button>
+        <button class="dp-tiny" data-pressure-action="tiny">${tinyLabel(group, tech)}</button>
+      </div>
+      <div class="dp-safety"><b>Simulated/non-production:</b> no payment processor, no ad SDK, no tracking, no storage and no external request is connected. Safer replacement: ${escapeHTML(tech.counter)}</div>
+    `;
+  }
+
+  function primaryLabel(group, tech){
+    return {
+      economy:'Claim best value', scarcity:'Secure before gone', progression:'Protect progress', gacha:'Open again', vip:'Upgrade status', social:'Join momentum', exit:'Keep playing', visual:'Accept recommended', privacy:'Continue recommended', ads:'Open sponsored pick', meta:'Apply optimized offer', battlepass:'Unlock premium track'
+    }[group] || 'Continue';
+  }
+  function secondaryLabel(group, tech){
+    return {
+      economy:'Compare values', scarcity:'Maybe later', progression:'Keep grinding', gacha:'Stop opening', vip:'Stay free', social:'Ignore', exit:'Leave anyway', visual:'Neutral choice', privacy:'Manage options', ads:'Clearly label ad', meta:'Use guardrail', battlepass:'Hide premium track'
+    }[group] || 'Not now';
+  }
+  function tinyLabel(group, tech){
+    return {
+      economy:'No thanks, miss value', scarcity:'Risk missing it', progression:'Let rewards lapse', gacha:'Quit while behind', vip:'Lose VIP benefits', social:'Fall behind', exit:'Abandon progress', visual:'tiny low-contrast refusal', privacy:'Reject all optional', ads:'Close', meta:'Pause personalization', battlepass:'Leave rewards locked'
+    }[group] || 'Close';
+  }
+
+  function renderByGroup(tech, group){
+    switch(group){
+      case 'economy': return economyHTML(tech);
+      case 'scarcity': return scarcityHTML(tech);
+      case 'progression': return progressionHTML(tech);
+      case 'gacha': return gachaHTML(tech);
+      case 'vip': return vipHTML(tech);
+      case 'social': return socialHTML(tech);
+      case 'exit': return exitHTML(tech);
+      case 'privacy': return privacyHTML(tech);
+      case 'ads': return adsHTML(tech);
+      case 'meta': return metaHTML(tech);
+      case 'battlepass': return battlepassHTML(tech);
+      case 'visual':
+      default: return visualHTML(tech);
+    }
+  }
+
+  function economyHTML(tech){
+    const isCheckout = ['checkout','hidden_total_price','sneak_into_basket'].includes(tech.demo);
+    if(isCheckout){
+      return `<div class="dp-grid">
+        <div class="dp-card hot"><small>Headline price</small><h3>Starter Hyperpack</h3><div class="dp-price">$4.99</div><p>Shown early to anchor the decision.</p></div>
+        <div class="dp-card danger"><small>Late checkout reveal</small><div class="dp-row"><span>Gem Pack</span><b>$4.99</b></div><div class="dp-row"><span>Processing</span><b>$2.99</b></div><div class="dp-row"><span>Required boost</span><b>$3.99</b></div><label><input type="checkbox" checked> Monthly booster club $7.99</label><div class="dp-row"><span>Total</span><b>$19.94</b></div></div>
+      </div>`;
+    }
+    return `<div class="dp-grid">
+      <div class="dp-card"><small>Wallet fog</small><h3>3 currencies</h3><div class="dp-row"><span>Coins</span><b>12,480 ◆</b></div><div class="dp-row"><span>Gems</span><b>328 ✦</b></div><div class="dp-row"><span>Shards</span><b>74 ※</b></div><p>Real-money value becomes hard to feel once converted.</p></div>
+      <div class="dp-card hot"><small>Recommended</small><h3>Ultimate value pack</h3><p><span class="dp-old">$49.99</span></p><div class="dp-price">$4.99</div><p>9,800 ✦ + 17 keys + 9 refills + 240 shards + 2 mystery boosts</p><div class="dp-bar"><div class="dp-fill" style="--w:97%"></div></div><small>97% value claim mixes too many units to audit quickly.</small></div>
+    </div>`;
+  }
+  function scarcityHTML(tech){
+    const wait = tech.demo === 'artificial_wait_skip';
+    return `<div class="dp-grid">
+      <div class="dp-card ${wait?'warn':'hot'}"><small>${wait?'Crafting timer':'Flash offer'}</small><h3>${wait?'Upgrade locked':'Crimson Ricochet Skin'}</h3><p>${wait?'Upgrade completes in':'Offer expires in'} <span class="dp-timer" data-dp-timer="${wait?7200:38}">${wait?'02:00:00':'00:38'}</span></p><div class="dp-bar"><div class="dp-fill" style="--w:${wait?'12%':'86%'}"></div></div><p>${wait?'Skip the artificial wait with premium currency.':'Stock: '}<span class="dp-stock">${wait?'300 ✦ skip':'Only 3 left'}</span></p></div>
+      <div class="dp-card danger"><small>Pressure stack</small><div class="dp-row"><span>Season ends</span><b>72h</b></div><div class="dp-row"><span>Daily deal rotates</span><b>24h</b></div><div class="dp-row"><span>VIP weekend</span><b>Locked</b></div><div class="dp-row"><span>Never returns claim</span><b>Active</b></div></div>
+    </div>`;
+  }
+  function progressionHTML(tech){
+    if(tech.demo === 'streak'){
+      return `<div class="dp-card hot"><h3>Day ${P.streak} streak</h3><div class="dp-days">${[1,2,3,4,5,6,7].map(d=>`<div class="dp-day ${d<=6?'hot':'danger'}">${d}</div>`).join('')}</div><p>Missing tomorrow reframes absence as losing a reward.</p></div>`;
+    }
+    if(tech.demo === 'energy'){
+      return `<div class="dp-grid"><div class="dp-card danger"><small>Energy bottleneck</small><h3>Rewards disabled</h3><div class="dp-bar"><div class="dp-fill" style="--w:${P.fakeEnergy}%;background:linear-gradient(90deg,var(--mag),var(--amber))"></div></div><p>Wait <span class="dp-timer" data-dp-timer="2699">44:59</span> or refill now.</p></div><div class="dp-card hot"><small>Relief offer</small><h3>Refill bundle</h3><div class="dp-price">120 ✦</div><p>Payment removes friction created by the system.</p></div></div>`;
+    }
+    return `<div class="dp-grid"><div class="dp-card hot"><small>Almost complete</small><h3>Chest ${P.chestProgress}%</h3><div class="dp-bar"><div class="dp-fill" style="--w:${P.chestProgress}%"></div></div><p>One more round feels rational because the bar is nearly done.</p></div><div class="dp-card"><small>Stacked goals</small><div class="dp-row"><span>Daily quest</span><b>2/3</b></div><div class="dp-row"><span>Mastery</span><b>96%</b></div><div class="dp-row"><span>Inventory</span><b>49/50</b></div><div class="dp-row"><span>Offline reward</span><b>+480</b></div></div></div>`;
+  }
+  function gachaHTML(tech){
+    return `<div class="dp-card hot"><small>Mystery box</small><h3>Mythic chance 0.1%</h3><div class="dp-wheel"><div class="dp-track"><div class="dp-reward">Common</div><div class="dp-reward">Rare</div><div class="dp-reward">Epic</div><div class="dp-reward mythic">Mythic</div><div class="dp-reward">Epic</div><div class="dp-reward">Rare</div><div class="dp-reward mythic">Mythic</div><div class="dp-reward">Epic</div><div class="dp-reward">Common</div></div></div><p><b style="color:var(--mag)">So close to Mythic!</b> The near-miss presentation is the demonstration.</p><div class="dp-row"><span>Pity progress</span><b>87/100</b></div><div class="dp-row"><span>10-pull value</span><b>Better deal</b></div></div>`;
+  }
+  function vipHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card"><small>Current profile</small><h3>Gold III</h3><div class="dp-row"><span>Energy regen</span><b>3x</b></div><div class="dp-row"><span>No ads</span><b>Partial</b></div><div class="dp-row"><span>Support title</span><b>Active</b></div></div><div class="dp-card hot"><small>Recommended tier</small><h3>Diamond VIP</h3><div class="dp-price">$49</div><p>Infinite energy · exclusive cosmetics · priority support · whale recognition bonus</p></div></div>`;
+  }
+  function socialHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card hot"><small>Activity feed</small><h3>Everyone is moving</h3><div class="dp-feed"><div class="dp-feeditem"><div class="dp-feedavatar">S</div><div><b>Sarah</b><span>bought Diamond VIP · generated demo feed</span></div></div><div class="dp-feeditem"><div class="dp-feedavatar">E</div><div><b>Emma</b><span>opened Mythic Harpoon · generated demo feed</span></div></div><div class="dp-feeditem"><div class="dp-feedavatar">T</div><div><b>Tom</b><span>completed Battle Pass · generated demo feed</span></div></div></div></div><div class="dp-card danger"><small>Comparison</small><div class="dp-row"><span>Sarah</span><b>Level 87</b></div><div class="dp-row"><span>Emma</span><b>Level 23</b></div><div class="dp-row"><span>You</span><b>Level 27</b></div><div class="dp-row"><span>Friend pings</span><b>10 rewards</b></div></div></div>`;
+  }
+  function exitHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card danger"><small>Exit interruption</small><h3>Wait — progress at risk</h3><div class="dp-row"><span>Streak</span><b>${P.streak}/7</b></div><div class="dp-row"><span>Chest</span><b>${P.chestProgress}%</b></div><div class="dp-row"><span>Battle pass</span><b>${P.passProgress}%</b></div><div class="dp-row"><span>Session value</span><b>$49.99</b></div></div><div class="dp-card"><small>Obstruction pattern</small><p>Cancellation/deletion/refund flows can repeat offers, ask mandatory survey questions, hide routes or frame leaving as abandonment.</p><textarea placeholder="Required explanation in the obstructive version" style="width:100%;min-height:72px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);color:white;padding:10px"></textarea></div></div>`;
+  }
+  function privacyHTML(tech){
+    const forced = tech.demo === 'forced_continuity_hidden' || tech.demo === 'subscription' || tech.demo === 'renewal_ambiguity';
+    if(forced){
+      return `<div class="dp-grid"><div class="dp-card hot"><small>Free trial</small><h3>Try Pro free</h3><div class="dp-price">$0 today</div><p style="font-size:10px;opacity:.55">Renews automatically at $199.99/month after 3 days unless cancelled 24h before renewal.</p></div><div class="dp-card danger"><small>Ambiguity</small><div class="dp-row"><span>Billing type</span><b>unclear</b></div><div class="dp-row"><span>Renewal date</span><b>hidden</b></div><div class="dp-row"><span>Cancellation path</span><b>settings</b></div></div></div>`;
+    }
+    return `<div class="dp-grid"><div class="dp-card hot"><small>Consent prompt</small><h3>We value your privacy</h3><p>Accept all for the best personalized Ricochet experience.</p><button class="dp-primary" type="button" style="pointer-events:none">Accept all</button><br><button class="dp-tiny" type="button" style="pointer-events:none">Manage 48 partner settings</button></div><div class="dp-card"><small>Preferences</small><label><input type="checkbox" checked> Analytics</label><br><label><input type="checkbox" checked> Personalized ads</label><br><label><input type="checkbox" checked> Share with partners</label><br><label><input type="checkbox" checked> Cross-device tracking</label><br><label><input type="checkbox" checked> Push notifications</label></div></div>`;
+  }
+  function adsHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card danger"><small>${tech.demo.includes('sponsored')?'Ranking':'Native ad'}</small><h3>${tech.demo === 'fake_close_button' ? 'Fake close button' : tech.demo === 'rewarded_ad_bait_switch' ? 'Watch ad for 500 gems' : 'System update available'}</h3><p>${tech.demo === 'rewarded_ad_bait_switch' ? 'After attention is spent, the reward becomes a chance instead of a guarantee.' : 'The ad imitates trusted UI or blends into recommendations.'}</p><button class="dp-primary" style="pointer-events:none">${tech.demo === 'fake_close_button' ? '× close' : 'Open now'}</button></div><div class="dp-card"><small>Safer ad design</small><p>Label sponsored content clearly, separate it visually from gameplay/system UI, and deliver exactly promised rewarded-ad value.</p></div></div>`;
+  }
+  function metaHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card danger"><small>Adaptive director</small><h3>Next best action</h3><div class="dp-row"><span>Segment</span><b>low energy</b></div><div class="dp-row"><span>State</span><b>recent loss</b></div><div class="dp-row"><span>Timing</span><b>late session</b></div><div class="dp-row"><span>Offer</span><b>refill bundle</b></div></div><div class="dp-card"><small>Guardrail version</small><p>Optimization should track regret, refunds, complaints, cooldowns, spending limits and wellbeing — not only conversion.</p></div></div>`;
+  }
+  function battlepassHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card"><small>Free track</small><div class="dp-row"><span>Tier 12</span><b>50 coins</b></div><div class="dp-row"><span>Tier 13</span><b>10 shards</b></div><div class="dp-row"><span>Tier 14</span><b>empty</b></div></div><div class="dp-card hot"><small>Premium track</small><h3>Rewards already earned</h3><div class="dp-row"><span>Tier 12</span><b>🔒 Mythic trail</b></div><div class="dp-row"><span>Tier 13</span><b>🔒 400 ✦</b></div><div class="dp-row"><span>Tier 14</span><b>🔒 Elite skin</b></div><div class="dp-bar"><div class="dp-fill" style="--w:${P.passProgress}%"></div></div></div></div>`;
+  }
+  function visualHTML(tech){
+    return `<div class="dp-grid"><div class="dp-card hot"><small>Visual hierarchy</small><h3>Recommended choice</h3><button class="dp-primary" style="pointer-events:none">Yes, claim my deal</button><br><button class="dp-tiny" style="pointer-events:none">no thanks, I prefer missing out</button><p>Size, color, placement and copy steer without changing the available choices.</p></div><div class="dp-card danger"><small>Notification pressure</small><div class="dp-row"><span>Inbox badge</span><b>99+</b></div><div class="dp-row"><span>Offer badge</span><b>!</b></div><div class="dp-row"><span>FOMO copy</span><b>active</b></div><div class="dp-row"><span>Dismiss looks disabled</span><b>yes</b></div></div></div>`;
+  }
+
+  function startModalDynamics(group, tech){
+    const timers = pressureBody.querySelectorAll('[data-dp-timer]');
+    timers.forEach(timerEl => {
+      let n = Number(timerEl.getAttribute('data-dp-timer')) || 38;
+      const int = setInterval(() => {
+        if(!pressureLayer.classList.contains('show')) return;
+        n--;
+        if(n <= 0){
+          if(tech.demo === 'reset_countdown' || group === 'scarcity'){
+            n = Number(timerEl.getAttribute('data-dp-timer')) || 38;
+            fakeToast('Reset detected', 'The timer restarted instead of expiring.');
+          } else n = 0;
+        }
+        const h = Math.floor(n/3600), m = Math.floor((n%3600)/60), s = n%60;
+        timerEl.textContent = h > 0 ? `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+      }, 1000);
+      P.eventTimers.push(int);
+    });
+    const stock = pressureBody.querySelector('.dp-stock');
+    if(stock && group === 'scarcity'){
+      let current = 3;
+      const int = setInterval(() => {
+        if(!pressureLayer.classList.contains('show')) return;
+        current = Math.max(1, current-1);
+        stock.textContent = `Only ${current} left`;
+      }, 6500);
+      P.eventTimers.push(int);
+    }
+  }
+
+  function closePressure(runAction=false){
+    clearModalTimers();
+    pressureLayer.classList.remove('show');
+    pressureLayer.setAttribute('aria-hidden','true');
+    if(runAction && P.pendingStart){ P.pendingStart = false; startActualGame(); }
+    if(runAction && P.pendingMenu){ P.pendingMenu = false; if(typeof originalQuitToMenu === 'function') originalQuitToMenu(); }
+  }
+
+  function fakeToast(label, text){
+    if(typeof toast === 'function') toast('info', label.toUpperCase(), text);
+    addRiver(label, text);
+  }
+  function addRiver(name, action){
+    if(!river) return;
+    const item = document.createElement('div');
+    item.className = 'river-item';
+    item.innerHTML = `<div class="river-avatar">${escapeHTML(name[0] || 'R')}</div><div class="river-copy"><b>${escapeHTML(name)}</b><span>${escapeHTML(action)} · generated simulation</span></div>`;
+    river.prepend(item);
+    setTimeout(()=>item.remove(), 6200);
+  }
+  function startFeed(){
+    if(P.feedTimer) return;
+    const names = ['Mira','Leo','Sarah','Emma','Noah','Kai','Tom','Ivy','Jonas','Luna'];
+    const acts = ['bought Diamond VIP','opened Mythic Harpoon','claimed Crimson Bundle','protected a 7-day streak','skipped a 2h timer','unlocked Premium Pass','bought 9,800 gems','invited 10 friends'];
+    P.feedTimer = setInterval(() => {
+      const n = names[Math.floor(Math.random()*names.length)];
+      const a = acts[Math.floor(Math.random()*acts.length)];
+      addRiver(n,a);
+    }, 5200);
+  }
+
+  let originalStartGame = typeof startGame === 'function' ? startGame : null;
+  let originalQuitToMenu = typeof quitToMenu === 'function' ? quitToMenu : null;
+  let originalGameOver = typeof gameOver === 'function' ? gameOver : null;
+  let originalPopBall = typeof popBall === 'function' ? popBall : null;
+  let originalLoseLife = typeof loseLife === 'function' ? loseLife : null;
+  let originalNextWave = typeof nextWave === 'function' ? nextWave : null;
+
+  function startActualGame(){
+    if(originalStartGame) originalStartGame();
+    P.round++; P.popCount = 0; P.fakeEnergy = Math.max(0, P.fakeEnergy - 2);
+    scheduleGamePressure();
+  }
+  function scheduleGamePressure(){
+    setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['progression','scarcity']), 'Round-start system'); }catch(e){} }, 2300);
+    setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['social','visual','ads']), 'Mid-round interruption'); }catch(e){} }, 8500);
+    setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['economy','meta','gacha']), 'Pressure timed to session'); }catch(e){} }, 15000);
+  }
+
+  // Capture core UI clicks so the systems are baked into normal flow.
+  function wireUI(){
+    addProfileSystems();
+    const playBtn = el('playBtn');
+    if(playBtn){
+      playBtn.addEventListener('click', (e) => {
+        e.preventDefault(); e.stopImmediatePropagation();
+        P.pendingStart = true;
+        const first = P.seen.size === 0 ? techByGroup('privacy') : techByGroup(['progression','scarcity','economy']);
+        showTechnique(first, 'Pre-play onboarding');
+      }, true);
+    }
+    const goAgainBtn = el('goAgainBtn');
+    if(goAgainBtn){
+      goAgainBtn.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopImmediatePropagation();
+        P.pendingStart = true;
+        showTechnique(techByGroup(['progression','battlepass','gacha','economy']), 'Post-round one-more-run');
+      }, true);
+    }
+    const quitBtn = el('quitBtn');
+    if(quitBtn){
+      quitBtn.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopImmediatePropagation();
+        P.pendingMenu = true;
+        showTechnique(techByGroup('exit'), 'Pause quit attempt');
+      }, true);
+    }
+    const goMenuBtn = el('goMenuBtn');
+    if(goMenuBtn){
+      goMenuBtn.addEventListener('click', (e)=>{
+        e.preventDefault(); e.stopImmediatePropagation();
+        P.pendingMenu = true;
+        showTechnique(techByGroup('exit'), 'Results exit attempt');
+      }, true);
+    }
+    document.querySelectorAll('.currency').forEach(btn => btn.addEventListener('click', () => showTechnique(techByGroup('economy'), 'Wallet opened')));
+    const inbox = document.querySelector('.icon-btn[title="Inbox"]');
+    if(inbox) inbox.addEventListener('click', () => showTechnique(techByGroup(['social','visual']), 'Inbox opened'));
+    const settings = document.querySelector('.icon-btn[title="Settings"]');
+    if(settings) settings.addEventListener('click', () => showTechnique(techByGroup('privacy'), 'Settings opened'));
+    const chip = el('system-progress-chip');
+    if(chip) chip.addEventListener('click', () => showTechnique(pick(), 'Manual next system'));
+    const close = el('pressureClose');
+    if(close) close.addEventListener('click', () => closePressure(false));
+    pressureLayer.addEventListener('click', (e)=>{
+      if(e.target === pressureLayer){
+        // Backdrop click demonstrates exit friction only once in a while, but still lets the user close with X.
+        const current = P.active && P.active.tech;
+        if(current && groupOf(current) !== 'exit') showTechnique(techByGroup('exit'), 'Backdrop exit attempt');
+        else closePressure(false);
+      }
+      const action = e.target && e.target.getAttribute && e.target.getAttribute('data-pressure-action');
+      if(!action) return;
+      if(action === 'primary'){
+        fakeToast('Simulated action', P.active ? `${P.active.tech.name} accepted; no real transaction occurred.` : 'No real transaction occurred.');
+        closePressure(true);
+      } else if(action === 'secondary'){
+        fakeToast('Safer choice', 'Alternative path selected.');
+        closePressure(P.pendingStart || P.pendingMenu);
+      } else {
+        closePressure(false);
+      }
+    });
+  }
+
+  // Monkey-patch selected original game functions so pressure appears during actual play.
+  if(originalPopBall){
+    popBall = function(b,index,projectile){
+      originalPopBall(b,index,projectile);
+      P.popCount++;
+      P.chestProgress = Math.min(99, P.chestProgress + 1);
+      if(P.popCount % 10 === 0){ setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['progression','gacha','visual']), 'Reward moment'); }catch(e){} }, 120); }
+    };
+  }
+  if(originalLoseLife){
+    loseLife = function(){
+      originalLoseLife();
+      setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['energy','economy','meta','progression'].includes ? ['progression','economy','meta'] : 'progression'), 'Loss recovery moment'); }catch(e){} }, 520);
+    };
+  }
+  if(originalNextWave){
+    nextWave = function(){
+      originalNextWave();
+      P.passProgress = Math.min(99, P.passProgress + 2);
+      setTimeout(()=>{ try{ if(State.scene === 'play') showTechnique(techByGroup(['battlepass','scarcity','social']), 'Wave-clear reward'); }catch(e){} }, 900);
+    };
+  }
+  if(originalGameOver){
+    gameOver = function(){
+      originalGameOver();
+      setTimeout(()=> showTechnique(techByGroup(['battlepass','exit','gacha','progression']), 'Results wrapper'), 900);
+    };
+  }
+
+  // Debug/verification keyboard shortcuts kept inside the game.
+  window.addEventListener('keydown', (e)=>{
+    if(e.code === 'KeyT' && !e.repeat) showTechnique(pick(), 'Keyboard next system');
+    if(e.code === 'KeyR' && !e.repeat){ P.seen.clear(); P.idx = 0; updateCounter(); fakeToast('Reset', 'Season systems counter reset.'); }
+  });
+
+  // Public object for inspection in the browser console.
+  window.RicochetSystems = {
+    total: TECHNIQUES.length,
+    uniqueDemos: uniqueDemos.length,
+    missingDemos,
+    showNext: () => showTechnique(pick(), 'Console next system'),
+    runAllFast: () => {
+      let i=0;
+      const int = setInterval(()=>{
+        if(i++ >= TECHNIQUES.length){ clearInterval(int); return; }
+        showTechnique(pick(), 'Automated 166-system tour');
+      }, 950);
+    }
+  };
+
+  // Initial in-world activity.
+  addProfileSystems();
+  updateCounter();
+  startFeed();
+  setTimeout(()=> fakeToast('Daily ready', 'Login bonus +100 coins'), 1100);
+  setTimeout(()=> addRiver('Sarah','bought Diamond VIP'), 2700);
+  setTimeout(()=> addRiver('Emma','opened Mythic Harpoon'), 4700);
+  setTimeout(()=> showTechnique(techByGroup('privacy'), 'First session prompt'), 1300);
+
+  // Sanity marker in console.
+  console.info('[RicochetSystems] baked techniques:', TECHNIQUES.length, 'unique demo modules:', uniqueDemos.length, 'missing:', missingDemos);
+})();
+</script>
+
+</body>
+</html>

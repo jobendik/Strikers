@@ -1,7 +1,8 @@
 import { TEAMS, teamMeta } from '../config/players';
 import { match } from './state';
 import { returnToMenu, startMatch } from './flow';
-import { refreshTeamTags, showFullTime } from '../ui/hud';
+import { refreshTeamTags } from '../ui/hud';
+import { showResultScreen, type ResultScreenData, type ResultStat, type ResultChip, type ResultBar } from '../ui/resultScreen';
 import { getSettings, saveSettings } from '../core/settings';
 import { applyMatchRewards, type MatchRewards } from './rewards';
 import { getPlayerData, savePlayerData } from '../core/playerData';
@@ -117,54 +118,149 @@ export function onFullTimeButton(): void {
   returnToMenu();
 }
 
-/** A compact progress note for the result card (the full animated Result Screen
- *  is D). Honest, immediate XP/level/coins + daily progress + next-best-action. */
-function rewardLine(r: MatchRewards): string {
-  const parts = [`+${r.xp.total} XP`, `Lv ${r.level} · ${r.xpIntoLevel}/${r.xpForNext}`, `+${r.coins} coins`];
-  if (r.levelsGained > 0) parts.push(r.newTitle ? `LEVEL UP → ${r.newTitle}!` : 'LEVEL UP!');
-  for (const c of r.daily.completed) parts.push(`✓ ${c}`);
-  parts.push(`Daily chest ${r.daily.chestPoints}%${r.daily.chestAwarded ? ' — CHEST!' : ''}`);
-  if (r.daily.nextBest) parts.push(r.daily.nextBest);
-  return parts.join('  ·  ');
+/** The full-time card's secondary button — always returns to the menu (D4 exit). */
+export function onResultMenu(): void {
+  pendingContinue = false;
+  refreshWorldCupUI(); // freshen the menu banner / tournament screen on the way back
+  returnToMenu();
 }
 
-/** The World Cup result card: headline + context + button driven by the outcome. */
+const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** Possession as whole-percent shares of the two teams (defaults to 50–50). */
+function possessionPct(): [number, number] {
+  const [a, b] = match.stats.possession;
+  const tot = a + b;
+  if (tot < 1) return [50, 50];
+  const pa = Math.round((a / tot) * 100);
+  return [pa, 100 - pa];
+}
+
+/** The per-team stat grid for the result screen (D1). */
+function statTiles(): ResultStat[] {
+  const s = match.stats;
+  const [pa, pb] = possessionPct();
+  return [
+    { label: 'Possession', home: `${pa}%`, away: `${pb}%` },
+    { label: 'Shots', home: `${s.shots[0]}`, away: `${s.shots[1]}` },
+    { label: 'On Target', home: `${s.onTarget[0]}`, away: `${s.onTarget[1]}` },
+    { label: 'Saves', home: `${s.saves[0]}`, away: `${s.saves[1]}` },
+    { label: 'Tackles', home: `${s.tackles[0]}`, away: `${s.tackles[1]}` },
+  ];
+}
+
+/** 1–3 performance stars from result + goals + clean sheet (D1). */
+function computeStars(o: {
+  result: 'win' | 'draw' | 'loss';
+  goalsFor: number;
+  goalsAgainst: number;
+  cleanSheet: boolean;
+  champion: boolean;
+}): number {
+  if (o.champion) return 3;
+  let s = o.result === 'win' ? 2 : 1;
+  if (o.cleanSheet && o.result !== 'loss') s += 1;
+  if (o.goalsFor >= 3 || o.goalsFor - o.goalsAgainst >= 3) s += 1;
+  if (o.result === 'loss') s = o.goalsFor >= 2 ? 2 : 1; // fought back in defeat
+  return Math.max(1, Math.min(3, s));
+}
+
+/** Reward pills, revealed in sequence (D3): XP → coins → bonuses. */
+function rewardChips(r: MatchRewards): ResultChip[] {
+  const chips: ResultChip[] = [
+    { text: `+${r.xp.total} XP`, tone: 'xp' },
+    { text: `+${r.coins} coins`, tone: 'coin' },
+  ];
+  if (r.firstMatchOfDay) chips.push({ text: 'First match of day', tone: 'bonus' });
+  if (r.firstWinOfDay) chips.push({ text: 'First-win bonus', tone: 'bonus' });
+  return chips;
+}
+
+/** The animated progress stack (D2): account XP, daily chest, daily orders. */
+function rewardBars(r: MatchRewards): ResultBar[] {
+  const bars: ResultBar[] = [];
+  const xpTo = r.xpForNext > 0 ? r.xpIntoLevel / r.xpForNext : 0;
+  // when a level was gained the final bar fills from empty; otherwise from the
+  // pre-grant fill so the player sees this match's XP land.
+  const xpFrom = r.levelsGained > 0 || r.xpForNext <= 0 ? 0 : (r.xpIntoLevel - r.xp.total) / r.xpForNext;
+  bars.push({
+    label: `Level ${r.level}`,
+    from: clamp01(xpFrom),
+    to: clamp01(xpTo),
+    text: `${r.xpIntoLevel} / ${r.xpForNext} XP`,
+    badge: r.levelsGained > 0 ? (r.newTitle ? `LEVEL UP → ${r.newTitle}` : 'LEVEL UP') : undefined,
+    tone: 'xp',
+    done: r.levelsGained > 0,
+  });
+
+  const d = r.daily;
+  bars.push({
+    label: 'Daily chest',
+    from: clamp01(d.chestBefore / d.chestMax),
+    to: d.chestAwarded ? 1 : clamp01(d.chestPoints / d.chestMax),
+    text: d.chestAwarded ? `Filled · ${d.chestPoints}% carried` : `${d.chestPoints}%`,
+    badge: d.chestAwarded ? 'CHEST!' : undefined,
+    tone: 'chest',
+    done: d.chestAwarded,
+  });
+
+  for (const o of d.orders) {
+    bars.push({
+      label: o.label,
+      from: 0,
+      to: o.target > 0 ? clamp01(o.progress / o.target) : 0,
+      text: `${Math.min(o.progress, o.target)} / ${o.target}`,
+      tone: 'order',
+      done: o.done,
+    });
+  }
+  return bars;
+}
+
+/** Show the World Cup result via the animated Result Screen (D). */
 function presentWorldCupResult(
   o: MatchdayOutcome,
   h: number,
   a: number,
   decided: boolean,
   userWon: boolean,
-  stat: string,
+  rewards: MatchRewards,
   motm: string,
-  reward: string,
+  penLine: string | undefined,
 ): void {
   const ctxRound = roundName(o.roundJustPlayed);
-  const ctx = o.roundJustPlayed === 'GROUP'
+  const kicker = o.roundJustPlayed === 'GROUP'
     ? `World Cup 2026 · Group Stage · Matchday ${o.matchdayJustPlayed}`
     : `World Cup 2026 · ${ctxRound}`;
   const nextName = o.nextOpponent ? teamMeta(o.nextOpponent).name : '';
   const nextBtn = o.nextOpponent ? `NEXT: ${nextName} ▸` : 'BACK TO MENU ▸';
 
   let headline: string;
+  let tone: ResultScreenData['tone'];
   switch (o.status) {
     case 'champion':
       headline = `${match.teams[0].fullName} — WORLD CHAMPIONS 🏆`;
+      tone = 'champion';
       break;
     case 'knocked-out':
       headline = 'KNOCKED OUT';
+      tone = 'loss';
       break;
     case 'group-out':
       headline = 'GROUP STAGE EXIT';
+      tone = 'loss';
       break;
     case 'group-through':
       headline = 'THROUGH TO THE KNOCKOUTS';
+      tone = 'win';
       break;
     case 'advanced':
       headline = o.nextRound ? `INTO THE ${roundName(o.nextRound).toUpperCase()}` : 'THROUGH';
+      tone = 'win';
       break;
     default: // group-continue
       headline = !decided ? 'MATCHDAY DRAWN' : userWon ? 'MATCHDAY WIN' : 'MATCHDAY DEFEAT';
+      tone = !decided ? 'draw' : userWon ? 'win' : 'loss';
   }
 
   const advancing = o.status === 'group-continue' || o.status === 'group-through' || o.status === 'advanced';
@@ -177,7 +273,25 @@ function presentWorldCupResult(
     savePlayerData();
   }
 
-  showFullTime(h, a, headline, stat, motm, ctx, pendingContinue ? nextBtn : 'BACK TO MENU ▸', reward);
+  const result: 'win' | 'draw' | 'loss' = !decided ? 'draw' : userWon ? 'win' : 'loss';
+  const stars = computeStars({ result, goalsFor: h, goalsAgainst: a, cleanSheet: a === 0, champion: o.status === 'champion' });
+
+  showResultScreen({
+    kicker,
+    headline,
+    tone,
+    homeScore: h,
+    awayScore: a,
+    penLine,
+    stars,
+    motm,
+    stats: statTiles(),
+    chips: rewardChips(rewards),
+    bars: rewardBars(rewards),
+    nextBest: rewards.daily.nextBest,
+    primaryLabel: pendingContinue ? nextBtn : 'BACK TO MENU ▸',
+    secondaryLabel: pendingContinue ? 'MENU' : '',
+  });
   refreshWorldCupUI(); // run has advanced — keep the banner/screen in sync
 }
 
@@ -189,12 +303,10 @@ function presentWorldCupResult(
 export function presentResult(
   penWinner: number | null,
   penScore: [number, number] | null,
-  stats: string,
+  _stats: string,
   motm: string,
 ): void {
   const [h, a] = match.score;
-  const homeName = match.teams[0].fullName;
-  const awayName = match.teams[1].fullName;
   const userWon = penWinner !== null ? penWinner === 0 : h > a;
   const decided = penWinner !== null || h !== a;
 
@@ -209,21 +321,52 @@ export function presentResult(
     goalsAgainst: a,
   });
 
-  const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}  ·  ` : '';
-  const stat = `${penLine}${stats}`;
-  const reward = rewardLine(rewards);
+  const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}` : undefined;
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
 
   // World Cup tournament — feed the result into the engine and advance the bracket
   if (getSettings().mode === 'cup' && wcRun) {
     const penUserWon = penWinner === null ? null : penWinner === 0;
     const outcome = playUserMatchday(wcRun, h, a, penUserWon);
-    presentWorldCupResult(outcome, h, a, decided, userWon, stat, motm, reward);
+    presentWorldCupResult(outcome, h, a, decided, userWon, rewards, motm, penLine);
     return;
   }
 
   // friendly / knockout one-off
   pendingContinue = false;
-  const result = !decided ? 'DRAW' : userWon ? `${homeName} WIN` : `${awayName} WIN`;
-  showFullTime(h, a, result, stat, motm, 'Full Time', 'PLAY AGAIN ▸', reward);
+  const result: 'win' | 'draw' | 'loss' = !decided ? 'draw' : userWon ? 'win' : 'loss';
+  let headline: string;
+  let tone: ResultScreenData['tone'];
+  if (penWinner !== null) {
+    headline = userWon ? 'SHOOTOUT HERO' : 'SHOOTOUT DEFEAT';
+    tone = userWon ? 'win' : 'loss';
+  } else if (!decided) {
+    headline = 'DRAW';
+    tone = 'draw';
+  } else if (userWon) {
+    headline = 'VICTORY';
+    tone = 'win';
+  } else {
+    headline = 'DEFEAT';
+    tone = 'loss';
+  }
+  const stars = computeStars({ result, goalsFor: h, goalsAgainst: a, cleanSheet: a === 0, champion: false });
+  const kicker = getSettings().mode === 'knockout' ? 'Knockout · Full Time' : 'Friendly · Full Time';
+
+  showResultScreen({
+    kicker,
+    headline,
+    tone,
+    homeScore: h,
+    awayScore: a,
+    penLine,
+    stars,
+    motm,
+    stats: statTiles(),
+    chips: rewardChips(rewards),
+    bars: rewardBars(rewards),
+    nextBest: rewards.daily.nextBest,
+    primaryLabel: 'PLAY AGAIN ▸',
+    secondaryLabel: '',
+  });
 }

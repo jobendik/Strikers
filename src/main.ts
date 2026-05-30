@@ -5,8 +5,9 @@ import { createGameState } from './game/state';
 import { initInput } from './game/input';
 import { startLoop } from './game/loop';
 import { startSecondHalf } from './game/flow';
-import { onFullTimeButton, startGame } from './game/modes';
+import { onFullTimeButton, onResultMenu, startGame } from './game/modes';
 import { initUI, refreshTeamTags, updateHUD } from './ui/hud';
+import { initResultScreen } from './ui/resultScreen';
 import { initRadar } from './ui/radar';
 import { initSettings, getSettings } from './core/settings';
 import { getPlayerData, savePlayerData } from './core/playerData';
@@ -24,7 +25,8 @@ import { initDailyCard } from './ui/daily';
 buildStadium();
 createGameState();
 
-initUI({ onPlay: startGame, onAgain: onFullTimeButton, onSecondHalf: startSecondHalf });
+initUI({ onPlay: startGame, onSecondHalf: startSecondHalf });
+initResultScreen({ onPrimary: onFullTimeButton, onSecondary: onResultMenu }); // Result Screen (D)
 initSettings(); // loads saved prefs and applies them to the menu + engine
 
 // Player save (C1): loads on import; align a brand-new profile's nation with the

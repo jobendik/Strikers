@@ -50,6 +50,8 @@ export interface DailyRewards {
   orders: OrderProgress[];
   /** Labels of orders completed this match. */
   completed: string[];
+  /** 0–100 chest meter before this match (for the result-screen fill animation). */
+  chestBefore: number;
   /** 0–100 chest meter after this match. */
   chestPoints: number;
   chestMax: number;
@@ -143,6 +145,7 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     goalsAgainst: o.goalsAgainst,
     cleanSheet,
   };
+  const chestBefore = data.daily.chestPoints; // captured before progressDaily mutates it
   const dp = progressDaily(data.daily, facts);
 
   // --- coins ---
@@ -182,6 +185,7 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   const daily: DailyRewards = {
     orders: data.daily.orders.map((q) => ({ label: orderLabel(q.id), progress: q.progress, target: q.target, done: q.claimed })),
     completed: dp.completed,
+    chestBefore,
     chestPoints: data.daily.chestPoints,
     chestMax: CHEST_MAX,
     chestAwarded: dp.chestAwarded,

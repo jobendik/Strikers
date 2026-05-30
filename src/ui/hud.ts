@@ -70,29 +70,6 @@ export function showGoalFx(i: number): void {
   fx.classList.add('show');
 }
 
-export function showFullTime(
-  h: number,
-  a: number,
-  result: string,
-  stats: string,
-  motm = '',
-  kicker = 'Full Time',
-  buttonLabel = 'PLAY AGAIN ▸',
-  reward = '',
-): void {
-  el('ftH').textContent = String(h);
-  el('ftA').textContent = String(a);
-  el('ftResult').textContent = result;
-  el('ftStats').textContent = stats;
-  const rw = el('ftReward');
-  rw.textContent = reward;
-  rw.classList.toggle('hidden', !reward);
-  el('ftMotm').textContent = motm;
-  el('ftKicker').textContent = kicker;
-  el('btnAgain').textContent = buttonLabel;
-  setFullTimeVisible(true);
-}
-
 /** Show the half-time interval card with the running score + stats. */
 export function showHalfTime(h: number, a: number, stats: string): void {
   el('htH').textContent = String(h);
@@ -152,8 +129,7 @@ export function setPauseVisible(v: boolean): void {
  * match type, rules) and all settings live in {@link initSettings}, which owns
  * persistence.
  */
-export function initUI(callbacks: { onPlay: () => void; onAgain: () => void; onSecondHalf: () => void }): void {
+export function initUI(callbacks: { onPlay: () => void; onSecondHalf: () => void }): void {
   el('btnPlay').addEventListener('click', callbacks.onPlay);
-  el('btnAgain').addEventListener('click', callbacks.onAgain);
   el('btnSecond').addEventListener('click', callbacks.onSecondHalf);
 }
