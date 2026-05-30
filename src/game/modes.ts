@@ -3,6 +3,8 @@ import { match } from './state';
 import { returnToMenu, startMatch } from './flow';
 import { refreshTeamTags, showFullTime } from '../ui/hud';
 import { getSettings, saveSettings } from '../core/settings';
+import { applyMatchRewards, type MatchRewards } from './rewards';
+import { getPlayerData, savePlayerData } from '../core/playerData';
 
 /*
  * Game-mode controller: team selection, the friendly/knockout one-off, and a
@@ -88,6 +90,14 @@ export function onFullTimeButton(): void {
   }
 }
 
+/** A compact one-line progress note for the result card (the full animated
+ *  Result Screen is D). Honest, immediate XP/level/coins feedback. */
+function rewardLine(r: MatchRewards): string {
+  const parts = [`+${r.xp.total} XP`, `Lv ${r.level} · ${r.xpIntoLevel}/${r.xpForNext}`, `+${r.coins} coins`];
+  if (r.levelsGained > 0) parts.push(r.newTitle ? `LEVEL UP → ${r.newTitle}!` : 'LEVEL UP!');
+  return parts.join('  ·  ');
+}
+
 /**
  * Present the full-time outcome. `penWinner` is the shootout winner when a tie
  * was settled from the spot (else null and the score decides). Resolves the cup
@@ -104,13 +114,26 @@ export function presentResult(
   const awayName = match.teams[1].fullName;
   const userWon = penWinner !== null ? penWinner === 0 : h > a;
   const decided = penWinner !== null || h !== a;
+
+  // Match reward pipeline (C2): every completed match grants XP/coins and rolls
+  // the account level/title. Runs here (the result-screen owner), which is stubbed
+  // out of the headless balance harness, so it never fires during balance sims.
+  const rewards = applyMatchRewards({
+    win: decided && userWon,
+    loss: decided && !userWon,
+    draw: !decided,
+    goalsFor: h,
+    goalsAgainst: a,
+  });
+
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}  ·  ` : '';
-  const stat = penLine + stats;
+  const stat = `${penLine}${stats}`;
+  const reward = rewardLine(rewards);
 
   if (!cupActive) {
     const result = !decided ? 'DRAW' : userWon ? `${homeName} WIN` : `${awayName} WIN`;
     pendingContinue = false;
-    showFullTime(h, a, result, stat, motm, 'Full Time', 'PLAY AGAIN ▸');
+    showFullTime(h, a, result, stat, motm, 'Full Time', 'PLAY AGAIN ▸', reward);
     return;
   }
 
@@ -118,7 +141,7 @@ export function presentResult(
   if (!userWon) {
     cupActive = false;
     pendingContinue = false;
-    showFullTime(h, a, 'KNOCKED OUT', stat, motm, `World Cup 2026 · ${ROUND_NAMES[cupRound]}`, 'BACK TO MENU ▸');
+    showFullTime(h, a, 'KNOCKED OUT', stat, motm, `World Cup 2026 · ${ROUND_NAMES[cupRound]}`, 'BACK TO MENU ▸', reward);
     return;
   }
 
@@ -127,10 +150,13 @@ export function presentResult(
     cupActive = false;
     pendingContinue = false;
     saveSettings({ titles: getSettings().titles + 1 });
-    showFullTime(h, a, `${homeName} — WORLD CHAMPIONS 🏆`, stat, motm, 'World Cup 2026 · FINAL', 'BACK TO MENU ▸');
+    // record the trophy on the player save too (career stat for the profile/achievements)
+    getPlayerData().stats.cupsWon++;
+    savePlayerData();
+    showFullTime(h, a, `${homeName} — WORLD CHAMPIONS 🏆`, stat, motm, 'World Cup 2026 · FINAL', 'BACK TO MENU ▸', reward);
     return;
   }
   pendingContinue = true;
   const next = teamMeta(cupOpponents[cupRound]).name;
-  showFullTime(h, a, 'THROUGH TO THE NEXT ROUND', stat, motm, `World Cup 2026 · into the ${ROUND_NAMES[cupRound]}`, `NEXT: ${next} ▸`);
+  showFullTime(h, a, 'THROUGH TO THE NEXT ROUND', stat, motm, `World Cup 2026 · into the ${ROUND_NAMES[cupRound]}`, `NEXT: ${next} ▸`, reward);
 }
