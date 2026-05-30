@@ -11,6 +11,8 @@ import type { Player } from '../entities/Player';
 import { addShake, clearTrail } from './render';
 import {
   flashToast,
+  goalCommentary,
+  resetCommentary,
   setFullTimeVisible,
   setHalfTimeVisible,
   setMenuVisible,
@@ -75,6 +77,15 @@ export function scoreGoal(i: number): void {
   match.scoredBy = i;
   updateAwayMentality(); // the away side re-reads the game after every goal
   flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].short} SCORE!`);
+  // broadcast commentary (H1): contextual shout complementing the scorer toast
+  const forGoals = match.score[i];
+  const againstGoals = match.score[1 - i];
+  goalCommentary({
+    forGoals,
+    againstGoals,
+    isUser: match.teams[i].isUser,
+    lastGasp: match.half >= 2 && match.stoppageLeft > 0 && forGoals > againstGoals,
+  });
 }
 
 /** Reset all entities to their home positions for a restart. */
@@ -279,6 +290,7 @@ export function startMatch(): void {
   setMenuVisible(false);
   setFullTimeVisible(false);
   setHalfTimeVisible(false);
+  resetCommentary(); // clear any caption left from the previous match (H1)
   firstHalfKicker = Math.random() < 0.5 ? 0 : 1;
   updateAwayMentality();
   kickOff(match.teams[firstHalfKicker]);

@@ -1,6 +1,10 @@
 import { CFG } from '../config/constants';
 import { match } from '../game/state';
 
+// On-screen commentary (H1) lives behind the HUD module so the gameplay path
+// (flow.ts) reaches it through an already-sim-stubbed boundary — see commentary.ts.
+export { commentate, goalCommentary, resetCommentary, type GoalCtx } from './commentary';
+
 const el = (id: string): HTMLElement => {
   const node = document.getElementById(id);
   if (!node) throw new Error(`Missing DOM element #${id}`);

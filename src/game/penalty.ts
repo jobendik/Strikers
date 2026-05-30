@@ -10,6 +10,7 @@ import { addShake } from './render';
 import { finishShootout } from './flow';
 import { flashToast } from '../ui/hud';
 import { showShootout, updateShootoutBoard } from '../ui/hud';
+import { commentate } from '../ui/commentary';
 import type { Player } from '../entities/Player';
 import type { Team } from '../entities/Team';
 
@@ -346,6 +347,7 @@ function recordKick(kind: 'goal' | 'save' | 'miss'): void {
       Audio.roar();
       addShake(0.5);
       flashToast(SO.keeper.team.isUser ? 'YOU SAVE IT!' : 'SAVED!');
+      commentate(SO.keeper.team.isUser ? 'WONDER SAVE!' : 'HUGE SAVE!', 'save');
     } else flashToast(match.teams[t].isUser ? 'MISSED!' : 'OFF TARGET');
   }
   // ball trickles dead; keeper holds his lean a beat
@@ -364,7 +366,10 @@ function nextKick(): void {
     return;
   }
   // both teams level after their 5th pair → into sudden death
-  if (SO.taken[0] >= CFG.pen.bestOf && SO.taken[1] >= CFG.pen.bestOf) SO.suddenDeath = true;
+  if (SO.taken[0] >= CFG.pen.bestOf && SO.taken[1] >= CFG.pen.bestOf && !SO.suddenDeath) {
+    SO.suddenDeath = true;
+    commentate('SUDDEN-DEATH DRAMA!', 'drama');
+  }
   SO.keeper.dive = 0;
   SO.keeper.mesh.rotation.x = 0;
   SO.current = 1 - SO.current;
@@ -392,6 +397,7 @@ function decideWinner(): number | null {
 function end(winner: number): void {
   if (!SO) return;
   const score: [number, number] = [SO.goals[0], SO.goals[1]];
+  commentate(match.teams[winner].isUser ? 'SHOOTOUT HEROES!' : 'SETTLED FROM THE SPOT!', 'drama');
   Audio.whistle();
   showShootout(false);
   SO.keeper.dive = 0;
