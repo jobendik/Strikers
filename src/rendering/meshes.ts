@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+import { clone as skeletonClone } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CFG } from '../config/constants';
 import { rand } from '../core/math';
 import { world } from './scene';
+import { getPlayerModelData, type AnimName, type PlayerAnimState } from './playerLoader';
 
 /** Builds a stylised player avatar (body, shorts, head, facing chip, active ring). */
 export function makePlayerMesh(jersey: string): THREE.Group {
@@ -114,4 +116,106 @@ export function makeBallMesh(): THREE.Mesh {
 
   world.add(m);
   return m;
+}
+
+/* ------------------------------------------------------------------ 3-D model mesh */
+
+/**
+ * Build a player mesh from the pre-loaded Mixamo FBX model.
+ * Each call clones the template with an independent skeleton (via SkeletonUtils)
+ * so every player animates separately.
+ *
+ * The returned Group keeps the same userData interface as the stub mesh:
+ *   .ring  — yellow indicator ring (visible for the user-controlled player)
+ *   .call  — green pass-request ring
+ *   .body  — proxy whose .material.color.set() tints the jersey
+ *   .mixer — THREE.AnimationMixer for this player
+ *   .clips — shared Record<AnimName, THREE.AnimationClip>
+ *   .animState — PlayerAnimState bookkeeping
+ */
+export function makeModelPlayerMesh(jerseyColor: string): THREE.Group {
+  const { template, clips } = getPlayerModelData();
+
+  const g = new THREE.Group();
+
+  // SkeletonUtils.clone gives each player a fully independent skeleton.
+  const modelClone = skeletonClone(template) as THREE.Group;
+  g.add(modelClone);
+
+  // ----- body color proxy (matches the interface Player.applyIdentity() uses) -----
+  g.userData.body = {
+    material: {
+      color: {
+        set(c: string): void {
+          modelClone.traverse((obj) => {
+            if (obj instanceof THREE.SkinnedMesh || obj instanceof THREE.Mesh) {
+              const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+              for (const m of mats) {
+                if (
+                  (m instanceof THREE.MeshStandardMaterial || m instanceof THREE.MeshPhongMaterial) &&
+                  !m.transparent
+                ) {
+                  (m as THREE.MeshStandardMaterial).color.set(c);
+                }
+              }
+            }
+          });
+        },
+      },
+    },
+  };
+  // Apply the initial jersey colour immediately.
+  (g.userData.body as { material: { color: { set(c: string): void } } }).material.color.set(jerseyColor);
+
+  // ----- overlay elements (game-unit scale — unaffected by the 1.7 m model scale) -----
+
+  // Active-player indicator ring
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.62, 0.82, 28),
+    new THREE.MeshBasicMaterial({ color: '#ffce2e', transparent: true, opacity: 0.95, side: THREE.DoubleSide }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.05;
+  ring.visible = false;
+  g.add(ring);
+
+  // Pass-request cue ring
+  const call = new THREE.Mesh(
+    new THREE.RingGeometry(0.95, 1.08, 30),
+    new THREE.MeshBasicMaterial({ color: '#39ff14', transparent: true, opacity: 0.0, side: THREE.DoubleSide }),
+  );
+  call.rotation.x = -Math.PI / 2;
+  call.position.y = 0.075;
+  call.visible = false;
+  g.add(call);
+
+  // Contact shadow blob
+  const shadow = new THREE.Mesh(
+    new THREE.CircleGeometry(0.55, 18),
+    new THREE.MeshBasicMaterial({ color: '#000', transparent: true, opacity: 0.28 }),
+  );
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.y = 0.02;
+  g.add(shadow);
+
+  g.userData.ring = ring;
+  g.userData.call = call;
+
+  // ----- animation mixer -----
+  const mixer = new THREE.AnimationMixer(modelClone);
+  const idleAction = mixer.clipAction(clips.idle);
+  idleAction.setLoop(THREE.LoopRepeat, Infinity).play();
+
+  const animState: PlayerAnimState = {
+    current: 'idle',
+    action: idleAction,
+    prevKickCd: 0,
+  };
+
+  g.userData.mixer = mixer;
+  g.userData.clips = clips as Record<AnimName, THREE.AnimationClip>;
+  g.userData.animState = animState;
+
+  world.add(g);
+  return g;
 }

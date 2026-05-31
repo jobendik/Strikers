@@ -9,12 +9,13 @@ import { onFullTimeButton, onResultMenu, startGame } from './game/modes';
 import { initUI, refreshTeamTags, updateHUD } from './ui/hud';
 import { initResultScreen } from './ui/resultScreen';
 import { initRadar } from './ui/radar';
-import { initSettings, getSettings } from './core/settings';
+import { initSettings, getSettings, applySettings } from './core/settings';
 import { getPlayerData, savePlayerData } from './core/playerData';
 import { initWorldCupUI, refreshWorldCupUI } from './ui/worldcup';
 import { initDailyCard } from './ui/daily';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
 import { initCrazyGames, loadingStop } from './platform/crazygames';
+import { loadPlayerModels } from './rendering/playerLoader';
 
 /* ============================================================================
    YUKA STRIKERS — AI Soccer
@@ -29,9 +30,7 @@ import { initCrazyGames, loadingStop } from './platform/crazygames';
 // Fire-and-forget so boot never blocks; loadingStop() runs once the SDK resolves.
 void initCrazyGames().then(() => loadingStop());
 
-buildStadium();
-createGameState();
-
+// UI and settings can initialise before the 3-D assets arrive.
 initUI({ onPlay: startGame, onSecondHalf: startSecondHalf });
 initResultScreen({ onPrimary: onFullTimeButton, onSecondary: onResultMenu }); // Result Screen (D)
 initSettings(); // loads saved prefs and applies them to the menu + engine
@@ -62,6 +61,15 @@ initRadar();
 initInput();
 window.addEventListener('resize', handleResize);
 
-refreshTeamTags();
-updateHUD();
-startLoop();
+// Player model + animations must be fully loaded before Player instances are
+// created (they clone the FBX template in their constructor).
+void loadPlayerModels().then(() => {
+  buildStadium();
+  createGameState();
+  // Re-apply settings now that match exists (applySettings skips match
+  // writes on the first early call before createGameState runs).
+  applySettings();
+  refreshTeamTags();
+  updateHUD();
+  startLoop();
+});

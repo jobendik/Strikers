@@ -17,9 +17,11 @@ import type { Player } from '../entities/Player';
 export function updateBall(dt: number): void {
   const c = match.controlPlayer;
   if (c && match.gkHold > 0) {
-    ball.position.x = c.position.x;
+    // GK cradles the ball in front of their feet, not at body centre.
+    const fwd = headingVec(c.heading);
+    ball.position.x = c.position.x + fwd.x * CFG.carryDist * 0.6;
     ball.position.y = GROUND_Y;
-    ball.position.z = c.position.z;
+    ball.position.z = c.position.z + fwd.z * CFG.carryDist * 0.6;
     ball.velocity.set(0, 0, 0);
     ball.spin = 0;
   } else if (c && c.kickCooldown <= 0) {

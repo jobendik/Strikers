@@ -118,8 +118,11 @@ export function applySettings(): void {
   document.body.classList.toggle('lefty', S.lefty);
   CFG.diff = S.diff;
   CFG.matchSeconds = S.half;
-  match.simRules = S.sim;
-  match.teams[0].mentality = S.mentality; // the user team's chosen approach
+  // match may not exist yet during early boot (before createGameState runs).
+  if (match) {
+    match.simRules = S.sim;
+    match.teams[0].mentality = S.mentality; // the user team's chosen approach
+  }
 
   const mute = el('muteBtn');
   if (mute) mute.textContent = S.sound ? '🔊' : '🔇';

@@ -19,7 +19,7 @@ export const CFG = {
   playerR: 0.46,
   playerH: 1.7,
   controlR: 1.35,
-  carryDist: 1.05,
+  carryDist: 1.4,
   tackleEdge: 0.35,
   ballDecel: 8,
   ballMax: 40,

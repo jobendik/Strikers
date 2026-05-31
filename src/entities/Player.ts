@@ -17,7 +17,7 @@ import { V3, clamp } from '../core/math';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
 import { initPerception } from '../ai/perception';
-import { makePlayerMesh } from '../rendering/meshes';
+import { makeModelPlayerMesh } from '../rendering/meshes';
 import type { FormationEntry, PlayerAttributes, PlayerRole, RoleType, SquadPlayer } from '../config/types';
 import type { Team } from './Team';
 
@@ -103,7 +103,7 @@ export class Player extends Vehicle {
     this.updateOrientation = false; // we drive heading manually for crisp facing
     this.heading = attackHeading(team.side);
 
-    this.mesh = makePlayerMesh(team.color);
+    this.mesh = makeModelPlayerMesh(team.color);
     this.applyIdentity();
     this.position.copy(this.homePos());
 

@@ -6,6 +6,7 @@ const base = process.env.BASE_PATH ?? '/strikers/';
 
 export default defineConfig({
   base,
+  assetsInclude: ['**/*.fbx'],
   build: {
     target: 'es2020',
     outDir: 'dist',

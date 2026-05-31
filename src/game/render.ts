@@ -3,21 +3,121 @@ import { CFG } from '../config/constants';
 import { clamp } from '../core/math';
 import { ball, match } from './state';
 import { camera, scene, sun } from '../rendering/scene';
+import type { Player } from '../entities/Player';
+import type { AnimName, PlayerAnimState } from '../rendering/playerLoader';
+
+/* ------------------------------------------------------------------ animation */
+
+const ONESHOTS = new Set<AnimName>(['kick', 'gkDiveLeft', 'gkDiveRight', 'celebrate']);
+
+/**
+ * Drive the AnimationMixer for a 3-D model player.
+ * Chooses the correct clip based on game state and crossfades when it changes.
+ * No-ops when the player uses the legacy stub mesh (no mixer in userData).
+ */
+function updatePlayerAnimation(p: Player, dt: number): void {
+  const mixer = p.mesh.userData.mixer as THREE.AnimationMixer | undefined;
+  if (!mixer) return;
+
+  mixer.update(dt);
+
+  const clips = p.mesh.userData.clips as Record<AnimName, THREE.AnimationClip>;
+  const animState = p.mesh.userData.animState as PlayerAnimState;
+
+  // Detect one-shot completion: Three.js sets action.paused = true when a
+  // LoopOnce action with clampWhenFinished reaches its last frame.
+  if (animState.current && ONESHOTS.has(animState.current) && animState.action?.paused) {
+    animState.current = null;
+    animState.action = null;
+  }
+
+  // --- choose the target animation ---
+  let target: AnimName;
+  if (p.dive > 0) {
+    // GK dives: stay visually facing the field; choose left/right clip from the
+    // direction the ball is relative to the keeper's forward axis.
+    // side > 0 → GK faces +x, so right = +z; side < 0 → GK faces -x, right = -z.
+    const dz = p.diveTarget.z - p.position.z;
+    target = dz * p.team.side > 0 ? 'gkDiveRight' : 'gkDiveLeft';
+  } else if (match.state === 'celebrate') {
+    target = 'celebrate';
+  } else {
+    // Detect a kick on the rising edge of kickCooldown.
+    const kicked = p.kickCooldown > animState.prevKickCd + 0.05;
+    if (kicked || (animState.current === 'kick' && animState.action)) {
+      target = 'kick';
+    } else if (p.slide > 0) {
+      // No dedicated slide clip — kick is the closest available action pose.
+      target = 'kick';
+    } else {
+      const speed = Math.hypot(p.velocity.x, p.velocity.z);
+      if (speed < 0.5) target = 'idle';
+      else if (speed > p.baseSpeed * 0.8) target = 'sprint';
+      else target = 'run';
+    }
+  }
+  animState.prevKickCd = p.kickCooldown;
+
+  // --- crossfade when target changes ---
+  if (target !== animState.current) {
+    const newClip = clips[target];
+    const newAction = mixer.clipAction(newClip);
+    const isOneShot = ONESHOTS.has(target);
+
+    if (isOneShot) {
+      newAction.setLoop(THREE.LoopOnce, 1);
+      newAction.clampWhenFinished = true;
+    } else {
+      newAction.setLoop(THREE.LoopRepeat, Infinity);
+    }
+
+    const fadeDuration = isOneShot ? 0.1 : 0.15;
+    const prev = animState.action;
+    if (prev && !prev.paused) {
+      newAction.reset().crossFadeFrom(prev, fadeDuration, true).play();
+    } else {
+      newAction.reset().fadeIn(fadeDuration).play();
+    }
+    animState.current = target;
+    animState.action = newAction;
+  }
+}
 
 /** Push simulation state onto the Three.js meshes each frame. */
 export function syncMeshes(dt: number): void {
   for (const t of match.teams)
     for (const p of t.players) {
       p.mesh.position.set(p.position.x, 0, p.position.z);
-      const cur = p.mesh.rotation.y;
-      let diff = p.heading - cur;
-      while (diff > Math.PI) diff -= 2 * Math.PI;
-      while (diff < -Math.PI) diff += 2 * Math.PI;
-      p.mesh.rotation.y = cur + diff * Math.min(1, 12 * dt);
-      // a diving keeper pitches forward and goes full-stretch toward the ball;
-      // sliding tacklers lean too. Ease the lean in and back out smoothly.
-      const leanTo = p.dive > 0 ? 1.25 : p.slide > 0 ? 0.7 : 0;
-      p.mesh.rotation.x += (leanTo - p.mesh.rotation.x) * Math.min(1, 14 * dt);
+
+      const hasMixer = !!(p.mesh.userData.mixer);
+
+      if (hasMixer && p.dive > 0) {
+        // Freeze the GK's facing direction during a dive so the left/right
+        // animations look correct (the body moves via position, not rotation).
+        const stored = p.mesh.userData.fieldHeading as number | undefined;
+        if (stored !== undefined) p.mesh.rotation.y = stored;
+        // No x-lean for model meshes — the animation poses the body.
+        p.mesh.rotation.x = 0;
+      } else {
+        // Normal heading interpolation.
+        const cur = p.mesh.rotation.y;
+        let diff = p.heading - cur;
+        while (diff > Math.PI) diff -= 2 * Math.PI;
+        while (diff < -Math.PI) diff += 2 * Math.PI;
+        p.mesh.rotation.y = cur + diff * Math.min(1, 12 * dt);
+        // Persist the last non-dive heading so the freeze above is correct.
+        p.mesh.userData.fieldHeading = p.mesh.rotation.y;
+
+        if (hasMixer) {
+          // Model mesh: animation handles all posing; clear any residual x tilt.
+          p.mesh.rotation.x = 0;
+        } else {
+          // Stub mesh: a diving keeper pitches forward; sliding tacklers lean.
+          const leanTo = p.dive > 0 ? 1.25 : p.slide > 0 ? 0.7 : 0;
+          p.mesh.rotation.x += (leanTo - p.mesh.rotation.x) * Math.min(1, 14 * dt);
+        }
+      }
+
       (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
       const call = p.mesh.userData.call as THREE.Mesh | undefined;
       if (call) {
@@ -29,6 +129,9 @@ export function syncMeshes(dt: number): void {
           (call.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.45;
         }
       }
+
+      // Drive animation clips for 3-D model players.
+      updatePlayerAnimation(p, dt);
     }
   ball.mesh.position.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);
   const sp = Math.hypot(ball.velocity.x, ball.velocity.z);
