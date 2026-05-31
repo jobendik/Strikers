@@ -151,8 +151,11 @@ function buildGoal(sx: number): void {
   };
   post(-w);
   post(w);
+  // crossbar spans the goal WIDTH (along z, connecting the two posts). A cylinder
+  // defaults to the Y axis, so rotate about X to lay it along z — NOT about z,
+  // which would point it out along the depth axis (a bar sticking out of the goal).
   const bar = new THREE.Mesh(new THREE.CylinderGeometry(r, r, 2 * w, 10), postMat);
-  bar.rotation.z = Math.PI / 2;
+  bar.rotation.x = Math.PI / 2;
   bar.position.set(gx, h, 0);
   bar.castShadow = true;
   grp.add(bar);
