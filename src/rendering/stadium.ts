@@ -157,40 +157,43 @@ function buildGoal(sx: number): void {
   bar.castShadow = true;
   grp.add(bar);
 
-  // The net slopes from the crossbar back and DOWN to the ground — the classic
-  // self-supporting goal profile. No full-height vertical back posts (those read
-  // as two poles standing out of the goal); the back is held by ONE thin angled
-  // support per side, run subtly behind the net.
+  // A classic box goal: a shallow frame behind the posts that the net hangs on.
+  // The back uprights are SHORT (the net roof slopes down from the crossbar to a
+  // low back bar), so there are no full-height poles standing out of the goal.
   const bx = gx + sx * d; // back of the goal (outward, away from the pitch)
+  const hb = h * 0.5; // back is half-height — gives the goal its sloping roof
 
-  // corner points: front-top (crossbar ends), front-bottom (post feet), back-bottom (on ground)
+  // 8 corners: F=front / B=back, T=top / B(ottom), L/R = -z / +z
   const FTL = new THREE.Vector3(gx, h, -w);
   const FTR = new THREE.Vector3(gx, h, w);
   const FBL = new THREE.Vector3(gx, 0, -w);
   const FBR = new THREE.Vector3(gx, 0, w);
+  const BTL = new THREE.Vector3(bx, hb, -w);
+  const BTR = new THREE.Vector3(bx, hb, w);
   const BBL = new THREE.Vector3(bx, 0, -w);
   const BBR = new THREE.Vector3(bx, 0, w);
 
-  // a thin tubular strut between two points
-  const strut = (a: THREE.Vector3, b: THREE.Vector3, rad: number): void => {
+  // thin tubular frame member between two points
+  const strut = (a: THREE.Vector3, b: THREE.Vector3): void => {
     const dir = new THREE.Vector3().subVectors(b, a);
     const len = dir.length() || 1e-3;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 6), postMat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, len, 6), postMat);
     m.position.copy(a).addScaledVector(dir, 0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
     grp.add(m);
   };
-  // one slim back-stay per side (crossbar end → back-ground corner) + a ground bar
-  strut(FTL, BBL, r * 0.32);
-  strut(FTR, BBR, r * 0.32);
-  strut(BBL, BBR, r * 0.32);
+  strut(FTL, BTL); // roof rails (crossbar end → back-top), sloping down
+  strut(FTR, BTR);
+  strut(BTL, BBL); // short back uprights
+  strut(BTR, BBR);
+  strut(BTL, BTR); // back-top bar
+  strut(BBL, BBR); // back-bottom (ground) bar
 
-  // Net as a visible wireframe GRID (line segments), so it reads as netting rather
-  // than a flat pane. `quad` lays an n×m grid over four corners (pass a repeated
-  // corner for a triangular face). Lerp helper keeps it readable.
-  const netMat = new THREE.LineBasicMaterial({ color: '#eaf2ff', transparent: true, opacity: 0.4 });
+  // Net as a visible wireframe GRID over each face, so it clearly reads as netting.
+  const netMat = new THREE.LineBasicMaterial({ color: '#eaf2ff', transparent: true, opacity: 0.5 });
   const lerp = (a: THREE.Vector3, b: THREE.Vector3, t: number): THREE.Vector3 => a.clone().lerp(b, t);
-  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, dd: THREE.Vector3, nu = 6, nv = 6): void => {
+  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, dd: THREE.Vector3, nu = 5, nv = 5): void => {
+    // bilinear patch: corners a→b along one edge, dd→c along the other
     const at = (u: number, v: number): THREE.Vector3 => lerp(lerp(a, b, u), lerp(dd, c, u), v);
     const pos: number[] = [];
     const seg = (p: THREE.Vector3, q: THREE.Vector3): void => void pos.push(p.x, p.y, p.z, q.x, q.y, q.z);
@@ -200,9 +203,10 @@ function buildGoal(sx: number): void {
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     grp.add(new THREE.LineSegments(geo, netMat));
   };
-  quad(FTL, FTR, BBR, BBL); // sloping roof/back of the net
-  quad(FTL, FBL, BBL, BBL); // left side (triangle: BBL repeated)
-  quad(FTR, FBR, BBR, BBR); // right side (triangle: BBR repeated)
+  quad(FTL, FTR, BTR, BTL); // sloping roof
+  quad(BTL, BTR, BBR, BBL); // back (leans out slightly under the slope)
+  quad(FTL, FBL, BBL, BTL); // left side
+  quad(FTR, FBR, BBR, BTR); // right side
 
   world.add(grp);
 }
