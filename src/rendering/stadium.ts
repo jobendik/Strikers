@@ -157,56 +157,64 @@ function buildGoal(sx: number): void {
   bar.castShadow = true;
   grp.add(bar);
 
-  // A classic box goal: a shallow frame behind the posts that the net hangs on.
-  // The back uprights are SHORT (the net roof slopes down from the crossbar to a
-  // low back bar), so there are no full-height poles standing out of the goal.
+  // A full box goal (real football-goal silhouette): the front frame above, a
+  // matching full-height back frame, joined by depth bars top and bottom on both
+  // sides, with a net grid on the back, both sides and the roof. The goal's width
+  // runs along z (±w); depth runs along x (front gx → back bx).
   const bx = gx + sx * d; // back of the goal (outward, away from the pitch)
-  const hb = h * 0.5; // back is half-height — gives the goal its sloping roof
 
-  // 8 corners: F=front / B=back, T=top / B(ottom), L/R = -z / +z
-  const FTL = new THREE.Vector3(gx, h, -w);
-  const FTR = new THREE.Vector3(gx, h, w);
-  const FBL = new THREE.Vector3(gx, 0, -w);
-  const FBR = new THREE.Vector3(gx, 0, w);
-  const BTL = new THREE.Vector3(bx, hb, -w);
-  const BTR = new THREE.Vector3(bx, hb, w);
-  const BBL = new THREE.Vector3(bx, 0, -w);
-  const BBR = new THREE.Vector3(bx, 0, w);
-
-  // thin tubular frame member between two points
-  const strut = (a: THREE.Vector3, b: THREE.Vector3): void => {
+  // thin tubular frame member between two world points
+  const tube = (a: THREE.Vector3, b: THREE.Vector3, rad: number): void => {
     const dir = new THREE.Vector3().subVectors(b, a);
     const len = dir.length() || 1e-3;
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.5, r * 0.5, len, 6), postMat);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 12), postMat);
     m.position.copy(a).addScaledVector(dir, 0.5);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize());
+    m.castShadow = true;
     grp.add(m);
   };
-  strut(FTL, BTL); // roof rails (crossbar end → back-top), sloping down
-  strut(FTR, BTR);
-  strut(BTL, BBL); // short back uprights
-  strut(BTR, BBR);
-  strut(BTL, BTR); // back-top bar
-  strut(BBL, BBR); // back-bottom (ground) bar
+  const V = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
 
-  // Net as a visible wireframe GRID over each face, so it clearly reads as netting.
-  const netMat = new THREE.LineBasicMaterial({ color: '#eaf2ff', transparent: true, opacity: 0.5 });
-  const lerp = (a: THREE.Vector3, b: THREE.Vector3, t: number): THREE.Vector3 => a.clone().lerp(b, t);
-  const quad = (a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3, dd: THREE.Vector3, nu = 5, nv = 5): void => {
-    // bilinear patch: corners a→b along one edge, dd→c along the other
-    const at = (u: number, v: number): THREE.Vector3 => lerp(lerp(a, b, u), lerp(dd, c, u), v);
-    const pos: number[] = [];
-    const seg = (p: THREE.Vector3, q: THREE.Vector3): void => void pos.push(p.x, p.y, p.z, q.x, q.y, q.z);
-    for (let i = 0; i <= nu; i++) for (let j = 0; j < nv; j++) seg(at(i / nu, j / nv), at(i / nu, (j + 1) / nv));
-    for (let j = 0; j <= nv; j++) for (let i = 0; i < nu; i++) seg(at(i / nu, j / nv), at((i + 1) / nu, j / nv));
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    grp.add(new THREE.LineSegments(geo, netMat));
+  // back box frame (thinner than the front posts) + bottom ground bar
+  tube(V(bx, 0, -w), V(bx, h, -w), r * 0.65);
+  tube(V(bx, 0, w), V(bx, h, w), r * 0.65);
+  tube(V(bx, h, -w), V(bx, h, w), r * 0.65);
+  tube(V(bx, 0, -w), V(bx, 0, w), r * 0.5);
+  // depth bars joining front frame to back frame (top + bottom, both sides)
+  tube(V(gx, h, -w), V(bx, h, -w), r * 0.55);
+  tube(V(gx, h, w), V(bx, h, w), r * 0.55);
+  tube(V(gx, 0, -w), V(bx, 0, -w), r * 0.45);
+  tube(V(gx, 0, w), V(bx, 0, w), r * 0.45);
+
+  // --- net: a grid of straight lines on the back, both sides and the roof ---
+  const netMat = new THREE.LineBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.35 });
+  const step = 0.55; // net mesh spacing (world units)
+  const pos: number[] = [];
+  const addLine = (a: THREE.Vector3, b: THREE.Vector3): void => void pos.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  // inclusive samples from `a` to `b` every ~`step` (handles either direction)
+  const samples = (a: number, b: number): number[] => {
+    const n = Math.max(1, Math.round(Math.abs(b - a) / step));
+    return Array.from({ length: n + 1 }, (_, i) => a + ((b - a) * i) / n);
   };
-  quad(FTL, FTR, BTR, BTL); // sloping roof
-  quad(BTL, BTR, BBR, BBL); // back (leans out slightly under the slope)
-  quad(FTL, FBL, BBL, BTL); // left side
-  quad(FTR, FBR, BBR, BTR); // right side
+  const zs = samples(-w, w); // across the width
+  const ys = samples(0, h); // up the height
+  const xs = samples(gx, bx); // along the depth
+
+  // back face (at x = bx): verticals + horizontals
+  for (const z of zs) addLine(V(bx, 0, z), V(bx, h, z));
+  for (const y of ys) addLine(V(bx, y, -w), V(bx, y, w));
+  // side faces (at z = ±w): depth lines + verticals
+  for (const z of [-w, w]) {
+    for (const y of ys) addLine(V(gx, y, z), V(bx, y, z));
+    for (const x of xs) addLine(V(x, 0, z), V(x, h, z));
+  }
+  // roof (at y = h): depth lines + width lines
+  for (const z of zs) addLine(V(gx, h, z), V(bx, h, z));
+  for (const x of xs) addLine(V(x, h, -w), V(x, h, w));
+
+  const netGeo = new THREE.BufferGeometry();
+  netGeo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  grp.add(new THREE.LineSegments(netGeo, netMat));
 
   world.add(grp);
 }
