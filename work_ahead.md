@@ -240,8 +240,9 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 ## 7. Validation & workflow
 
 - **Every gameplay/balance change:** `npx tsc --noEmit` → `npx vite build` → `npm run sim -- 16 180`; confirm mirror ≈ even, possession ~50/50, on-target ≤ shots, no NaN/hang/OOB.
+- **Every progression/economy change:** also run **`npm run test`** (the committed engine unit suite in `simtest/units.ts`) — keep it green and add assertions for new logic.
 - **Every commit:** branch → PR → squash/merge to `main` (owner merges autonomously). End commits with the Co-Authored-By trailer.
-- **Keep `npm run sim` green** as the regression gate. Extend the harness with reward/quest unit checks where useful.
+- **Keep `npm run sim` + `npm run test` green** as the regression gates. New retention/economy/live modules must stay out of the sim bundle (reach them only via the stubbed `modes`/`ui`/`main` boundaries) — verify the harness still reports the same module count.
 - **Update §8 and MEMORY.md** as things ship.
 
 ---
