@@ -247,7 +247,7 @@ export function ensureThisWeek(weekly: WeeklyState, weekId = isoWeekId()): boole
  * the reroll happened.
  *
  * Note: `WeeklyState` does not yet have a `rerollUsed` field — we store it as a sentinel
- * activeDays entry `"rerolled"` to avoid a schema migration.
+ * activeDays entry `"__rerolled"` to avoid a schema migration.
  */
 export function rerollWeeklyOrder(weekly: WeeklyState, index: number): boolean {
   if (weekly.activeDays.includes('__rerolled')) return false;
