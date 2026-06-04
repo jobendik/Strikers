@@ -464,6 +464,24 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 @keyframes cxPop{0%{transform:scale(.8);opacity:0;}100%{transform:scale(1);opacity:1;}}
 @media (prefers-reduced-motion: reduce){.cx-reveal{animation:none;}}
 
+/* ---------- Shop (F6) ---------- */
+.sh-card{max-width:520px;}
+.sh-balance{font-family:'Teko';font-weight:500;font-size:22px;letter-spacing:.04em;color:#eafff3;text-align:center;margin-bottom:8px;}
+.sh-list{display:flex;flex-direction:column;gap:8px;}
+.sh-row{display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:12px;text-align:left;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.09);border-left-width:3px;}
+.sh-row.rar-rare{border-left-color:#5fb6ff;}
+.sh-row.rar-epic{border-left-color:#b18cff;}
+.sh-row.rar-mythic{border-left-color:#ffce2e;}
+.sh-star{background:none;border:none;color:var(--amber);font-size:18px;cursor:pointer;padding:0 2px;line-height:1;}
+.sh-info{flex:1;min-width:0;}
+.sh-name{font-family:'Rajdhani';font-weight:700;font-size:14px;color:#eaf2ff;}
+.sh-kind{font-family:'Rajdhani';font-weight:600;font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#7f93ad;}
+.sh-buy{font-size:16px;padding:6px 14px 4px;white-space:nowrap;}
+.sh-buy:disabled{opacity:.4;filter:grayscale(.6);cursor:default;box-shadow:none;}
+.sh-owned{font-family:'Rajdhani';font-weight:800;font-size:12px;letter-spacing:.1em;color:var(--neon);padding:0 8px;}
+.sh-note{font-family:'Rajdhani';font-weight:600;font-size:11px;color:#7f93ad;text-align:center;margin-top:10px;}
+
 /* ---------- Result screen (D) ---------- */
 .ft-card{max-width:560px;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #ftResult[data-tone="win"]{color:var(--neon);text-shadow:0 0 26px rgba(57,255,20,.5);}
