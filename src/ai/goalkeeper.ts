@@ -85,7 +85,7 @@ export function gkBrain(p: Player, _dt: number): void {
       const dl = Math.hypot(dx, dz) || 1;
       // Lateral component of the advance: track the ball's z so the keeper
       // doesn't sprint sideways away from the line of the shot.
-      const rearZ = ball.position.z * ((CFG.goalHalf * 2) / (CFG.halfW * 2));
+      const rearZ = ball.position.z * (CFG.goalHalf / CFG.halfW);
       const tx = own + (dx / dl) * (CFG.gkTend + step);
       const tz = rearZ + (dz / dl) * (CFG.gkTend + step) * 0.4;
       p.goArrive(V3(clamp(tx, own, own + team.side * -CFG.gkAngleStep), 0, clamp(tz, -CFG.goalHalf, CFG.goalHalf)));

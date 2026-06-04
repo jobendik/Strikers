@@ -75,8 +75,8 @@ export function aiCarry(p: Player, _dt: number): void {
   const myIdx = teamIndex(team);
   const scoreDiff = match.score[myIdx] - match.score[1 - myIdx]; // +ve = winning
   const timeRemaining = match.timeLeft + (match.stoppageLeft > 0 ? match.stoppageLeft : 0);
-  const urgency = scoreDiff < 0 ? clamp(1 - timeRemaining / 40, 0, 1) : 0; // ramps up in last 40 s when losing
-  const conserve = scoreDiff >= 2 && timeRemaining < 25 ? clamp(1 - timeRemaining / 25, 0, 1) : 0; // sit on a big lead
+  const urgency = scoreDiff < 0 ? clamp(1 - timeRemaining / 40, 0, 1) : 0; // ramps up in last 40 s (seconds) when losing
+  const conserve = scoreDiff >= 2 && timeRemaining < 25 ? clamp(1 - timeRemaining / 25, 0, 1) : 0; // sit on a big lead (seconds)
 
   // 0) CHIP the keeper if he has rushed off his line — high-reward, composure-gated
   if (composure > 0.55 && canChipKeeper(ball.position, team, opp, _chip) && Math.random() < 0.35 + composure * 0.45) {
