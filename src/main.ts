@@ -1,4 +1,5 @@
 import './style.css';
+import { Audio } from './core/audio';
 import { handleResize } from './rendering/scene';
 import { buildStadium } from './rendering/stadium';
 import { createGameState } from './game/state';
@@ -80,6 +81,17 @@ for (const id of ['teamPick', 'segMode']) {
 initRadar();
 initInput();
 window.addEventListener('resize', handleResize);
+
+// iOS/mobile audio unlock (L2): resume the AudioContext on the very first user
+// gesture (iOS Safari only unlocks audio inside a gesture handler). Respects the
+// sound setting and detaches itself after firing once.
+const unlockAudio = (): void => {
+  if (getSettings().sound) Audio.resume();
+  window.removeEventListener('pointerdown', unlockAudio);
+  window.removeEventListener('touchend', unlockAudio);
+};
+window.addEventListener('pointerdown', unlockAudio);
+window.addEventListener('touchend', unlockAudio);
 
 // Player model + animations must be fully loaded before Player instances are
 // created (they clone the FBX template in their constructor).
