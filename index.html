@@ -144,6 +144,12 @@
         <div class="daily-meter"><div class="daily-fill season-fill" id="seasonFill"></div></div>
         <div class="season-foot"><span class="season-claim-badge hidden" id="seasonClaimBadge"></span><button class="link" id="btnSeasonView">🏆 VIEW SEASON TRACK</button></div>
       </div>
+      <div class="vault-row">
+        <button class="link vault-btn" id="btnCollection">🎒 COLLECTION<span class="vault-badge hidden" id="collectionBadge"></span></button>
+        <button class="link vault-btn" id="btnChests">🎁 CHESTS<span class="vault-badge hidden" id="chestsBadge"></span></button>
+        <button class="link vault-btn" id="btnShop">🛒 SHOP</button>
+        <button class="link vault-btn" id="btnAwards">🏅 AWARDS<span class="vault-badge hidden" id="awardsBadge"></span></button>
+      </div>
       <div class="wc-banner hidden" id="wcBanner">
         <div class="wc-banner-l1" id="wcBannerL1">WORLD CUP 2026</div>
         <div class="wc-banner-l2" id="wcBannerL2"></div>
@@ -237,6 +243,53 @@
         <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
         <button class="link" id="btnFtMenu">MENU</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Cosmetic collection album (F3/F4) -->
+  <div class="overlay hidden" id="collection">
+    <div class="card wc-card co-card">
+      <div class="kicker">Collection</div>
+      <h2 class="panel-title">COSMETIC COLLECTION</h2>
+      <div class="co-summary" id="coSummary"></div>
+      <div class="wc-tabs co-tabs" id="coTabs"></div>
+      <div class="wc-body co-body" id="coBody"></div>
+      <button class="cta small" id="btnCollectionDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Free chests (F5) -->
+  <div class="overlay hidden" id="chests">
+    <div class="card wc-card cx-card">
+      <div class="kicker">Chests</div>
+      <h2 class="panel-title">FREE CHESTS</h2>
+      <div class="wc-body cx-body" id="chestsBody"></div>
+      <button class="cta small" id="btnChestsDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Earned-currency shop (F6) -->
+  <div class="overlay hidden" id="shop">
+    <div class="card wc-card sh-card">
+      <div class="kicker" id="shopKicker">Shop</div>
+      <h2 class="panel-title">DAILY SHOP</h2>
+      <div class="wc-body sh-body" id="shopBody"></div>
+      <button class="cta small" id="btnShopDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Achievements · medals · mastery (G1/G2/G3) -->
+  <div class="overlay hidden" id="awards">
+    <div class="card wc-card aw-card">
+      <div class="kicker">Awards</div>
+      <h2 class="panel-title">ACHIEVEMENTS</h2>
+      <div class="wc-tabs" id="awTabs">
+        <button class="wc-tab on" data-tab="ach">ACHIEVEMENTS</button>
+        <button class="wc-tab" data-tab="medals">MEDALS</button>
+        <button class="wc-tab" data-tab="mastery">MASTERY</button>
+      </div>
+      <div class="wc-body aw-body" id="awardsBody"></div>
+      <button class="cta small" id="btnAwardsDone">DONE ▸</button>
     </div>
   </div>
 

@@ -16,6 +16,7 @@
  * so this stays out of the balance bundle.
  */
 import type { PlayerData, SeasonState } from '../core/playerData';
+import { grantCosmetic } from './collection';
 
 /** The active season's id (the save heals onto this on load). */
 export const SEASON_ID = 'wc2026';
@@ -287,7 +288,8 @@ function grantReward(data: PlayerData, r: TierReward): void {
     }
     case 'cosmetic':
     case 'title':
-      if (r.id && !data.collection.owned.includes(r.id)) data.collection.owned.push(r.id);
+      // route through the collection so a duplicate converts to shards (F4)
+      if (r.id) grantCosmetic(data, r.id);
       break;
   }
 }

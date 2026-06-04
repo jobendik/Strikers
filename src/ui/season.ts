@@ -14,6 +14,7 @@
  * states plainly why it's locked. No fake scarcity, no countdowns.
  */
 import { getPlayerData, savePlayerData } from '../core/playerData';
+import { refreshCollectionBadge } from './collection';
 import {
   SEASON_TIERS,
   TIERS,
@@ -137,6 +138,7 @@ function claimOne(tier: number, track: Track): void {
   if (claimTier(data, tier, track)) {
     savePlayerData();
     renderSeasonBody();
+    refreshCollectionBadge(); // a cosmetic/title reward may have entered the album
   }
 }
 
@@ -151,6 +153,7 @@ export function initSeasonCard(): void {
     if (res.rewards.length) {
       savePlayerData();
       renderSeasonBody();
+      refreshCollectionBadge();
     }
   });
 

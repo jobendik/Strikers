@@ -78,6 +78,12 @@ export interface EquippedCosmetics {
   celebration: string | null;
   trail: string | null;
   banner: string | null;
+  /** Goal-net colour (F3). */
+  net: string | null;
+  /** Goal sound-stinger (F3). */
+  stinger: string | null;
+  /** Cosmetic name title shown on the profile (overrides the level title) (F3). */
+  title: string | null;
 }
 
 /** Cosmetic collection (F3/F4). */
@@ -133,6 +139,18 @@ export interface PlayerData {
   medals: Record<string, number>;
   /** Nation/playstyle mastery id → xp. */
   mastery: Record<string, number>;
+  /** Unopened chests by chest-type id (F5). */
+  chests: Record<string, number>;
+  /** Pity counters by rarity since the last drop of that rarity (F5). */
+  pity: Record<string, number>;
+  /** Shop wishlist — cosmetic ids the player starred (F6). */
+  wishlist: string[];
+  /** Best-ever records for leaderboards (K1): fastestWcWin, longestStreak, weeklyScore… */
+  records: Record<string, number>;
+  /** Current consecutive-win streak (K1 / comeback aids). */
+  streak: number;
+  /** One-shot flags (onboarding seen, tips dismissed…) (J1). */
+  flags: Record<string, boolean>;
   worldcup: WorldCupState;
   settings: PlayerPrefs;
 }
@@ -166,10 +184,16 @@ export function defaultPlayerData(nation: string = DEFAULT_TEAM): PlayerData {
     daily: { date: '', orders: [], rerollUsed: false, chestPoints: 0, firstWin: false },
     weekly: { weekId: '', orders: [], activeDays: [] },
     season: { id: 'wc2026', level: 1, xp: 0, eliteUnlocked: false, claimed: [] },
-    collection: { owned: [], equipped: { kit: null, ball: null, celebration: null, trail: null, banner: null } },
+    collection: { owned: [], equipped: { kit: null, ball: null, celebration: null, trail: null, banner: null, net: null, stinger: null, title: null } },
     achievements: {},
     medals: {},
     mastery: {},
+    chests: {},
+    pity: {},
+    wishlist: [],
+    records: {},
+    streak: 0,
+    flags: {},
     worldcup: { active: false, field: [], groups: [], bracket: [], matchday: 0, yourNation: nation, yourPath: [], champion: null, userOut: false },
     settings: { reducedMotion: false, effects: 'full' },
   };
@@ -183,6 +207,8 @@ const bool = (v: unknown, d: boolean): boolean => (typeof v === 'boolean' ? v : 
 const arr = <T>(v: unknown, d: T[]): T[] => (Array.isArray(v) ? (v as T[]) : d);
 const rec = (v: unknown): Record<string, number> =>
   v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, number>) : {};
+const recBool = (v: unknown): Record<string, boolean> =>
+  v && typeof v === 'object' && !Array.isArray(v) ? (v as Record<string, boolean>) : {};
 
 /**
  * Coerce an arbitrary parsed object into a valid {@link PlayerData}, filling any
@@ -251,11 +277,20 @@ export function migratePlayerData(raw: unknown): PlayerData {
         celebration: (rEquip.celebration as string | null) ?? null,
         trail: (rEquip.trail as string | null) ?? null,
         banner: (rEquip.banner as string | null) ?? null,
+        net: (rEquip.net as string | null) ?? null,
+        stinger: (rEquip.stinger as string | null) ?? null,
+        title: (rEquip.title as string | null) ?? null,
       },
     },
     achievements: rec(r.achievements),
     medals: rec(r.medals),
     mastery: rec(r.mastery),
+    chests: rec(r.chests),
+    pity: rec(r.pity),
+    wishlist: arr<string>(r.wishlist, []),
+    records: rec(r.records),
+    streak: Math.max(0, num(r.streak, 0)),
+    flags: recBool(r.flags),
     worldcup: {
       active: bool(rWC.active, false),
       field: arr<string>(rWC.field, []),
