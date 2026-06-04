@@ -22,6 +22,7 @@ import {
   WEEKLY_ACTIVITY_TARGET, type WeeklyProgress,
 } from './quests';
 import { ensureSeason, progressSeason, unlockElite, type SeasonProgress } from './season';
+import { grantChest } from './chests';
 
 /** What happened in the match, from the *user team's* perspective. */
 export interface MatchOutcome {
@@ -133,6 +134,8 @@ export interface MatchRewards {
   daily: DailyRewards;
   weekly: WeeklyRewards;
   season: SeasonRewards;
+  /** Chests earned this match (daily-meter fill + level-ups) — to open on the menu (F5). */
+  chestsEarned: number;
 }
 
 // --- tunables (retention §3.1) ----------------------------------------------
@@ -241,6 +244,18 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   // Rewards aren't auto-granted — the player claims them on the season screen.
   const sp: SeasonProgress = progressSeason(data.season, totalXp);
 
+  // --- chests (F5): the daily-meter fill drops a Daily chest; each account
+  // level-up drops a Level-Up chest. Opened (with visible odds) on the menu.
+  let chestsEarned = 0;
+  if (dp.chestAwarded) {
+    grantChest(data, 'daily');
+    chestsEarned++;
+  }
+  if (out.levelsGained > 0) {
+    grantChest(data, 'levelup', out.levelsGained);
+    chestsEarned += out.levelsGained;
+  }
+
   data.stats.played++;
   if (o.win) data.stats.wins++;
   else if (o.draw) data.stats.draws++;
@@ -310,5 +325,6 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     daily,
     weekly,
     season,
+    chestsEarned,
   };
 }

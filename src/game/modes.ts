@@ -19,6 +19,7 @@ import { refreshWorldCupUI } from '../ui/worldcup';
 import { refreshDailyCard } from '../ui/daily';
 import { refreshWeeklyCard } from '../ui/weekly';
 import { refreshSeasonCard } from '../ui/season';
+import { refreshChestsBadge } from '../ui/chest';
 import { refreshProfileCard } from '../ui/profile';
 import { interstitial, happytime } from '../platform/crazygames';
 
@@ -189,6 +190,7 @@ function rewardChips(r: MatchRewards): ResultChip[] {
   if (r.firstWinOfDay) chips.push({ text: 'First-win bonus', tone: 'bonus' });
   if (r.weekly.activityBonusAwarded) chips.push({ text: 'Weekly activity bonus', tone: 'bonus' });
   if (r.season.eliteJustUnlocked) chips.push({ text: 'Elite Track unlocked', tone: 'bonus' });
+  if (r.chestsEarned > 0) chips.push({ text: `+${r.chestsEarned} chest${r.chestsEarned > 1 ? 's' : ''}`, tone: 'bonus' });
   return chips;
 }
 
@@ -395,6 +397,7 @@ export function presentResult(
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
   refreshWeeklyCard(); // weekly orders + activity days may have advanced
   refreshSeasonCard(); // season tier advanced / Elite may have unlocked — refresh the card (F1/F2)
+  refreshChestsBadge(); // a chest may have been earned (F5)
   refreshProfileCard(); // XP/level/title/stats moved — keep the menu profile fresh (C4)
 
   // World Cup tournament — feed the result into the engine and advance the bracket
