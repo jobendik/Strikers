@@ -23,6 +23,7 @@ import {
 } from './quests';
 import { ensureSeason, progressSeason, unlockElite, type SeasonProgress } from './season';
 import { grantChest } from './chests';
+import { activeEvent } from './events';
 import { CFG } from '../config/constants';
 
 /** Account/season XP multiplier by difficulty (G4) — harder tiers pay more. */
@@ -142,6 +143,8 @@ export interface MatchRewards {
   season: SeasonRewards;
   /** Chests earned this match (daily-meter fill + level-ups) — to open on the menu (F5). */
   chestsEarned: number;
+  /** Active weekly event applied to this match's rewards (K3), or null. */
+  event: { name: string; xpMult: number; coinMult: number } | null;
 }
 
 // --- tunables (retention §3.1) ----------------------------------------------
@@ -219,8 +222,11 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   const rawXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp + wp.activityBonusXp;
   // difficulty multiplier (G4): the harder the tier, the more the match pays
   const diffMult = DIFF_XP_MULT[CFG.diff] ?? 1;
-  const diffBonus = Math.round(rawXp * (diffMult - 1));
-  const totalXp = rawXp + diffBonus;
+  const preEventXp = Math.round(rawXp * diffMult);
+  const diffBonus = preEventXp - rawXp;
+  // weekly event multiplier (K3) on top of everything
+  const ev = activeEvent();
+  const totalXp = Math.round(preEventXp * ev.xpMult);
 
   const xp: XpBreakdown = {
     base,
@@ -233,8 +239,8 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     total: totalXp,
   };
 
-  // --- coins ---
-  const coins =
+  // --- coins (with the weekly-event multiplier, K3) ---
+  const baseCoins =
     (o.win ? COINS_WIN : o.draw ? COINS_DRAW : COINS_LOSS) +
     o.goalsFor * COINS_PER_GOAL +
     (firstMatchOfDay ? COINS_FIRST_MATCH : 0) +
@@ -243,6 +249,7 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     dp.chestCoins +
     wp.orderCoins +
     wp.activityBonusCoins;
+  const coins = Math.round(baseCoins * ev.coinMult);
 
   // --- apply to the save ---
   const out = grantXp(data.level, data.xp, totalXp);
@@ -337,5 +344,6 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     weekly,
     season,
     chestsEarned,
+    event: ev.xpMult > 1 || ev.coinMult > 1 ? { name: ev.name, xpMult: ev.xpMult, coinMult: ev.coinMult } : null,
   };
 }

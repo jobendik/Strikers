@@ -19,6 +19,7 @@ import { initCollection } from './ui/collection';
 import { initChests } from './ui/chest';
 import { initShop } from './ui/shop';
 import { initAwards } from './ui/awards';
+import { initLive } from './ui/live';
 import { initRewardedSurfaces } from './ui/rewarded';
 import { initPause } from './ui/pause';
 import { initOnboarding } from './ui/onboarding';
@@ -61,6 +62,7 @@ initCollection(); // cosmetic album: slots, equip, shards, completion bonuses (F
 initChests(); // free chests with visible odds + pity (F5)
 initShop(); // earned-currency daily shop (F6)
 initAwards(); // achievements · medals · mastery (G1/G2/G3/G5)
+initLive(); // weekly event banner + simulated leaderboard/feed/region (K1–K4)
 initRewardedSurfaces(); // opt-in rewarded-ad surfaces: double XP (B4)
 initPause(); // clean-exit pause info: progress + claimables (J3)
 initProfileCard(); // profile card: flag avatar, name, tier, XP, stat tiles (C4)

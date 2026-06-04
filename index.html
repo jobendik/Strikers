@@ -146,11 +146,16 @@
         <div class="daily-meter"><div class="daily-fill season-fill" id="seasonFill"></div></div>
         <div class="season-foot"><span class="season-claim-badge hidden" id="seasonClaimBadge"></span><button class="link" id="btnSeasonView">🏆 VIEW SEASON TRACK</button></div>
       </div>
+      <div class="event-banner hidden" id="eventBanner">
+        <span class="event-em" id="eventEm">⚡</span>
+        <span class="event-txt"><b id="eventName">EVENT</b><span id="eventBlurb"></span></span>
+      </div>
       <div class="vault-row">
         <button class="link vault-btn" id="btnCollection">🎒 COLLECTION<span class="vault-badge hidden" id="collectionBadge"></span></button>
         <button class="link vault-btn" id="btnChests">🎁 CHESTS<span class="vault-badge hidden" id="chestsBadge"></span></button>
         <button class="link vault-btn" id="btnShop">🛒 SHOP</button>
         <button class="link vault-btn" id="btnAwards">🏅 AWARDS<span class="vault-badge hidden" id="awardsBadge"></span></button>
+        <button class="link vault-btn" id="btnLive">📡 LIVE</button>
       </div>
       <div class="wc-banner hidden" id="wcBanner">
         <div class="wc-banner-l1" id="wcBannerL1">WORLD CUP 2026</div>
@@ -264,6 +269,16 @@
         <button class="link reward-btn hidden" id="btnRewardXp">▶ DOUBLE THIS MATCH'S XP · watch a short ad</button>
         <button class="link" id="btnFtMenu">MENU</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Live: leaderboard · feed · region goal (K1/K2/K4, simulated) -->
+  <div class="overlay hidden" id="live">
+    <div class="card wc-card lv-card">
+      <div class="kicker">Live · Simulated</div>
+      <h2 class="panel-title">LIVE</h2>
+      <div class="wc-body lv-body" id="liveBody"></div>
+      <button class="cta small" id="btnLiveDone">DONE ▸</button>
     </div>
   </div>
 

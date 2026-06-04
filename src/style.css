@@ -528,6 +528,38 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 .sim-ribbon{font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:.08em;color:#7f93ad;
   border:1px dashed rgba(255,255,255,.18);border-radius:8px;padding:6px 10px;margin:0 auto 14px;display:inline-block;}
 
+/* ---------- Weekly event banner (K3) ---------- */
+.event-banner{display:flex;align-items:center;gap:10px;margin:10px 0 4px;padding:10px 14px;border-radius:14px;text-align:left;
+  background:linear-gradient(180deg,rgba(125,211,252,.10),rgba(255,255,255,.03));border:1px solid rgba(125,211,252,.28);}
+.event-banner.hidden{display:none;}
+.event-em{font-size:22px;}
+.event-txt{font-family:'Rajdhani';font-weight:600;font-size:13px;color:#cdd9ea;line-height:1.25;}
+.event-txt b{display:block;font-family:'Rajdhani';font-weight:700;letter-spacing:.1em;font-size:12px;color:#7dd3fc;text-transform:uppercase;}
+
+/* ---------- Live (K1/K2/K4, simulated) ---------- */
+.lv-card{max-width:520px;}
+.lv-h{font-family:'Rajdhani';font-weight:700;letter-spacing:.14em;font-size:11px;text-transform:uppercase;color:#cdd9ea;
+  margin:12px 0 6px;display:flex;justify-content:space-between;align-items:baseline;}
+.lv-h:first-child{margin-top:0;}
+.lv-sim{font-family:'Rajdhani';font-weight:600;font-size:9px;letter-spacing:.06em;color:#7f93ad;text-transform:none;}
+.lv-rank{font-family:'Rajdhani';font-weight:600;font-size:13px;color:#9fb1c9;margin-bottom:6px;}
+.lv-rank b{color:var(--neon);font-size:16px;}
+.lv-list{display:flex;flex-direction:column;gap:3px;}
+.lv-row{display:flex;align-items:center;gap:8px;padding:5px 10px;border-radius:8px;background:rgba(255,255,255,.03);
+  font-family:'Rajdhani';font-weight:600;font-size:13px;color:#cdd9ea;}
+.lv-row.you{background:rgba(57,255,20,.10);border:1px solid rgba(57,255,20,.3);color:#eafff3;}
+.lv-pos{width:20px;font-family:'Teko';font-weight:500;font-size:16px;color:#7f93ad;text-align:center;}
+.lv-name{flex:1;}
+.lv-nat{font-family:'Rajdhani';font-weight:700;font-size:10px;color:#7f93ad;letter-spacing:.06em;}
+.lv-score{font-family:'Teko';font-weight:500;font-size:17px;color:var(--amber);}
+.lv-region{font-family:'Rajdhani';font-weight:600;font-size:13px;color:#eaf2ff;margin-bottom:6px;}
+.lv-region-sub{font-family:'Rajdhani';font-weight:600;font-size:11px;color:#9fb1c9;margin-top:5px;}
+.lv-feed{display:flex;flex-direction:column;gap:4px;}
+.lv-feed-item{font-family:'Rajdhani';font-weight:600;font-size:12px;color:#9fb1c9;padding:5px 10px;border-radius:8px;
+  background:rgba(255,255,255,.03);border-left:3px solid rgba(255,255,255,.12);}
+.lv-feed-item.lv-win{border-left-color:var(--neon);}
+.lv-feed-item.lv-milestone{border-left-color:#7dd3fc;}
+
 /* ---------- Result screen (D) ---------- */
 .ft-card{max-width:560px;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #ftResult[data-tone="win"]{color:var(--neon);text-shadow:0 0 26px rgba(57,255,20,.5);}

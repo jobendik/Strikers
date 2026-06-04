@@ -8,6 +8,7 @@ import { applyMatchRewards, type MatchRewards } from './rewards';
 import { awardMatchMedals, type MedalAward } from './medals';
 import { grantMastery, type MasteryGrant } from './mastery';
 import { checkAchievements, type AchievementAward } from './achievements';
+import { bumpWeeklyScore } from './rivals';
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import {
   startOrResumeRun,
@@ -216,6 +217,7 @@ function rewardChips(r: MatchRewards): ResultChip[] {
   if (r.weekly.activityBonusAwarded) chips.push({ text: 'Weekly activity bonus', tone: 'bonus' });
   if (r.season.eliteJustUnlocked) chips.push({ text: 'Elite Track unlocked', tone: 'bonus' });
   if (r.chestsEarned > 0) chips.push({ text: `+${r.chestsEarned} chest${r.chestsEarned > 1 ? 's' : ''}`, tone: 'bonus' });
+  if (r.event) chips.push({ text: r.event.name, tone: 'bonus' });
   return chips;
 }
 
@@ -448,7 +450,7 @@ export function presentResult(
   } else if (decided && !userWon) {
     data.streak = 0;
   }
-  data.records.weeklyScore = (data.records.weeklyScore ?? 0) + (decided && userWon ? 3 : !decided ? 1 : 0);
+  bumpWeeklyScore(data, decided && userWon ? 3 : !decided ? 1 : 0); // weekly leaderboard points (K1, resets weekly)
 
   // --- G-cluster post-match grants (this owner has stats + context + the nation) ---
   const masteryGrant = grantMastery(data, getSettings().team, decided && userWon, !decided); // G3
