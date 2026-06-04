@@ -14,6 +14,7 @@ import {
 } from '../game/chests';
 import { RARITY_ORDER } from '../game/collection';
 import { refreshCollectionBadge } from './collection';
+import { refreshProfileCard } from './profile';
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -91,6 +92,7 @@ export function openChests(): void {
 export function closeChests(): void {
   setVisible(false);
   refreshChestsBadge();
+  refreshProfileCard(); // chest coins/cosmetics gained
 }
 
 /** Wire the chest overlay. Call once at boot. */

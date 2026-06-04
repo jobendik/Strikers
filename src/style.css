@@ -630,9 +630,18 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
   font-family:'Teko';font-weight:600;font-size:26px;line-height:1;letter-spacing:.03em;color:#eaf2ff;padding:0 0 2px;
   transition:border-color .15s;}
 .prof-name:focus{border-bottom-color:var(--neon);}
-.prof-meta{display:flex;align-items:center;gap:8px;}
+.prof-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
 .prof-badge{font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#06140a;
   background:linear-gradient(180deg,#ffe79a,var(--amber));padding:3px 9px 2px;border-radius:999px;}
+.prof-flair{font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:.08em;color:#eaf2ff;
+  border:1px solid currentColor;border-radius:999px;padding:2px 9px;opacity:.95;}
+.prof-flair.hidden{display:none;}
+.prof-wallet{display:flex;gap:8px;margin-top:7px;}
+.cur-pill{font-family:'Rajdhani';font-weight:700;font-size:12px;color:#cdd9ea;background:rgba(255,255,255,.05);
+  border:1px solid rgba(255,255,255,.12);border-radius:999px;padding:2px 10px;}
+.cur-pill b{color:#fff;}
+.cur-pill.coin{border-color:rgba(255,206,46,.3);}
+.cur-pill.gem{border-color:rgba(125,211,252,.3);}
 .prof-level{font-family:'Rajdhani';font-weight:700;font-size:11px;letter-spacing:.12em;color:#9fb1c9;}
 .prof-xp{display:flex;align-items:center;gap:9px;}
 .prof-xp-track{flex:1;height:7px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;min-width:60px;}

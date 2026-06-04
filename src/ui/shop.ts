@@ -11,6 +11,7 @@ import { getPlayerData, savePlayerData } from '../core/playerData';
 import { dailyOffers, canBuy, buy, toggleWishlist, isWishlisted, type ShopItem } from '../game/shop';
 import { refreshCollectionBadge } from './collection';
 import { refreshChestsBadge } from './chest';
+import { refreshProfileCard } from './profile';
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -76,6 +77,7 @@ export function openShop(): void {
 
 export function closeShop(): void {
   setVisible(false);
+  refreshProfileCard(); // coins/gems spent
 }
 
 /** Wire the shop overlay. Call once at boot. */

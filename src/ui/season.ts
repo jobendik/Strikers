@@ -15,6 +15,7 @@
  */
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import { refreshCollectionBadge } from './collection';
+import { refreshProfileCard } from './profile';
 import {
   SEASON_TIERS,
   TIERS,
@@ -130,6 +131,7 @@ export function openSeason(): void {
 export function closeSeason(): void {
   setSeasonVisible(false);
   refreshSeasonCard();
+  refreshProfileCard(); // claimed coins/gems/cosmetics
 }
 
 /** Claim a single tier reward (from a body click), then re-render. */

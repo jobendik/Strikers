@@ -7,6 +7,7 @@
  * owns the catalogue + equip logic.
  */
 import { getPlayerData, savePlayerData } from '../core/playerData';
+import { refreshProfileCard } from './profile';
 import {
   CATALOGUE, RARITY_ORDER, bySlot, isOwned, equip, equippedIn, collectionProgress,
   completionBonuses, checkCompletionBonuses, type Slot,
@@ -117,6 +118,7 @@ export function openCollection(): void {
 export function closeCollection(): void {
   setVisible(false);
   refreshCollectionBadge();
+  refreshProfileCard(); // equipped title/banner + any completion-bonus coins changed
 }
 
 /** Wire the collection album. Call once at boot. */

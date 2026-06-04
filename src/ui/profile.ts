@@ -11,8 +11,12 @@
 import { teamMeta } from '../config/players';
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import { xpToNext } from '../core/progression';
+import { cosmeticById } from '../game/collection';
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
+
+/** Rarity → accent colour (matches the rar-* tints) for the equipped banner. */
+const RARITY_ACCENT: Record<string, string> = { common: 'rgba(255,255,255,.14)', rare: '#5fb6ff', epic: '#b18cff', mythic: '#ffce2e' };
 
 /** Max characters for the player name (mirrors the save's migrate clamp). */
 const NAME_MAX = 16;
@@ -40,6 +44,27 @@ export function refreshProfileCard(): void {
   if (badge) badge.textContent = d.title;
   const level = byId('profLevel');
   if (level) level.textContent = `LV ${d.level}`;
+
+  // equipped cosmetic name-title (F3) — flair shown alongside the level tier
+  const flair = byId('profFlair');
+  if (flair) {
+    const t = d.collection.equipped.title;
+    const cz = t ? cosmeticById(t) : undefined;
+    flair.textContent = cz ? cz.name : '';
+    flair.classList.toggle('hidden', !cz);
+    if (cz) flair.style.color = RARITY_ACCENT[cz.rarity] ?? '#eaf2ff';
+  }
+
+  // equipped banner (F3) — tints the card's accent border + glow
+  const banner = d.collection.equipped.banner;
+  const bz = banner ? cosmeticById(banner) : undefined;
+  const accent = bz ? RARITY_ACCENT[bz.rarity] ?? '' : '';
+  card.style.borderColor = accent || '';
+  card.style.boxShadow = accent && bz && bz.rarity !== 'common' ? `0 0 22px ${accent}40` : '';
+
+  // wallet (F6 currency made visible on the menu)
+  setTile('profCoins', String(d.coins));
+  setTile('profGems', String(d.gems));
 
   const need = xpToNext(d.level);
   const pct = need > 0 ? Math.max(0, Math.min(100, (d.xp / need) * 100)) : 0;
