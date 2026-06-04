@@ -86,6 +86,16 @@ export class Team {
       if (isPassSafe(ball.position, s, null, CFG.passLong, opp)) sc += 2;
       if (canShoot(s, CFG.shootPow, this, opp, _scratch)) sc += 1.5;
       sc += 2 * clamp(carrier.position.distanceTo(s) / 9, 0, 1);
+      // Reward spots that are genuinely open: the further the nearest defender,
+      // the more useful the run. Spots covered by a defender score poorly so
+      // the off-ball runner doesn't sprint into a marked position.
+      let nearestDefDist = Infinity;
+      for (const o of opp.players) {
+        if (o.sentOff) continue;
+        const d = Math.hypot(o.position.x - s.x, o.position.z - s.z);
+        if (d < nearestDefDist) nearestDefDist = d;
+      }
+      sc += 1.5 * clamp(nearestDefDist / 8, 0, 1);
       if (sc > bs) {
         bs = sc;
         best = s;
@@ -163,7 +173,19 @@ export class Team {
     } else {
       const sorted = of.slice().sort((a, b) => distSq(a.position, ball.position) - distSq(b.position, ball.position));
       if (sorted[0]) sorted[0].role = 'CHASER';
-      if (ball.position.x * side < 0 && sorted[1]) sorted[1].role = 'CHASER';
+      // Secondary chaser: only commit a second player when the ball is in our
+      // half AND the first chaser isn't already close enough to win it alone.
+      // If the first chaser is within 4 units the second player holds a covering
+      // position behind the play — this blocks counter-attack through-balls
+      // instead of leaving the back line exposed with two players committed.
+      if (ball.position.x * side < 0 && sorted[1]) {
+        const firstChaser = sorted[0];
+        const firstDist = firstChaser ? Math.hypot(firstChaser.position.x - ball.position.x, firstChaser.position.z - ball.position.z) : Infinity;
+        if (firstDist > 4) {
+          sorted[1].role = 'CHASER';
+        }
+        // else sorted[1] stays as POSITION and holds its covering shape
+      }
       this.assignMarks();
     }
 

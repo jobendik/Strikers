@@ -143,6 +143,17 @@ export const CFG = {
 
   // --- corner kicks: a defender's last touch over his own byline ---
   cornerInset: 0.7, // how far inside the lines the corner ball is placed
+
+  // --- goalkeeper angle-narrowing (off-the-line positioning to compress shot angle) ---
+  // When an attacker enters the penalty box with the ball on the ground, the keeper
+  // steps forward along the goal-to-ball axis by up to `gkAngleStep` units.
+  gkAngleStep: 3.8, // maximum units the keeper advances off his line to narrow the angle
+
+  // --- perception: sound cue (Legend difficulty only) ---
+  // A fast ball within this radius is always sensed, even from behind, simulating
+  // elite players reacting to the sound and feel of the ball.
+  soundBallR: 10, // sensing radius (world units) for the sound cue
+  soundBallSpd: 12, // minimum ball ground speed (u/s) that triggers the cue
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff. */

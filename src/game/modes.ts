@@ -17,6 +17,7 @@ import {
 } from './worldcup';
 import { refreshWorldCupUI } from '../ui/worldcup';
 import { refreshDailyCard } from '../ui/daily';
+import { refreshWeeklyCard } from '../ui/weekly';
 import { refreshProfileCard } from '../ui/profile';
 import { interstitial, happytime } from '../platform/crazygames';
 
@@ -185,10 +186,11 @@ function rewardChips(r: MatchRewards): ResultChip[] {
   ];
   if (r.firstMatchOfDay) chips.push({ text: 'First match of day', tone: 'bonus' });
   if (r.firstWinOfDay) chips.push({ text: 'First-win bonus', tone: 'bonus' });
+  if (r.weekly.activityBonusAwarded) chips.push({ text: 'Weekly activity bonus', tone: 'bonus' });
   return chips;
 }
 
-/** The animated progress stack (D2): account XP, daily chest, daily orders. */
+/** The animated progress stack (D2): account XP, daily chest, daily orders, weekly orders, weekly activity. */
 function rewardBars(r: MatchRewards): ResultBar[] {
   const bars: ResultBar[] = [];
   const xpTo = r.xpForNext > 0 ? r.xpIntoLevel / r.xpForNext : 0;
@@ -226,6 +228,31 @@ function rewardBars(r: MatchRewards): ResultBar[] {
       done: o.done,
     });
   }
+
+  // weekly orders (E4)
+  const w = r.weekly;
+  for (const o of w.orders) {
+    bars.push({
+      label: o.label,
+      from: 0,
+      to: o.target > 0 ? clamp01(o.progress / o.target) : 0,
+      text: `${Math.min(o.progress, o.target)} / ${o.target}`,
+      tone: 'order',
+      done: o.done,
+    });
+  }
+
+  // weekly activity meter (E4): shows days played / target (e.g. 2/3 days)
+  bars.push({
+    label: 'Weekly activity',
+    from: 0,
+    to: w.activityTarget > 0 ? clamp01(w.activeDays / w.activityTarget) : 0,
+    text: `${Math.min(w.activeDays, w.activityTarget)} / ${w.activityTarget} days`,
+    badge: w.activityBonusAwarded ? 'BONUS!' : undefined,
+    tone: 'ach',
+    done: w.activeDays >= w.activityTarget,
+  });
+
   return bars;
 }
 
@@ -336,6 +363,7 @@ export function presentResult(
 
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}` : undefined;
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
+  refreshWeeklyCard(); // weekly orders + activity days may have advanced
   refreshProfileCard(); // XP/level/title/stats moved — keep the menu profile fresh (C4)
 
   // World Cup tournament — feed the result into the engine and advance the bracket

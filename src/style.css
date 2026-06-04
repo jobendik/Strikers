@@ -327,6 +327,14 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 #btnReroll{display:inline-block;margin-top:9px;color:var(--amber);}
 #btnReroll.hidden{display:none;}
 
+/* ---------- Weekly card (menu, E4) ---------- */
+.weekly-card{background:linear-gradient(180deg,rgba(177,140,255,.09),rgba(255,255,255,.03));
+  border:1px solid rgba(177,140,255,.22);}
+.weekly-card .daily-title{color:#b18cff;}
+.weekly-fill{background:linear-gradient(90deg,#b18cff,#d4b8ff);}
+#btnWeeklyReroll{display:inline-block;margin-top:9px;color:#b18cff;}
+#btnWeeklyReroll.hidden{display:none;}
+
 /* ---------- Result screen (D) ---------- */
 .ft-card{max-width:560px;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #ftResult[data-tone="win"]{color:var(--neon);text-shadow:0 0 26px rgba(57,255,20,.5);}
