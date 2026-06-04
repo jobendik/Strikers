@@ -10,7 +10,16 @@ import type { Player } from '../entities/Player';
  * heading for a corner beyond his standing reach — flings himself at the
  * predicted crossing point (a full-stretch diving save, deepening Simple
  * Soccer's keeper logic and leaning on the aerial ball model). Failing a dive,
- * he rushes out to smother a close ball, otherwise holds a rear-interpose line.
+ * he either rushes out to smother a close ball, narrows the shooting angle by
+ * stepping off his line when an attacker enters the box, or holds a
+ * rear-interpose line.
+ *
+ * Angle-narrowing: a keeper who stays planted on his line gives the attacker the
+ * full width of the goal to aim at. Real keepers step toward the ball carrier to
+ * compress that angle — the further they advance, the smaller the gap. This
+ * behaviour is gated so the keeper never over-commits (he stays within
+ * `CFG.gkAngleStep` units off the line and retreats immediately if the ball is
+ * crossed or shot).
  */
 export function gkBrain(p: Player, _dt: number): void {
   const team = p.team;
@@ -56,6 +65,32 @@ export function gkBrain(p: Player, _dt: number): void {
   if (distSq(goalC, ball.position) < CFG.gkInterceptR * CFG.gkInterceptR && match.controlTeam !== team) {
     p.goSeek(ball.position); // rush to intercept
     return;
+  }
+
+  // --- angle-narrowing: step off the line toward the ball carrier to compress
+  // the shooting cone when an attacker is in or approaching the penalty area. ---
+  // The keeper advances along the line between own goal and ball, stopping at
+  // `CFG.gkAngleStep` units from the goal line. This is only active when our
+  // team is not in possession and the ball is on the ground (no aerial shots).
+  if (match.controlTeam !== team && ball.position.y < CFG.controlHeight) {
+    const ballDistGoal = Math.abs(ball.position.x - own);
+    const inBox = ballDistGoal < CFG.boxDepth && Math.abs(ball.position.z) < CFG.boxHalfW;
+    if (inBox) {
+      // step fraction: how far to advance (0 = stay on line, 1 = full step forward).
+      // Increases as ball comes closer to goal; keeper commits more when under pressure.
+      const step = clamp(1 - ballDistGoal / CFG.boxDepth, 0, 1) * CFG.gkAngleStep;
+      // Direction from own goal to ball (normalised on ground plane).
+      const dx = ball.position.x - own;
+      const dz = ball.position.z;
+      const dl = Math.hypot(dx, dz) || 1;
+      // Lateral component of the advance: track the ball's z so the keeper
+      // doesn't sprint sideways away from the line of the shot.
+      const rearZ = ball.position.z * ((CFG.goalHalf * 2) / (CFG.halfW * 2));
+      const tx = own + (dx / dl) * (CFG.gkTend + step);
+      const tz = rearZ + (dz / dl) * (CFG.gkTend + step) * 0.4;
+      p.goArrive(V3(clamp(tx, own, own + team.side * -CFG.gkAngleStep), 0, clamp(tz, -CFG.goalHalf, CFG.goalHalf)));
+      return;
+    }
   }
 
   // rear-interpose target: track the ball laterally, scaled into the goal mouth

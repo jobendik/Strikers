@@ -16,6 +16,12 @@ import type { Player } from '../entities/Player';
  *
  * Vision sharpness scales with difficulty: weaker AIs have a narrower cone and
  * shorter sight, so they lose track of play behind them more often.
+ *
+ * At LEGEND difficulty a "sound cue" is added: a fast-moving ball (speed above
+ * `CFG.soundBallSpd`) within `CFG.soundBallR` units is always sensed even when
+ * it is behind the player, simulating elite players reacting to the sound and
+ * feel of the ball rather than pure sight. This produces noticeably sharper
+ * reactions to shots and through-balls on the highest setting.
  */
 
 // [easy, pro, legend] — field of view (radians) and vision range (world units).
@@ -43,6 +49,14 @@ export function updatePerception(p: Player): void {
     const fwd = headingVec(p.heading);
     const dot = (dx / dist) * fwd.x + (dz / dist) * fwd.z; // cos(angle to heading)
     if (dot < Math.cos(fov * 0.5)) visible = false; // outside the FOV cone
+  }
+
+  // Sound cue (Legend difficulty): a fast ball nearby is heard even from behind.
+  // This is NOT available at Easy/Pro so that placement beats Legend defenders
+  // too — the ball has to actually be fast enough to make a noise.
+  if (!visible && CFG.diff === 2 && p.roleType !== 'GK') {
+    const ballSpd = Math.hypot(ball.velocity.x, ball.velocity.z);
+    if (ballSpd >= CFG.soundBallSpd && dist <= CFG.soundBallR) visible = true;
   }
 
   if (visible) {

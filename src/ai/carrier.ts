@@ -4,6 +4,7 @@ import { V3, clamp, distSq, headingVec, rand } from '../core/math';
 import { ball, match, oppOf, setReceiver, teamIndex } from '../game/state';
 import { kick, clearBall, lobKick } from '../game/control';
 import { evaluateCarrier } from './fuzzy';
+
 import {
   addNoise,
   canChipKeeper,
@@ -59,11 +60,23 @@ export function aiCarry(p: Player, _dt: number): void {
   const fwd = headingVec(p.heading);
   const dot = clamp((toBall.x / tl) * fwd.x + (toBall.z / tl) * fwd.z, 0, 1);
 
-  // fuzzy inputs: distance to goal mouth, and marking pressure (0..1).
+  // fuzzy inputs: distance to goal mouth, marking pressure (0..1), and lateral
+  // centrality (1 = dead central, 0 = on the byline).
   const distToGoal = clamp(Math.hypot(goalX(team) - ball.position.x, ball.position.z), 0, 30);
   const nd = o ? Math.hypot(o.position.x - p.position.x, o.position.z - p.position.z) : Infinity;
   const pressure01 = clamp(1 - nd / (CFG.comfortZone * 2), 0, 1);
-  const desire = evaluateCarrier(distToGoal, pressure01);
+  // central01: 1 when directly in front of goal, 0 when on the byline.
+  const central01 = clamp(1 - Math.abs(ball.position.z) / CFG.halfW, 0, 1);
+  const desire = evaluateCarrier(distToGoal, pressure01, central01);
+
+  // Match-context urgency: if losing and time is running low, the team must
+  // gamble — shoot from further out, attempt higher-risk plays. Conversely,
+  // if sitting on a lead in added time, preserve possession and slow the game.
+  const myIdx = teamIndex(team);
+  const scoreDiff = match.score[myIdx] - match.score[1 - myIdx]; // +ve = winning
+  const timeRemaining = match.timeLeft + (match.stoppageLeft > 0 ? match.stoppageLeft : 0);
+  const urgency = scoreDiff < 0 ? clamp(1 - timeRemaining / 40, 0, 1) : 0; // ramps up in last 40 s when losing
+  const conserve = scoreDiff >= 2 && timeRemaining < 25 ? clamp(1 - timeRemaining / 25, 0, 1) : 0; // sit on a big lead
 
   // 0) CHIP the keeper if he has rushed off his line — high-reward, composure-gated
   if (composure > 0.55 && canChipKeeper(ball.position, team, opp, _chip) && Math.random() < 0.35 + composure * 0.45) {
@@ -74,15 +87,21 @@ export function aiCarry(p: Player, _dt: number): void {
     return;
   }
 
-  // 1) SHOOT — needs a clear lane AND fuzzy approval; composure lowers the nerve threshold
+  // 1) SHOOT — needs a clear lane AND fuzzy approval; composure lowers the nerve
+  // threshold, and urgency (losing late) lowers it further so the team gambles.
   let power = CFG.shootPow * (0.6 + 0.4 * dot) * (0.85 + 0.3 * shootAcc);
   let canSh = canShoot(ball.position, power, team, opp, _shot);
-  const wantsShot = desire.shoot >= 45 - composure * 14;
-  if (!canSh && p.position.x * team.side > 4 && Math.random() < CFG.potShot) {
+  // pot-shot: blind strike hoping for a deflection; suppressed when team is
+  // conserving a lead (waste time rather than give the ball away).
+  const potShotChance = CFG.potShot * (1 + urgency * 3) * (1 - conserve * 0.9);
+  if (!canSh && p.position.x * team.side > 4 && Math.random() < potShotChance) {
     _shot.set(goalX(team), 0, rand(-CFG.goalHalf * 0.8, CFG.goalHalf * 0.8));
     canSh = true;
   }
-  if (canSh && (wantsShot || !isOppWithin(p, CFG.comfortZone))) {
+  // urgency lowers the nerve threshold — a team that must score takes bigger risks;
+  // conserve raises it so a winning team doesn't throw away possession shooting.
+  const shootThreshold = 45 - composure * 14 - urgency * 12 + conserve * 18;
+  if (canSh && (desire.shoot >= shootThreshold || !isOppWithin(p, CFG.comfortZone))) {
     addNoise(_shot, shootAcc);
     clampShot(_shot, team);
     // a clinical striker bends the shot back toward goal centre (in-swinging),
@@ -148,9 +167,12 @@ export function aiCarry(p: Player, _dt: number): void {
     }
   }
 
-  // 5) PASS — when fuzzy says so or when threatened, and a safe lane exists
+  // 5) PASS — when fuzzy says so or when threatened, and a safe lane exists.
+  // When conserving a lead, a lower pass threshold means the team circulates
+  // the ball readily rather than holding and inviting pressure.
   power = CFG.passLong * (0.6 + 0.4 * dot);
-  if (desire.pass >= 55 || isOppWithin(p, CFG.comfortZone)) {
+  const passThreshold = 55 - conserve * 14;
+  if (desire.pass >= passThreshold || isOppWithin(p, CFG.comfortZone)) {
     const pass = findBestPass(p, power, CFG.minPassDist, opp);
     if (pass) {
       addNoise(pass.target, passAcc);
