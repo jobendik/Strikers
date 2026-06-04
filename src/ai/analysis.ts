@@ -187,7 +187,8 @@ export function findBestPass(
  * sprays the ball far less than a journeyman.
  */
 export function addNoise(t: Vector3, accuracy = 0.5): void {
-  const n = (0.78 - CFG.diff * 0.2) * (1.25 - accuracy);
+  // floor at 0 so the top tiers (Ultimate/World Class) shoot clean, never negative
+  const n = Math.max(0, 0.78 - CFG.diff * 0.2) * (1.25 - accuracy);
   t.z += rand(-n, n);
   t.x += rand(-n, n) * 0.4;
 }

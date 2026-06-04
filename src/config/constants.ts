@@ -131,8 +131,8 @@ export const CFG = {
     setupTime: 0.9, // pause before each kick can be taken
     resultTime: 1.7, // how long a kick result is shown
     flightTimeout: 2.4, // failsafe: an unresolved kick is recorded as a miss
-    aiKeeperRead: [0.42, 0.52, 0.62], // chance the AI keeper picks the right side, by diff
-    aiOnTarget: [0.78, 0.84, 0.9], // chance an AI penalty is on target, by diff
+    aiKeeperRead: [0.42, 0.52, 0.62, 0.7, 0.76], // chance the AI keeper picks the right side, by diff (0–4)
+    aiOnTarget: [0.78, 0.84, 0.9, 0.93, 0.95], // chance an AI penalty is on target, by diff (0–4)
     bestOf: 5, // kicks each before sudden death
   },
 
@@ -156,11 +156,14 @@ export const CFG = {
   soundBallSpd: 12, // minimum ball ground speed (u/s) that triggers the cue
 };
 
-/** Per-difficulty AI tuning. Indexed by CFG.diff. */
+/** Per-difficulty AI tuning. Indexed by CFG.diff (0 Easy → 4 World Class). */
 export const DIFF: DiffSetting[] = [
   { label: 'EASY', aiSpd: 0.88, react: 0.34, passSafe: 2.6, shootBias: 0.55, keeper: 0.74 },
   { label: 'PRO', aiSpd: 0.97, react: 0.22, passSafe: 2.1, shootBias: 0.78, keeper: 0.78 },
   { label: 'LEGEND', aiSpd: 1.05, react: 0.12, passSafe: 1.7, shootBias: 0.95, keeper: 0.82 },
+  // G4 — extra tiers above Legend (sharper reads, riskier passing, better keeper).
+  { label: 'ULTIMATE', aiSpd: 1.11, react: 0.08, passSafe: 1.45, shootBias: 1.05, keeper: 0.86 },
+  { label: 'WORLD CLASS', aiSpd: 1.16, react: 0.06, passSafe: 1.25, shootBias: 1.12, keeper: 0.9 },
 ];
 
 /**

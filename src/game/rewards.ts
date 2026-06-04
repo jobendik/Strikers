@@ -23,6 +23,10 @@ import {
 } from './quests';
 import { ensureSeason, progressSeason, unlockElite, type SeasonProgress } from './season';
 import { grantChest } from './chests';
+import { CFG } from '../config/constants';
+
+/** Account/season XP multiplier by difficulty (G4) — harder tiers pay more. */
+const DIFF_XP_MULT = [0.9, 1.0, 1.15, 1.3, 1.5];
 
 /** What happened in the match, from the *user team's* perspective. */
 export interface MatchOutcome {
@@ -41,6 +45,8 @@ export interface XpBreakdown {
   cleanSheet: number;
   margin: number;
   firstWin: number;
+  /** Bonus XP from a harder difficulty tier (G4). */
+  difficulty: number;
   total: number;
 }
 
@@ -210,7 +216,11 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   const allWeeklyDone = data.weekly.orders.length > 0 && data.weekly.orders.every((q) => q.claimed);
   const eliteJustUnlocked = allWeeklyDone ? unlockElite(data.season) : false;
 
-  const totalXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp + wp.activityBonusXp;
+  const rawXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp + wp.activityBonusXp;
+  // difficulty multiplier (G4): the harder the tier, the more the match pays
+  const diffMult = DIFF_XP_MULT[CFG.diff] ?? 1;
+  const diffBonus = Math.round(rawXp * (diffMult - 1));
+  const totalXp = rawXp + diffBonus;
 
   const xp: XpBreakdown = {
     base,
@@ -219,6 +229,7 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     cleanSheet: cleanSheetXp,
     margin: marginXp,
     firstWin: firstWinXp,
+    difficulty: diffBonus,
     total: totalXp,
   };
 

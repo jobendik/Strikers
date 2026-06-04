@@ -191,6 +191,7 @@ function rewardChips(r: MatchRewards): ResultChip[] {
     { text: `+${r.xp.total} XP`, tone: 'xp' },
     { text: `+${r.coins} coins`, tone: 'coin' },
   ];
+  if (r.xp.difficulty > 0) chips.push({ text: `+${r.xp.difficulty} difficulty XP`, tone: 'xp' });
   if (r.firstMatchOfDay) chips.push({ text: 'First match of day', tone: 'bonus' });
   if (r.firstWinOfDay) chips.push({ text: 'First-win bonus', tone: 'bonus' });
   if (r.weekly.activityBonusAwarded) chips.push({ text: 'Weekly activity bonus', tone: 'bonus' });
