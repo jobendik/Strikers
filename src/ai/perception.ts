@@ -25,8 +25,8 @@ import type { Player } from '../entities/Player';
  */
 
 // [easy, pro, legend] — field of view (radians) and vision range (world units).
-const FOV = [2.6, 3.5, 4.4];
-const RANGE = [40, 52, 64];
+const FOV = [2.6, 3.5, 4.4, 4.8, 5.2]; // vision cone by diff (0–4)
+const RANGE = [40, 52, 64, 72, 80]; // sight range by diff (0–4)
 const MEMORY_SPAN = 0.8;
 
 export function initPerception(p: Player): void {
@@ -51,10 +51,10 @@ export function updatePerception(p: Player): void {
     if (dot < Math.cos(fov * 0.5)) visible = false; // outside the FOV cone
   }
 
-  // Sound cue (Legend difficulty): a fast ball nearby is heard even from behind.
-  // This is NOT available at Easy/Pro so that placement beats Legend defenders
-  // too — the ball has to actually be fast enough to make a noise.
-  if (!visible && CFG.diff === 2 && p.roleType !== 'GK') {
+  // Sound cue (Legend and above): a fast ball nearby is heard even from behind.
+  // This is NOT available at Easy/Pro so that placement beats them too — the ball
+  // has to actually be fast enough to make a noise.
+  if (!visible && CFG.diff >= 2 && p.roleType !== 'GK') {
     const ballSpd = Math.hypot(ball.velocity.x, ball.velocity.z);
     if (ballSpd >= CFG.soundBallSpd && dist <= CFG.soundBallR) visible = true;
   }

@@ -59,6 +59,8 @@ const scenarios: [string, string, string, number, boolean][] = [
   ['EASY   USA v BRA', 'USA', 'BRAZIL', 0, false],
   ['PRO    USA v BRA', 'USA', 'BRAZIL', 1, false],
   ['LEGEND USA v BRA', 'USA', 'BRAZIL', 2, false],
+  ['ULTIM  USA v BRA', 'USA', 'BRAZIL', 3, false],
+  ['WCLASS USA v BRA', 'USA', 'BRAZIL', 4, false],
   ['PRO    BRA v BRA (mirror)', 'BRAZIL', 'BRAZIL', 1, false],
   ['PRO    BRA v BRA (frozen ment.)', 'BRAZIL', 'BRAZIL', 1, true],
   ['PRO    ARG v FRA (elite)', 'ARGENTINA', 'FRANCE', 1, false],

@@ -21,6 +21,13 @@ import {
   ensureThisWeek, progressWeekly, remainingWeeklyOrders, weeklyOrderLabel,
   WEEKLY_ACTIVITY_TARGET, type WeeklyProgress,
 } from './quests';
+import { ensureSeason, progressSeason, unlockElite, type SeasonProgress } from './season';
+import { grantChest } from './chests';
+import { activeEvent } from './events';
+import { CFG } from '../config/constants';
+
+/** Account/season XP multiplier by difficulty (G4) — harder tiers pay more. */
+const DIFF_XP_MULT = [0.9, 1.0, 1.15, 1.3, 1.5];
 
 /** What happened in the match, from the *user team's* perspective. */
 export interface MatchOutcome {
@@ -39,6 +46,8 @@ export interface XpBreakdown {
   cleanSheet: number;
   margin: number;
   firstWin: number;
+  /** Bonus XP from a harder difficulty tier (G4). */
+  difficulty: number;
   total: number;
 }
 
@@ -87,6 +96,32 @@ export interface WeeklyRewards {
   activityBonusAwarded: boolean;
 }
 
+/** Season Track progress this match (F1/F2). */
+export interface SeasonRewards {
+  /** Season tier before this match. */
+  tierBefore: number;
+  /** Season tier after this match. */
+  tier: number;
+  /** Tiers gained this match. */
+  tiersGained: number;
+  /** Bar fill to animate from (0–1). */
+  fillFrom: number;
+  /** Bar fill to animate to (0–1). */
+  fillTo: number;
+  /** Season XP into the current tier (caption numerator). */
+  into: number;
+  /** Season XP for the next tier (caption denominator; 0 at the cap). */
+  forNext: number;
+  /** The final tier has been reached. */
+  atMax: boolean;
+  /** Rewards waiting to be claimed (free + unlocked elite). */
+  claimable: number;
+  /** The earned Elite track is unlocked for the season (F2). */
+  eliteUnlocked: boolean;
+  /** Elite unlocked *this* match (all weekly orders completed). */
+  eliteJustUnlocked: boolean;
+}
+
 /** Everything the result screen needs to reveal after a match. */
 export interface MatchRewards {
   result: 'win' | 'draw' | 'loss';
@@ -105,6 +140,11 @@ export interface MatchRewards {
   firstWinOfDay: boolean;
   daily: DailyRewards;
   weekly: WeeklyRewards;
+  season: SeasonRewards;
+  /** Chests earned this match (daily-meter fill + level-ups) — to open on the menu (F5). */
+  chestsEarned: number;
+  /** Active weekly event applied to this match's rewards (K3), or null. */
+  event: { name: string; xpMult: number; coinMult: number } | null;
 }
 
 // --- tunables (retention §3.1) ----------------------------------------------
@@ -144,6 +184,9 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   // ensure weekly block is current (rolls fresh weekly orders on a new ISO week) (E4)
   ensureThisWeek(data.weekly, thisWeek);
 
+  // ensure the season block belongs to the current season (F1/F2)
+  ensureSeason(data.season);
+
   // first *win* of the day (E first-win bonus)
   const firstWinOfDay = o.win && !data.daily.firstWin;
   if (firstWinOfDay) data.daily.firstWin = true;
@@ -171,7 +214,19 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   // --- weekly orders + activity meter (E4) ---
   const wp: WeeklyProgress = progressWeekly(data.weekly, facts, today);
 
-  const totalXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp + wp.activityBonusXp;
+  // --- earned Elite track unlock (F2): completing all of a week's orders unlocks
+  // the Elite column for the season (no payment); retroactive claim is automatic.
+  const allWeeklyDone = data.weekly.orders.length > 0 && data.weekly.orders.every((q) => q.claimed);
+  const eliteJustUnlocked = allWeeklyDone ? unlockElite(data.season) : false;
+
+  const rawXp = base + firstMatch + goalsXp + cleanSheetXp + marginXp + firstWinXp + wp.activityBonusXp;
+  // difficulty multiplier (G4): the harder the tier, the more the match pays
+  const diffMult = DIFF_XP_MULT[CFG.diff] ?? 1;
+  const preEventXp = Math.round(rawXp * diffMult);
+  const diffBonus = preEventXp - rawXp;
+  // weekly event multiplier (K3) on top of everything
+  const ev = activeEvent();
+  const totalXp = Math.round(preEventXp * ev.xpMult);
 
   const xp: XpBreakdown = {
     base,
@@ -180,11 +235,12 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     cleanSheet: cleanSheetXp,
     margin: marginXp,
     firstWin: firstWinXp,
+    difficulty: diffBonus,
     total: totalXp,
   };
 
-  // --- coins ---
-  const coins =
+  // --- coins (with the weekly-event multiplier, K3) ---
+  const baseCoins =
     (o.win ? COINS_WIN : o.draw ? COINS_DRAW : COINS_LOSS) +
     o.goalsFor * COINS_PER_GOAL +
     (firstMatchOfDay ? COINS_FIRST_MATCH : 0) +
@@ -193,6 +249,7 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     dp.chestCoins +
     wp.orderCoins +
     wp.activityBonusCoins;
+  const coins = Math.round(baseCoins * ev.coinMult);
 
   // --- apply to the save ---
   const out = grantXp(data.level, data.xp, totalXp);
@@ -200,6 +257,22 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
   data.xp = out.xpIntoLevel;
   data.title = titleForLevel(out.level);
   data.coins += coins;
+
+  // --- season track (F1/F2): the same match XP advances the season ladder.
+  // Rewards aren't auto-granted — the player claims them on the season screen.
+  const sp: SeasonProgress = progressSeason(data.season, totalXp);
+
+  // --- chests (F5): the daily-meter fill drops a Daily chest; each account
+  // level-up drops a Level-Up chest. Opened (with visible odds) on the menu.
+  let chestsEarned = 0;
+  if (dp.chestAwarded) {
+    grantChest(data, 'daily');
+    chestsEarned++;
+  }
+  if (out.levelsGained > 0) {
+    grantChest(data, 'levelup', out.levelsGained);
+    chestsEarned += out.levelsGained;
+  }
 
   data.stats.played++;
   if (o.win) data.stats.wins++;
@@ -239,6 +312,20 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     activityBonusAwarded: wp.activityBonusAwarded,
   };
 
+  const season: SeasonRewards = {
+    tierBefore: sp.tierBefore,
+    tier: sp.tier,
+    tiersGained: sp.tiersGained,
+    fillFrom: sp.fillFrom,
+    fillTo: sp.fillTo,
+    into: sp.standing.into,
+    forNext: sp.standing.forNext,
+    atMax: sp.standing.atMax,
+    claimable: sp.claimable,
+    eliteUnlocked: data.season.eliteUnlocked,
+    eliteJustUnlocked,
+  };
+
   return {
     result,
     goalsFor: o.goalsFor,
@@ -255,5 +342,8 @@ export function applyMatchRewards(o: MatchOutcome): MatchRewards {
     firstWinOfDay,
     daily,
     weekly,
+    season,
+    chestsEarned,
+    event: ev.xpMult > 1 || ev.coinMult > 1 ? { name: ev.name, xpMult: ev.xpMult, coinMult: ev.coinMult } : null,
   };
 }

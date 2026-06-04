@@ -8,6 +8,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="theme-color" content="#05080d" />
   <meta name="description" content="Strikers '26 — fast, fun arcade soccer. Pick your nation and win the World Championship 2026 in the USA: curling shots, diving keepers, give-and-go runs and penalty shootouts. Free online, plays on mobile and desktop." />
+  <meta name="keywords" content="world cup, soccer 2026, football game, arcade soccer, penalty shootout, world championship, free online football, mobile soccer, 5-a-side" />
+  <meta property="og:title" content="Strikers '26 — World Soccer Championship" />
+  <meta property="og:description" content="Pick your nation and chase the 2026 World Championship — fast arcade football with curling shots, diving keepers and penalty shootouts. Free to play." />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="icon.svg" />
   <link rel="apple-touch-icon" href="icon.svg" />
@@ -85,8 +90,9 @@
         <div class="prof-avatar" id="profAvatar">USA</div>
         <div class="prof-id">
           <input class="prof-name" id="profName" type="text" value="PLAYER" autocomplete="off" spellcheck="false" aria-label="Your name" />
-          <div class="prof-meta"><span class="prof-badge" id="profBadge">Rookie</span><span class="prof-level" id="profLevel">LV 1</span></div>
+          <div class="prof-meta"><span class="prof-flair hidden" id="profFlair"></span><span class="prof-badge" id="profBadge">Rookie</span><span class="prof-level" id="profLevel">LV 1</span></div>
           <div class="prof-xp"><div class="prof-xp-track"><div class="prof-xp-fill" id="profXpFill"></div></div><span class="prof-xp-lbl" id="profXpLbl">0 / 250 XP</span></div>
+          <div class="prof-wallet"><span class="cur-pill coin">🪙 <b id="profCoins">0</b></span><span class="cur-pill gem">💎 <b id="profGems">0</b></span></div>
         </div>
         <div class="prof-tiles">
           <div class="prof-tile"><span class="prof-tval" id="profTitles">0</span><span class="prof-tlbl">Titles</span></div>
@@ -103,7 +109,7 @@
         </div>
         <div class="opt-row"><div class="label">Difficulty</div>
           <div class="seg" id="segDiff">
-            <button data-v="0">EASY</button><button data-v="1" class="on">PRO</button><button data-v="2">LEGEND</button>
+            <button data-v="0">EASY</button><button data-v="1" class="on">PRO</button><button data-v="2">LEGEND</button><button data-v="3">ULTIMATE</button><button data-v="4">W.CLASS</button>
           </div>
         </div>
         <div class="opt-row"><div class="label">Half length</div>
@@ -132,12 +138,30 @@
         <div class="daily-meter"><div class="daily-fill" id="dailyChestFill"></div></div>
         <div class="daily-orders" id="dailyOrders"></div>
         <button class="link" id="btnReroll">↻ REROLL AN ORDER</button>
+        <button class="link reward-btn hidden" id="btnRerollAd">▶ EXTRA REROLL · ad</button>
       </div>
       <div class="daily-card weekly-card" id="weeklyCard">
         <div class="daily-head"><span class="daily-title">WEEKLY ORDERS</span><span class="daily-chest" id="weeklyActivityLbl">0/3 days</span></div>
         <div class="daily-meter"><div class="daily-fill weekly-fill" id="weeklyActivityFill"></div></div>
         <div class="daily-orders" id="weeklyOrders"></div>
         <button class="link" id="btnWeeklyReroll">↻ REROLL AN ORDER</button>
+        <button class="link reward-btn hidden" id="btnWeeklyRerollAd">▶ EXTRA REROLL · ad</button>
+      </div>
+      <div class="daily-card season-card" id="seasonCard">
+        <div class="daily-head"><span class="daily-title">WORLD CUP 2026 SEASON</span><span class="daily-chest season-tier" id="seasonTierLbl">Tier 1 / 30</span></div>
+        <div class="daily-meter"><div class="daily-fill season-fill" id="seasonFill"></div></div>
+        <div class="season-foot"><span class="season-claim-badge hidden" id="seasonClaimBadge"></span><button class="link" id="btnSeasonView">🏆 VIEW SEASON TRACK</button></div>
+      </div>
+      <div class="event-banner hidden" id="eventBanner">
+        <span class="event-em" id="eventEm">⚡</span>
+        <span class="event-txt"><b id="eventName">EVENT</b><span id="eventBlurb"></span></span>
+      </div>
+      <div class="vault-row">
+        <button class="link vault-btn" id="btnCollection">🎒 COLLECTION<span class="vault-badge hidden" id="collectionBadge"></span></button>
+        <button class="link vault-btn" id="btnChests">🎁 CHESTS<span class="vault-badge hidden" id="chestsBadge"></span></button>
+        <button class="link vault-btn" id="btnShop">🛒 SHOP</button>
+        <button class="link vault-btn" id="btnAwards">🏅 AWARDS<span class="vault-badge hidden" id="awardsBadge"></span></button>
+        <button class="link vault-btn" id="btnLive">📡 LIVE</button>
       </div>
       <div class="wc-banner hidden" id="wcBanner">
         <div class="wc-banner-l1" id="wcBannerL1">WORLD CUP 2026</div>
@@ -149,6 +173,22 @@
         <button class="link" id="btnHowto">❔ HOW TO PLAY</button>
         <button class="link" id="btnSettings">⚙ SETTINGS</button>
       </div>
+    </div>
+  </div>
+
+  <!-- First-run welcome / onboarding (J1) -->
+  <div class="overlay hidden" id="intro">
+    <div class="card">
+      <div class="kicker">★ Welcome ★</div>
+      <h2 class="panel-title">STRIKERS '26</h2>
+      <div class="sub">Pick your nation and play fast 5-a-side football. Here's the 10-second version:</div>
+      <div class="intro-steps">
+        <div class="intro-step"><span class="intro-em">🕹️</span><span><b>Move</b> with the left stick / WASD. <b>Shoot</b> ⚽ (hold to power up, lean to curl), <b>Pass</b> ➤.</span></div>
+        <div class="intro-step"><span class="intro-em">⏱️</span><span>A match is two short halves. Every match earns <b>XP, coins and chest progress</b> — win or lose.</span></div>
+        <div class="intro-step"><span class="intro-em">🏆</span><span>Climb the <b>Season Track</b>, win the <b>World Cup</b>, and come back for your nation's next matchday.</span></div>
+      </div>
+      <div class="sim-ribbon">Simulated build · no real payments · no tracking</div>
+      <button class="cta" id="btnIntroGo">LET'S PLAY ▸</button>
     </div>
   </div>
 
@@ -197,11 +237,13 @@
     <div class="card">
       <div class="kicker">Paused</div>
       <h2 class="panel-title">MATCH PAUSED</h2>
+      <div class="pause-info" id="pauseInfo"></div>
       <div class="pause-btns">
         <button class="cta" id="btnResume">RESUME ▸</button>
         <button class="link" id="btnRestart">↻ RESTART</button>
         <button class="link" id="btnQuit">✕ QUIT TO MENU</button>
       </div>
+      <div class="pause-saved">Progress saved · come back anytime.</div>
     </div>
   </div>
 
@@ -230,7 +272,78 @@
       <div class="ft-next hidden" id="ftNext"></div>
       <div class="ft-actions">
         <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
+        <button class="link reward-btn hidden" id="btnRewardXp">▶ DOUBLE THIS MATCH'S XP · watch a short ad</button>
         <button class="link" id="btnFtMenu">MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live: leaderboard · feed · region goal (K1/K2/K4, simulated) -->
+  <div class="overlay hidden" id="live">
+    <div class="card wc-card lv-card">
+      <div class="kicker">Live · Simulated</div>
+      <h2 class="panel-title">LIVE</h2>
+      <div class="wc-body lv-body" id="liveBody"></div>
+      <button class="cta small" id="btnLiveDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Cosmetic collection album (F3/F4) -->
+  <div class="overlay hidden" id="collection">
+    <div class="card wc-card co-card">
+      <div class="kicker">Collection</div>
+      <h2 class="panel-title">COSMETIC COLLECTION</h2>
+      <div class="co-summary" id="coSummary"></div>
+      <div class="wc-tabs co-tabs" id="coTabs"></div>
+      <div class="wc-body co-body" id="coBody"></div>
+      <button class="cta small" id="btnCollectionDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Free chests (F5) -->
+  <div class="overlay hidden" id="chests">
+    <div class="card wc-card cx-card">
+      <div class="kicker">Chests</div>
+      <h2 class="panel-title">FREE CHESTS</h2>
+      <div class="wc-body cx-body" id="chestsBody"></div>
+      <button class="cta small" id="btnChestsDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Earned-currency shop (F6) -->
+  <div class="overlay hidden" id="shop">
+    <div class="card wc-card sh-card">
+      <div class="kicker" id="shopKicker">Shop</div>
+      <h2 class="panel-title">DAILY SHOP</h2>
+      <div class="wc-body sh-body" id="shopBody"></div>
+      <button class="cta small" id="btnShopDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Achievements · medals · mastery (G1/G2/G3) -->
+  <div class="overlay hidden" id="awards">
+    <div class="card wc-card aw-card">
+      <div class="kicker">Awards</div>
+      <h2 class="panel-title">ACHIEVEMENTS</h2>
+      <div class="wc-tabs" id="awTabs">
+        <button class="wc-tab on" data-tab="ach">ACHIEVEMENTS</button>
+        <button class="wc-tab" data-tab="medals">MEDALS</button>
+        <button class="wc-tab" data-tab="mastery">MASTERY</button>
+      </div>
+      <div class="wc-body aw-body" id="awardsBody"></div>
+      <button class="cta small" id="btnAwardsDone">DONE ▸</button>
+    </div>
+  </div>
+
+  <!-- Season Track (F1 free · F2 elite) -->
+  <div class="overlay hidden" id="season">
+    <div class="card wc-card se-card">
+      <div class="kicker">Season Track</div>
+      <h2 class="panel-title">WORLD CUP 2026 SEASON</h2>
+      <div class="se-body wc-body" id="seasonBody"></div>
+      <div class="se-actions">
+        <button class="cta small" id="btnSeasonClaimAll">CLAIM ALL ▸</button>
+        <button class="link" id="btnSeasonDone">DONE</button>
       </div>
     </div>
   </div>
