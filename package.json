@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "sim": "vite build -c simtest/vite.config.ts && node simtest/dist/harness.mjs"
+    "sim": "vite build -c simtest/vite.config.ts && node simtest/dist/harness.mjs",
+    "test": "esbuild simtest/units.ts --bundle --platform=node --format=esm --outfile=simtest/dist/units.mjs --log-level=error && node simtest/dist/units.mjs"
   },
   "dependencies": {
     "three": "^0.160.0",
