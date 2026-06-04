@@ -139,6 +139,11 @@
         <div class="daily-orders" id="weeklyOrders"></div>
         <button class="link" id="btnWeeklyReroll">↻ REROLL AN ORDER</button>
       </div>
+      <div class="daily-card season-card" id="seasonCard">
+        <div class="daily-head"><span class="daily-title">WORLD CUP 2026 SEASON</span><span class="daily-chest season-tier" id="seasonTierLbl">Tier 1 / 30</span></div>
+        <div class="daily-meter"><div class="daily-fill season-fill" id="seasonFill"></div></div>
+        <div class="season-foot"><span class="season-claim-badge hidden" id="seasonClaimBadge"></span><button class="link" id="btnSeasonView">🏆 VIEW SEASON TRACK</button></div>
+      </div>
       <div class="wc-banner hidden" id="wcBanner">
         <div class="wc-banner-l1" id="wcBannerL1">WORLD CUP 2026</div>
         <div class="wc-banner-l2" id="wcBannerL2"></div>
@@ -231,6 +236,19 @@
       <div class="ft-actions">
         <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
         <button class="link" id="btnFtMenu">MENU</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Season Track (F1 free · F2 elite) -->
+  <div class="overlay hidden" id="season">
+    <div class="card wc-card se-card">
+      <div class="kicker">Season Track</div>
+      <h2 class="panel-title">WORLD CUP 2026 SEASON</h2>
+      <div class="se-body wc-body" id="seasonBody"></div>
+      <div class="se-actions">
+        <button class="cta small" id="btnSeasonClaimAll">CLAIM ALL ▸</button>
+        <button class="link" id="btnSeasonDone">DONE</button>
       </div>
     </div>
   </div>

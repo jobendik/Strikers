@@ -14,6 +14,7 @@ import { getPlayerData, savePlayerData } from './core/playerData';
 import { initWorldCupUI, refreshWorldCupUI } from './ui/worldcup';
 import { initDailyCard } from './ui/daily';
 import { initWeeklyCard } from './ui/weekly';
+import { initSeasonCard } from './ui/season';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
 import { initCrazyGames, loadingStop } from './platform/crazygames';
 import { loadPlayerModels } from './rendering/playerLoader';
@@ -48,6 +49,7 @@ if (player.stats.played === 0 && player.name === 'PLAYER') {
 initWorldCupUI(); // World Cup menu banner + tournament screens (A5/A6)
 initDailyCard(); // daily orders + chest meter on the menu (E2/E3)
 initWeeklyCard(); // weekly orders + activity meter on the menu (E4)
+initSeasonCard(); // season track card + screen: tiers, claim flow, elite (F1/F2)
 initProfileCard(); // profile card: flag avatar, name, tier, XP, stat tiles (C4)
 // keep the menu's World Cup banner + profile current when the team changes
 for (const id of ['teamPick', 'segMode']) {

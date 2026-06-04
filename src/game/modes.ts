@@ -18,6 +18,7 @@ import {
 import { refreshWorldCupUI } from '../ui/worldcup';
 import { refreshDailyCard } from '../ui/daily';
 import { refreshWeeklyCard } from '../ui/weekly';
+import { refreshSeasonCard } from '../ui/season';
 import { refreshProfileCard } from '../ui/profile';
 import { interstitial, happytime } from '../platform/crazygames';
 
@@ -187,10 +188,20 @@ function rewardChips(r: MatchRewards): ResultChip[] {
   if (r.firstMatchOfDay) chips.push({ text: 'First match of day', tone: 'bonus' });
   if (r.firstWinOfDay) chips.push({ text: 'First-win bonus', tone: 'bonus' });
   if (r.weekly.activityBonusAwarded) chips.push({ text: 'Weekly activity bonus', tone: 'bonus' });
+  if (r.season.eliteJustUnlocked) chips.push({ text: 'Elite Track unlocked', tone: 'bonus' });
   return chips;
 }
 
-/** The animated progress stack (D2): account XP, daily chest, daily orders, weekly orders, weekly activity. */
+/** The honest "next best action" line: a ready-to-claim season reward leads, else the daily nudge. */
+function nextBestLine(r: MatchRewards): string {
+  if (r.season.claimable > 0) {
+    const n = r.season.claimable;
+    return `Season: ${n} reward${n > 1 ? 's' : ''} ready to claim.`;
+  }
+  return r.daily.nextBest;
+}
+
+/** The animated progress stack (D2): account XP, season tier, daily chest, daily orders, weekly orders, weekly activity. */
 function rewardBars(r: MatchRewards): ResultBar[] {
   const bars: ResultBar[] = [];
   const xpTo = r.xpForNext > 0 ? r.xpIntoLevel / r.xpForNext : 0;
@@ -205,6 +216,25 @@ function rewardBars(r: MatchRewards): ResultBar[] {
     badge: r.levelsGained > 0 ? (r.newTitle ? `LEVEL UP → ${r.newTitle}` : 'LEVEL UP') : undefined,
     tone: 'xp',
     done: r.levelsGained > 0,
+  });
+
+  // season track (F1/F2): tier progress; the Elite-unlock + claim badges nudge
+  // toward the season screen (the claim itself happens there, battle-pass style).
+  const s = r.season;
+  bars.push({
+    label: `Season · Tier ${s.tier}`,
+    from: clamp01(s.fillFrom),
+    to: clamp01(s.fillTo),
+    text: s.atMax ? 'MAX TIER' : `${Math.round(s.into)} / ${s.forNext} XP`,
+    badge: s.eliteJustUnlocked
+      ? 'ELITE UNLOCKED'
+      : s.tiersGained > 0
+        ? `TIER UP${s.tiersGained > 1 ? ` ×${s.tiersGained}` : ''}`
+        : s.claimable > 0
+          ? `${s.claimable} TO CLAIM`
+          : undefined,
+    tone: 'season',
+    done: s.tiersGained > 0 || s.eliteJustUnlocked,
   });
 
   const d = r.daily;
@@ -328,7 +358,7 @@ function presentWorldCupResult(
     stats: statTiles(),
     chips: rewardChips(rewards),
     bars: rewardBars(rewards),
-    nextBest: rewards.daily.nextBest,
+    nextBest: nextBestLine(rewards),
     primaryLabel: pendingContinue ? nextBtn : 'BACK TO MENU ▸',
     secondaryLabel: pendingContinue ? 'MENU' : '',
   });
@@ -364,6 +394,7 @@ export function presentResult(
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}` : undefined;
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
   refreshWeeklyCard(); // weekly orders + activity days may have advanced
+  refreshSeasonCard(); // season tier advanced / Elite may have unlocked — refresh the card (F1/F2)
   refreshProfileCard(); // XP/level/title/stats moved — keep the menu profile fresh (C4)
 
   // World Cup tournament — feed the result into the engine and advance the bracket
@@ -408,7 +439,7 @@ export function presentResult(
     stats: statTiles(),
     chips: rewardChips(rewards),
     bars: rewardBars(rewards),
-    nextBest: rewards.daily.nextBest,
+    nextBest: nextBestLine(rewards),
     primaryLabel: 'PLAY AGAIN ▸',
     secondaryLabel: '',
   });
