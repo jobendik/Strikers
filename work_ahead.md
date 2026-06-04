@@ -281,7 +281,7 @@ Reward reveal order on screen: result → XP/level → quests → season → che
 - [ ] **L3** Submission assets: thumbnail, screenshots, SEO description, tags; final IP/branding review (§3).
 
 ### P1 — strong retention (ship soon after launch)
-- [ ] **E4** Weekly Orders + Weekly Activity meter (forgiving, "play 3 days") + first-win-of-day bonus.
+- [x] **E4** Weekly Orders + Weekly Activity meter (forgiving, "play 3 days") + first-win-of-day bonus. Weekly card (violet accent) on menu, 3 rotating orders + reroll, activity meter cross-week, result-screen bars, activity-bonus chip.
 - [ ] **F1** Free Season Track (~30 tiers, "World Cup 2026 Season") + reward claim flow.
 - [ ] **F2** Earned Elite Track (weekly-order unlock) + retroactive unlock.
 - [ ] **F3** Cosmetic collection album (kits, ball skins, celebrations, trails, banners, nets, stingers) + equip.
