@@ -2,13 +2,31 @@ import * as THREE from 'three';
 import { CFG } from '../config/constants';
 import { clamp } from '../core/math';
 import { ball, match } from './state';
-import { camera, scene, sun } from '../rendering/scene';
+import { camera, renderer, scene, sun } from '../rendering/scene';
 import type { Player } from '../entities/Player';
 import type { AnimName, PlayerAnimState } from '../rendering/playerLoader';
 
 /* ------------------------------------------------------------------ animation */
 
 const ONESHOTS = new Set<AnimName>(['kick', 'gkDiveLeft', 'gkDiveRight', 'celebrate']);
+
+// Foot-sync calibration: the run/sprint clips play at a fixed authored cadence,
+// but the player moves at a game-driven speed, so the feet "skate" whenever the
+// two disagree. We scale each locomotion clip's playback rate to the player's
+// actual speed, expressed as a fraction of their baseSpeed. The fractions are
+// chosen so timeScale sits near 1.0 in the middle of each clip's speed band
+// (run: 0.5..0.8×base, sprint: >0.8×base), and the clamp stops it ever looking
+// like a comedy sprint or a moonwalk. Tune these two if cadence still drifts.
+const RUN_REF_FRAC = 0.55;
+const SPRINT_REF_FRAC = 0.95;
+
+// Players far from the ball update their mixer at half rate (with accumulated dt)
+// — the camera never scrutinises them, and skinned-mesh bone updates are the
+// single biggest per-player CPU cost. Anyone nearer than this (squared) distance
+// to the ball, or otherwise "busy", always updates every frame.
+const NEAR_BALL_SQ = 12 * 12;
+
+let _frame = 0;
 
 /**
  * Drive the AnimationMixer for a 3-D model player.
@@ -19,17 +37,9 @@ function updatePlayerAnimation(p: Player, dt: number): void {
   const mixer = p.mesh.userData.mixer as THREE.AnimationMixer | undefined;
   if (!mixer) return;
 
-  mixer.update(dt);
-
   const clips = p.mesh.userData.clips as Record<AnimName, THREE.AnimationClip>;
   const animState = p.mesh.userData.animState as PlayerAnimState;
-
-  // Detect one-shot completion: Three.js sets action.paused = true when a
-  // LoopOnce action with clampWhenFinished reaches its last frame.
-  if (animState.current && ONESHOTS.has(animState.current) && animState.action?.paused) {
-    animState.current = null;
-    animState.action = null;
-  }
+  const speed = Math.hypot(p.velocity.x, p.velocity.z);
 
   // --- choose the target animation ---
   let target: AnimName;
@@ -48,9 +58,9 @@ function updatePlayerAnimation(p: Player, dt: number): void {
       target = 'kick';
     } else if (p.slide > 0) {
       // No dedicated slide clip — kick is the closest available action pose.
+      // (A real slide-tackle clip is the main remaining animation gap.)
       target = 'kick';
     } else {
-      const speed = Math.hypot(p.velocity.x, p.velocity.z);
       if (speed < 0.5) target = 'idle';
       else if (speed > p.baseSpeed * 0.8) target = 'sprint';
       else target = 'run';
@@ -71,8 +81,10 @@ function updatePlayerAnimation(p: Player, dt: number): void {
       newAction.setLoop(THREE.LoopRepeat, Infinity);
     }
 
-    const fadeDuration = isOneShot ? 0.1 : 0.15;
+    // Longer blend into/out of dissimilar poses (a full sprint snapping straight
+    // into a kick looked jarring); quick snap between same-family loops.
     const prev = animState.action;
+    const fadeDuration = isOneShot ? 0.18 : 0.15;
     if (prev && !prev.paused) {
       newAction.reset().crossFadeFrom(prev, fadeDuration, true).play();
     } else {
@@ -81,10 +93,51 @@ function updatePlayerAnimation(p: Player, dt: number): void {
     animState.current = target;
     animState.action = newAction;
   }
+
+  // --- foot-sync: match locomotion playback rate to real ground speed ---
+  if (animState.action) {
+    if (target === 'run') {
+      animState.action.timeScale = clamp(speed / (p.baseSpeed * RUN_REF_FRAC), 0.6, 1.7);
+    } else if (target === 'sprint') {
+      animState.action.timeScale = clamp(speed / (p.baseSpeed * SPRINT_REF_FRAC), 0.6, 1.7);
+    } else {
+      animState.action.timeScale = 1;
+    }
+  }
+
+  // --- throttled mixer update (distant, idle-ish players run at half rate) ---
+  animState.accum += dt;
+  const busy =
+    p === match.userPlayer ||
+    p.dive > 0 ||
+    p.slide > 0 ||
+    (animState.current !== null && ONESHOTS.has(animState.current));
+  const dx = p.position.x - ball.position.x;
+  const dz = p.position.z - ball.position.z;
+  const near = dx * dx + dz * dz < NEAR_BALL_SQ;
+  // Stagger which half of the distant crowd updates on a given frame via idx+side.
+  const phase = (p.idx + (p.team.side > 0 ? 0 : 1)) & 1;
+  const doUpdate = busy || near || ((_frame + phase) & 1) === 0;
+  if (doUpdate) {
+    mixer.update(animState.accum);
+    animState.accum = 0;
+  }
+
+  // Detect one-shot completion: Three.js sets action.paused = true when a
+  // LoopOnce action with clampWhenFinished reaches its last frame.
+  if (animState.current && ONESHOTS.has(animState.current) && animState.action?.paused) {
+    animState.current = null;
+    animState.action = null;
+  }
 }
 
 /** Push simulation state onto the Three.js meshes each frame. */
 export function syncMeshes(dt: number): void {
+  _frame++;
+  // Hide the cheap fake blob shadow whenever real shadow mapping is on, so we
+  // never stack a real cast shadow on top of a painted one. In the `lite` tier
+  // (shadowMap disabled) the blob is the only thing grounding the player.
+  const blobsVisible = !renderer.shadowMap.enabled;
   for (const t of match.teams)
     for (const p of t.players) {
       p.mesh.position.set(p.position.x, 0, p.position.z);
@@ -119,6 +172,8 @@ export function syncMeshes(dt: number): void {
       }
 
       (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
+      const blob = p.mesh.userData.blob as THREE.Mesh | undefined;
+      if (blob) blob.visible = blobsVisible;
       const call = p.mesh.userData.call as THREE.Mesh | undefined;
       if (call) {
         const active = p === match.callingPlayer && match.state === 'play';
