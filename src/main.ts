@@ -19,6 +19,9 @@ import { initCollection } from './ui/collection';
 import { initChests } from './ui/chest';
 import { initShop } from './ui/shop';
 import { initAwards } from './ui/awards';
+import { initRewardedSurfaces } from './ui/rewarded';
+import { initPause } from './ui/pause';
+import { initOnboarding } from './ui/onboarding';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
 import { initCrazyGames, loadingStop } from './platform/crazygames';
 import { loadPlayerModels } from './rendering/playerLoader';
@@ -58,7 +61,10 @@ initCollection(); // cosmetic album: slots, equip, shards, completion bonuses (F
 initChests(); // free chests with visible odds + pity (F5)
 initShop(); // earned-currency daily shop (F6)
 initAwards(); // achievements · medals · mastery (G1/G2/G3/G5)
+initRewardedSurfaces(); // opt-in rewarded-ad surfaces: double XP (B4)
+initPause(); // clean-exit pause info: progress + claimables (J3)
 initProfileCard(); // profile card: flag avatar, name, tier, XP, stat tiles (C4)
+initOnboarding(); // first-run welcome overlay (J1)
 // keep the menu's World Cup banner + profile current when the team changes
 for (const id of ['teamPick', 'segMode']) {
   document.getElementById(id)?.querySelectorAll('button').forEach((b) =>

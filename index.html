@@ -132,12 +132,14 @@
         <div class="daily-meter"><div class="daily-fill" id="dailyChestFill"></div></div>
         <div class="daily-orders" id="dailyOrders"></div>
         <button class="link" id="btnReroll">↻ REROLL AN ORDER</button>
+        <button class="link reward-btn hidden" id="btnRerollAd">▶ EXTRA REROLL · ad</button>
       </div>
       <div class="daily-card weekly-card" id="weeklyCard">
         <div class="daily-head"><span class="daily-title">WEEKLY ORDERS</span><span class="daily-chest" id="weeklyActivityLbl">0/3 days</span></div>
         <div class="daily-meter"><div class="daily-fill weekly-fill" id="weeklyActivityFill"></div></div>
         <div class="daily-orders" id="weeklyOrders"></div>
         <button class="link" id="btnWeeklyReroll">↻ REROLL AN ORDER</button>
+        <button class="link reward-btn hidden" id="btnWeeklyRerollAd">▶ EXTRA REROLL · ad</button>
       </div>
       <div class="daily-card season-card" id="seasonCard">
         <div class="daily-head"><span class="daily-title">WORLD CUP 2026 SEASON</span><span class="daily-chest season-tier" id="seasonTierLbl">Tier 1 / 30</span></div>
@@ -160,6 +162,22 @@
         <button class="link" id="btnHowto">❔ HOW TO PLAY</button>
         <button class="link" id="btnSettings">⚙ SETTINGS</button>
       </div>
+    </div>
+  </div>
+
+  <!-- First-run welcome / onboarding (J1) -->
+  <div class="overlay hidden" id="intro">
+    <div class="card">
+      <div class="kicker">★ Welcome ★</div>
+      <h2 class="panel-title">STRIKERS '26</h2>
+      <div class="sub">Pick your nation and play fast 5-a-side football. Here's the 10-second version:</div>
+      <div class="intro-steps">
+        <div class="intro-step"><span class="intro-em">🕹️</span><span><b>Move</b> with the left stick / WASD. <b>Shoot</b> ⚽ (hold to power up, lean to curl), <b>Pass</b> ➤.</span></div>
+        <div class="intro-step"><span class="intro-em">⏱️</span><span>A match is two short halves. Every match earns <b>XP, coins and chest progress</b> — win or lose.</span></div>
+        <div class="intro-step"><span class="intro-em">🏆</span><span>Climb the <b>Season Track</b>, win the <b>World Cup</b>, and come back for your nation's next matchday.</span></div>
+      </div>
+      <div class="sim-ribbon">Simulated build · no real payments · no tracking</div>
+      <button class="cta" id="btnIntroGo">LET'S PLAY ▸</button>
     </div>
   </div>
 
@@ -208,11 +226,13 @@
     <div class="card">
       <div class="kicker">Paused</div>
       <h2 class="panel-title">MATCH PAUSED</h2>
+      <div class="pause-info" id="pauseInfo"></div>
       <div class="pause-btns">
         <button class="cta" id="btnResume">RESUME ▸</button>
         <button class="link" id="btnRestart">↻ RESTART</button>
         <button class="link" id="btnQuit">✕ QUIT TO MENU</button>
       </div>
+      <div class="pause-saved">Progress saved · come back anytime.</div>
     </div>
   </div>
 
@@ -241,6 +261,7 @@
       <div class="ft-next hidden" id="ftNext"></div>
       <div class="ft-actions">
         <button class="cta" id="btnAgain">PLAY AGAIN ▸</button>
+        <button class="link reward-btn hidden" id="btnRewardXp">▶ DOUBLE THIS MATCH'S XP · watch a short ad</button>
         <button class="link" id="btnFtMenu">MENU</button>
       </div>
     </div>

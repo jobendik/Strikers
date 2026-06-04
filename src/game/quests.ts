@@ -145,14 +145,15 @@ export function ensureToday(daily: DailyState, today = localDateString()): boole
  * Reroll the order at `index` (once per day) for a different, not-currently-held
  * order. Returns true if the reroll happened.
  */
-export function rerollOrder(daily: DailyState, index: number): boolean {
-  if (daily.rerollUsed) return false;
+export function rerollOrder(daily: DailyState, index: number, force = false): boolean {
+  if (daily.rerollUsed && !force) return false;
   if (index < 0 || index >= daily.orders.length) return false;
   const held = daily.orders.map((o) => o.id);
   const [next] = pickDistinct(1, held);
   if (!next) return false;
   daily.orders[index] = { id: next.id, progress: 0, target: next.target, claimed: false };
-  daily.rerollUsed = true;
+  // a free reroll spends the daily slot; an earned (ad-granted) reroll does not (B4)
+  if (!force) daily.rerollUsed = true;
   return true;
 }
 
@@ -249,14 +250,15 @@ export function ensureThisWeek(weekly: WeeklyState, weekId = isoWeekId()): boole
  * Note: `WeeklyState` does not yet have a `rerollUsed` field — we store it as a sentinel
  * activeDays entry `"__rerolled"` to avoid a schema migration.
  */
-export function rerollWeeklyOrder(weekly: WeeklyState, index: number): boolean {
-  if (weekly.activeDays.includes('__rerolled')) return false;
+export function rerollWeeklyOrder(weekly: WeeklyState, index: number, force = false): boolean {
+  if (weekly.activeDays.includes('__rerolled') && !force) return false;
   if (index < 0 || index >= weekly.orders.length) return false;
   const held = weekly.orders.map((o) => o.id);
   const [next] = pickWeeklyDistinct(1, held);
   if (!next) return false;
   weekly.orders[index] = { id: next.id, progress: 0, target: next.target, claimed: false };
-  weekly.activeDays.push('__rerolled');
+  // a free reroll spends the weekly slot; an earned (ad-granted) reroll does not (B4)
+  if (!force) weekly.activeDays.push('__rerolled');
   return true;
 }
 

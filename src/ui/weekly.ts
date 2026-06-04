@@ -17,6 +17,7 @@ import {
   weeklyRerollUsed,
 } from '../game/quests';
 import { isoWeekId } from '../core/dates';
+import { rewarded } from '../platform/crazygames';
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -51,14 +52,15 @@ export function refreshWeeklyCard(): void {
       .join('');
   }
 
+  const open = remainingWeeklyOrders(data.weekly).length > 0;
+  const used = weeklyRerollUsed(data.weekly);
   const reroll = byId('btnWeeklyReroll') as HTMLButtonElement | null;
-  if (reroll) {
-    const canReroll = !weeklyRerollUsed(data.weekly) && remainingWeeklyOrders(data.weekly).length > 0;
-    reroll.classList.toggle('hidden', !canReroll);
-  }
+  if (reroll) reroll.classList.toggle('hidden', !(open && !used));
+  const rerollAd = byId('btnWeeklyRerollAd') as HTMLButtonElement | null;
+  if (rerollAd) rerollAd.classList.toggle('hidden', !(open && used));
 }
 
-/** Wire the weekly reroll button. Call once at boot. */
+/** Wire the weekly reroll buttons. Call once at boot. */
 export function initWeeklyCard(): void {
   byId('btnWeeklyReroll')?.addEventListener('click', () => {
     const data = getPlayerData();
@@ -67,6 +69,18 @@ export function initWeeklyCard(): void {
       savePlayerData();
       refreshWeeklyCard();
     }
+  });
+  // earned extra reroll (B4): opt-in rewarded ad; no-op in dev
+  byId('btnWeeklyRerollAd')?.addEventListener('click', () => {
+    rewarded((granted) => {
+      if (!granted) return;
+      const data = getPlayerData();
+      const idx = data.weekly.orders.findIndex((q) => !q.claimed);
+      if (idx >= 0 && rerollWeeklyOrder(data.weekly, idx, true)) {
+        savePlayerData();
+        refreshWeeklyCard();
+      }
+    });
   });
   refreshWeeklyCard();
 }

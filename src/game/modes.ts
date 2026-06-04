@@ -26,6 +26,10 @@ import { refreshChestsBadge } from '../ui/chest';
 import { refreshCollectionBadge } from '../ui/collection';
 import { refreshAwardsBadge } from '../ui/awards';
 import { refreshProfileCard } from '../ui/profile';
+import { armDoubleXp } from '../ui/rewarded';
+import { grantXp, titleForLevel } from '../core/progression';
+import { progressSeason } from './season';
+import { flashToast } from '../ui/hud';
 import { interstitial, happytime } from '../platform/crazygames';
 
 /*
@@ -146,6 +150,21 @@ export function onResultMenu(): void {
 }
 
 const clamp01 = (n: number): number => Math.max(0, Math.min(1, n));
+
+/** Apply a rewarded "double XP" bonus (B4): re-grant the match's XP to account + season. */
+function applyDoubleXp(amount: number): void {
+  if (amount <= 0) return;
+  const data = getPlayerData();
+  const out = grantXp(data.level, data.xp, amount);
+  data.level = out.level;
+  data.xp = out.xpIntoLevel;
+  data.title = titleForLevel(out.level);
+  progressSeason(data.season, amount);
+  savePlayerData();
+  refreshProfileCard();
+  refreshSeasonCard();
+  flashToast(`+${amount} bonus XP claimed!`);
+}
 
 /** Possession as whole-percent shares of the two teams (defaults to 50–50). */
 function possessionPct(): [number, number] {
@@ -375,6 +394,7 @@ function presentWorldCupResult(
     primaryLabel: pendingContinue ? nextBtn : 'BACK TO MENU ▸',
     secondaryLabel: pendingContinue ? 'MENU' : '',
   });
+  armDoubleXp(rewards.xp.total, () => applyDoubleXp(rewards.xp.total)); // B4 opt-in
   refreshWorldCupUI(); // run has advanced — keep the banner/screen in sync
 }
 
@@ -499,4 +519,5 @@ export function presentResult(
     primaryLabel: 'PLAY AGAIN ▸',
     secondaryLabel: '',
   });
+  armDoubleXp(rewards.xp.total, () => applyDoubleXp(rewards.xp.total)); // B4 opt-in
 }

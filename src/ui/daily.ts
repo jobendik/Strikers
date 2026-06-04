@@ -6,6 +6,7 @@
  */
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import { ensureToday, rerollOrder, orderLabel, remainingOrders, CHEST_MAX } from '../game/quests';
+import { rewarded } from '../platform/crazygames';
 
 const byId = (id: string): HTMLElement | null => document.getElementById(id);
 
@@ -37,14 +38,15 @@ export function refreshDailyCard(): void {
       .join('');
   }
 
+  const open = remainingOrders(data.daily).length > 0;
   const reroll = byId('btnReroll') as HTMLButtonElement | null;
-  if (reroll) {
-    const canReroll = !data.daily.rerollUsed && remainingOrders(data.daily).length > 0;
-    reroll.classList.toggle('hidden', !canReroll);
-  }
+  if (reroll) reroll.classList.toggle('hidden', !(open && !data.daily.rerollUsed));
+  // once the free reroll is spent, offer an earned extra reroll via a rewarded ad (B4)
+  const rerollAd = byId('btnRerollAd') as HTMLButtonElement | null;
+  if (rerollAd) rerollAd.classList.toggle('hidden', !(open && data.daily.rerollUsed));
 }
 
-/** Wire the reroll button. Call once at boot. */
+/** Wire the reroll buttons. Call once at boot. */
 export function initDailyCard(): void {
   byId('btnReroll')?.addEventListener('click', () => {
     const data = getPlayerData();
@@ -54,6 +56,18 @@ export function initDailyCard(): void {
       savePlayerData();
       refreshDailyCard();
     }
+  });
+  // earned extra reroll (B4): opt-in rewarded ad; no-op in dev so nothing is gated
+  byId('btnRerollAd')?.addEventListener('click', () => {
+    rewarded((granted) => {
+      if (!granted) return;
+      const data = getPlayerData();
+      const idx = data.daily.orders.findIndex((q) => !q.claimed);
+      if (idx >= 0 && rerollOrder(data.daily, idx, true)) {
+        savePlayerData();
+        refreshDailyCard();
+      }
+    });
   });
   refreshDailyCard();
 }
