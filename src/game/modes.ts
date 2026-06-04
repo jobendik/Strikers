@@ -5,6 +5,9 @@ import { refreshTeamTags } from '../ui/hud';
 import { showResultScreen, type ResultScreenData, type ResultStat, type ResultChip, type ResultBar } from '../ui/resultScreen';
 import { getSettings, saveSettings } from '../core/settings';
 import { applyMatchRewards, type MatchRewards } from './rewards';
+import { awardMatchMedals, type MedalAward } from './medals';
+import { grantMastery, type MasteryGrant } from './mastery';
+import { checkAchievements, type AchievementAward } from './achievements';
 import { getPlayerData, savePlayerData } from '../core/playerData';
 import {
   startOrResumeRun,
@@ -20,6 +23,8 @@ import { refreshDailyCard } from '../ui/daily';
 import { refreshWeeklyCard } from '../ui/weekly';
 import { refreshSeasonCard } from '../ui/season';
 import { refreshChestsBadge } from '../ui/chest';
+import { refreshCollectionBadge } from '../ui/collection';
+import { refreshAwardsBadge } from '../ui/awards';
 import { refreshProfileCard } from '../ui/profile';
 import { interstitial, happytime } from '../platform/crazygames';
 
@@ -194,6 +199,15 @@ function rewardChips(r: MatchRewards): ResultChip[] {
   return chips;
 }
 
+/** Extra reward chips for the G-cluster: medals, achievement unlocks, mastery level-ups. */
+function gChips(medals: MedalAward, achs: AchievementAward[], mastery: MasteryGrant): ResultChip[] {
+  const chips: ResultChip[] = [];
+  for (const m of medals.medals) chips.push({ text: `${m.emoji} ${m.label}`, tone: 'bonus' });
+  for (const a of achs) chips.push({ text: `🏅 ${a.label}`, tone: 'bonus' });
+  if (mastery.levelsGained > 0) chips.push({ text: `${teamMeta(mastery.nation).name} Mastery LV ${mastery.level}`, tone: 'bonus' });
+  return chips;
+}
+
 /** The honest "next best action" line: a ready-to-claim season reward leads, else the daily nudge. */
 function nextBestLine(r: MatchRewards): string {
   if (r.season.claimable > 0) {
@@ -298,6 +312,7 @@ function presentWorldCupResult(
   rewards: MatchRewards,
   motm: string,
   penLine: string | undefined,
+  extraChips: ResultChip[] = [],
 ): void {
   const ctxRound = roundName(o.roundJustPlayed);
   const kicker = o.roundJustPlayed === 'GROUP'
@@ -336,13 +351,8 @@ function presentWorldCupResult(
 
   const advancing = o.status === 'group-continue' || o.status === 'group-through' || o.status === 'advanced';
   pendingContinue = advancing && !!o.nextOpponent;
-
-  if (o.status === 'champion') {
-    // record the trophy (settings cup count + career stat)
-    saveSettings({ titles: getSettings().titles + 1 });
-    getPlayerData().stats.cupsWon++;
-    savePlayerData();
-  }
+  // (the trophy — titles + cupsWon — is recorded in presentResult before the
+  // achievement check, so cup1/cup3 see the new total.)
 
   const result: 'win' | 'draw' | 'loss' = !decided ? 'draw' : userWon ? 'win' : 'loss';
   const stars = computeStars({ result, goalsFor: h, goalsAgainst: a, cleanSheet: a === 0, champion: o.status === 'champion' });
@@ -358,7 +368,7 @@ function presentWorldCupResult(
     stars,
     motm,
     stats: statTiles(),
-    chips: rewardChips(rewards),
+    chips: [...rewardChips(rewards), ...extraChips],
     bars: rewardBars(rewards),
     nextBest: nextBestLine(rewards),
     primaryLabel: pendingContinue ? nextBtn : 'BACK TO MENU ▸',
@@ -394,17 +404,59 @@ export function presentResult(
   });
 
   const penLine = penWinner !== null && penScore ? `On penalties ${penScore[0]}–${penScore[1]}` : undefined;
+
+  // --- World Cup: advance the bracket first so the trophy is recorded before the
+  // achievement check (cup1/cup3 must see the new cupsWon) ---
+  const data = getPlayerData();
+  let outcome: MatchdayOutcome | null = null;
+  if (getSettings().mode === 'cup' && wcRun) {
+    const penUserWon = penWinner === null ? null : penWinner === 0;
+    outcome = playUserMatchday(wcRun, h, a, penUserWon);
+    if (outcome.status === 'champion') {
+      saveSettings({ titles: getSettings().titles + 1 }); // legacy cup count
+      data.stats.cupsWon++;
+    }
+  }
+  const champion = outcome?.status === 'champion';
+
+  // --- streak + records (K1 foundation): a decided win extends the streak, a
+  // decided loss resets it (a draw holds); track the best-ever streak + weekly points ---
+  if (decided && userWon) {
+    data.streak = (data.streak ?? 0) + 1;
+    data.records.longestStreak = Math.max(data.records.longestStreak ?? 0, data.streak);
+  } else if (decided && !userWon) {
+    data.streak = 0;
+  }
+  data.records.weeklyScore = (data.records.weeklyScore ?? 0) + (decided && userWon ? 3 : !decided ? 1 : 0);
+
+  // --- G-cluster post-match grants (this owner has stats + context + the nation) ---
+  const masteryGrant = grantMastery(data, getSettings().team, decided && userWon, !decided); // G3
+  const medalAward = awardMatchMedals(data, {
+    win: decided && userWon,
+    draw: !decided,
+    loss: decided && !userWon,
+    goalsFor: h,
+    goalsAgainst: a,
+    cleanSheet: a === 0,
+    shootoutWon: penWinner !== null && userWon,
+    champion,
+    onTargetFor: match.stats.onTarget[0],
+    savesFor: match.stats.saves[0],
+  }); // G1
+  const achAward: AchievementAward[] = checkAchievements(data); // G2/G5 — after stats/medals/streak
+  savePlayerData();
+  const extraChips = gChips(medalAward, achAward, masteryGrant);
+
   refreshDailyCard(); // the match advanced today's orders/chest — keep the menu card fresh
   refreshWeeklyCard(); // weekly orders + activity days may have advanced
   refreshSeasonCard(); // season tier advanced / Elite may have unlocked — refresh the card (F1/F2)
   refreshChestsBadge(); // a chest may have been earned (F5)
+  refreshCollectionBadge(); // an achievement/medal reward may have entered the album
+  refreshAwardsBadge(); // achievements may have completed (G2)
   refreshProfileCard(); // XP/level/title/stats moved — keep the menu profile fresh (C4)
 
-  // World Cup tournament — feed the result into the engine and advance the bracket
-  if (getSettings().mode === 'cup' && wcRun) {
-    const penUserWon = penWinner === null ? null : penWinner === 0;
-    const outcome = playUserMatchday(wcRun, h, a, penUserWon);
-    presentWorldCupResult(outcome, h, a, decided, userWon, rewards, motm, penLine);
+  if (outcome) {
+    presentWorldCupResult(outcome, h, a, decided, userWon, rewards, motm, penLine, extraChips);
     return;
   }
 
@@ -440,7 +492,7 @@ export function presentResult(
     stars,
     motm,
     stats: statTiles(),
-    chips: rewardChips(rewards),
+    chips: [...rewardChips(rewards), ...extraChips],
     bars: rewardBars(rewards),
     nextBest: nextBestLine(rewards),
     primaryLabel: 'PLAY AGAIN ▸',

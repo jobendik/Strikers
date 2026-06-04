@@ -482,6 +482,29 @@ body.lefty #pad{right:auto;left:max(env(safe-area-inset-left),16px);}
 .sh-owned{font-family:'Rajdhani';font-weight:800;font-size:12px;letter-spacing:.1em;color:var(--neon);padding:0 8px;}
 .sh-note{font-family:'Rajdhani';font-weight:600;font-size:11px;color:#7f93ad;text-align:center;margin-top:10px;}
 
+/* ---------- Awards: achievements · medals · mastery (G1/G2/G3) ---------- */
+.aw-card{max-width:560px;}
+.aw-body{display:flex;flex-direction:column;gap:8px;}
+.aw-row{padding:9px 12px;border-radius:11px;text-align:left;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);}
+.aw-row.done{background:rgba(57,255,20,.08);border-color:rgba(57,255,20,.3);}
+.aw-row.hidden-ach:not(.done){opacity:.7;border-style:dashed;}
+.aw-top{display:flex;justify-content:space-between;align-items:baseline;gap:8px;}
+.aw-name{font-family:'Rajdhani';font-weight:700;font-size:14px;color:#eaf2ff;}
+.aw-row.done .aw-name{color:var(--neon);}
+.aw-mlvl{font-family:'Rajdhani';font-weight:800;font-size:11px;color:var(--amber);}
+.aw-prog{font-family:'Teko';font-weight:500;font-size:15px;color:#9fb1c9;letter-spacing:.03em;}
+.aw-desc{font-family:'Rajdhani';font-weight:600;font-size:11px;color:#9fb1c9;margin:2px 0 5px;}
+.aw-reward{color:var(--amber);text-transform:capitalize;}
+.aw-track{height:6px;border-radius:5px;background:rgba(255,255,255,.08);overflow:hidden;}
+.aw-fill{height:100%;border-radius:5px;background:linear-gradient(90deg,var(--neon),#bff7a8);}
+.aw-medals{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;}
+.aw-medal{display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;
+  background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);opacity:.55;}
+.aw-medal.earned{opacity:1;background:rgba(255,206,46,.08);border-color:rgba(255,206,46,.3);}
+.aw-medal-em{font-size:16px;}
+.aw-medal-l{flex:1;font-family:'Rajdhani';font-weight:600;font-size:12px;color:#eaf2ff;}
+.aw-medal-n{font-family:'Teko';font-weight:500;font-size:16px;color:var(--amber);}
+
 /* ---------- Result screen (D) ---------- */
 .ft-card{max-width:560px;max-height:92vh;display:flex;flex-direction:column;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 #ftResult[data-tone="win"]{color:var(--neon);text-shadow:0 0 26px rgba(57,255,20,.5);}

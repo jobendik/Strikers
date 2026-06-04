@@ -18,6 +18,7 @@ import { initSeasonCard } from './ui/season';
 import { initCollection } from './ui/collection';
 import { initChests } from './ui/chest';
 import { initShop } from './ui/shop';
+import { initAwards } from './ui/awards';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
 import { initCrazyGames, loadingStop } from './platform/crazygames';
 import { loadPlayerModels } from './rendering/playerLoader';
@@ -56,6 +57,7 @@ initSeasonCard(); // season track card + screen: tiers, claim flow, elite (F1/F2
 initCollection(); // cosmetic album: slots, equip, shards, completion bonuses (F3/F4)
 initChests(); // free chests with visible odds + pity (F5)
 initShop(); // earned-currency daily shop (F6)
+initAwards(); // achievements · medals · mastery (G1/G2/G3/G5)
 initProfileCard(); // profile card: flag avatar, name, tier, XP, stat tiles (C4)
 // keep the menu's World Cup banner + profile current when the team changes
 for (const id of ['teamPick', 'segMode']) {
