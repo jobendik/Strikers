@@ -288,10 +288,10 @@ export function save(m: Mixer, parry: boolean, diving: boolean, speed: number, p
     thump(m, v, t, 190, 120, 0.045, 0.5);
   } else {
     // catch: the ball dies into gloves + chest — muffled, with weight
-    burst(m, v, t, 'pink', 'lowpass', 1100, 0.6, 0.003, 0.07, 2.2);
+    burst(m, v, t, 'pink', 'lowpass', 1100, 0.6, 0.003, 0.07, 1.3);
     thump(m, v, t, 130, 80, 0.075, 0.9);
   }
-  if (diving) landing(m, v, t + 0.28, 0.8);
+  if (diving) landing(m, v, t + 0.28, 0.5);
 }
 
 export function dive(m: Mixer, pl: Place): void {
@@ -303,7 +303,7 @@ export function dive(m: Mixer, pl: Place): void {
   f.frequency.setValueAtTime(480, t);
   f.frequency.exponentialRampToValueAtTime(950, t + 0.1);
   f.frequency.exponentialRampToValueAtTime(380, t + 0.28);
-  landing(m, v, t + 0.33, 0.9);
+  landing(m, v, t + 0.33, 0.6);
 }
 
 // ---- challenges -----------------------------------------------------------------------
@@ -358,7 +358,7 @@ export function slideStart(m: Mixer, pl: Place): void {
 export function collide(m: Mixer, force: number, pl: Place): void {
   const p = clamp((force - 2) / 10, 0, 1);
   if (p <= 0 || !m.gate('collide', 0.1)) return;
-  const v = m.voice({ bus: 'sfx', dur: 0.16, pan: pl.pan, gain: (0.12 + 0.42 * p) * pl.att, send: 0.1, prio: 2, tag: 'collide' });
+  const v = m.voice({ bus: 'sfx', dur: 0.16, pan: pl.pan, gain: (0.08 + 0.26 * p) * pl.att, send: 0.1, prio: 2, tag: 'collide' });
   if (!v) return;
   thump(m, v, v.t0, 98, 54, 0.095, 0.9);
   burst(m, v, v.t0, 'pink', 'lowpass', 520, 0.6, 0.003, 0.06, 1.8);

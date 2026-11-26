@@ -725,7 +725,8 @@ export function createCrowdModel(): CrowdModel {
     const a = s.arousal;
     const st = curState;
     const playLike = st === 'play' || st === 'celebrate' || st === 'shootout';
-    const level = (0.5 + 1.1 * Math.pow(a, 1.3)) * (1 - 0.5 * s.hold) * (1 - 0.45 * s.stun);
+    // the menu is heard from outside the ground: quieter as well as duller
+    const level = (0.5 + 1.1 * Math.pow(a, 1.3)) * (1 - 0.5 * s.hold) * (1 - 0.45 * s.stun) * (st === 'menu' ? 0.5 : 1);
     const shoutMix = smoothstep(0.42, 0.9, a);
     let cutoff = 800 + 3200 * Math.pow(a, 1.2) - 400 * s.flat;
     if (st === 'menu') cutoff = 520;

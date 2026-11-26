@@ -168,7 +168,8 @@ function build(oc: OfflineAudioContext, kind: TextureName, nVoices: number, tota
     bp2.connect(env);
     if (canPan) {
       const pan = oc.createStereoPanner();
-      pan.pan.value = rand() * 2 - 1;
+      // seat everyone well off-centre: keeps the two channels decorrelated (a wide bowl)
+      pan.pan.value = (rand() < 0.5 ? -1 : 1) * (0.45 + 0.55 * rand());
       env.connect(pan);
       pan.connect(vBus);
     } else env.connect(vBus);
@@ -302,7 +303,8 @@ function clapGrain(L: Float32Array, R: Float32Array, sr: number, t0: number, ran
   const a2 = -r * r;
   const tau = (0.004 + 0.006 * rand()) * sr;
   const n = Math.floor(0.035 * sr);
-  const pan = rand();
+  const pr = rand();
+  const pan = rand() < 0.5 ? pr * 0.3 : 1 - pr * 0.3;
   const gl = gain * Math.cos((pan * Math.PI) / 2);
   const gr = gain * Math.sin((pan * Math.PI) / 2);
   const len = L.length;
@@ -483,7 +485,7 @@ export async function bakeChant(ctx: BaseAudioContext, tpl: ChantTemplate, singe
       bp2.connect(env);
       if (canPan) {
         const pan = oc.createStereoPanner();
-        pan.pan.value = rand() * 2 - 1;
+        pan.pan.value = (rand() < 0.5 ? -1 : 1) * (0.4 + 0.6 * rand());
         env.connect(pan);
         pan.connect(out);
       } else env.connect(out);

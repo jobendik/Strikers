@@ -22,16 +22,16 @@ import { clamp } from './rng';
 /** Layer reference gains (linear, before the bed level and the crowd bus trim). */
 export const CROWD_LEVELS = {
   bed: 1.0,
-  rumble: 0.5,
-  body: 0.16,
-  murmur: 0.42,
-  shout: 0.6,
-  ooh: 0.55,
-  away: 0.2,
+  rumble: 0.07,
+  body: 0.17,
+  murmur: 0.16,
+  shout: 0.32,
+  ooh: 0.3,
+  away: 0.4,
   /** crowd bus → stadium reverb. */
   send: 0.16,
   /** one-shot master. */
-  shot: 1.0,
+  shot: 0.5,
 } as const;
 
 /** Stereo position of the away end. */
@@ -152,7 +152,7 @@ export class Crowd {
     const rs = this.loop(m.noise.brown, 0.8);
     const rlp = this.filter('lowpass', 150, 0.7);
     const rmod = this.wanderGain(0.3);
-    this.gRumble = this.gainNode(CROWD_LEVELS.rumble * 0.5);
+    this.gRumble = this.gainNode(0);
     rs.connect(rlp);
     rlp.connect(rmod);
     rmod.connect(this.gRumble);
@@ -162,7 +162,7 @@ export class Crowd {
     const bs = this.loop(m.noise.pink, 0.93);
     const bbp = this.filter('bandpass', 620, 0.45);
     this.fBody = this.filter('lowpass', 1200, 0.5);
-    this.gBody = this.gainNode(CROWD_LEVELS.body);
+    this.gBody = this.gainNode(0);
     bs.connect(bbp);
     bbp.connect(this.fBody);
     if (full) {
