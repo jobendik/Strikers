@@ -331,8 +331,8 @@ export const envU = {
   uFlood: { value: new THREE.Color() },
   /** Lamp emissive level 0..1. */
   uFloodOn: { value: 0 },
-  /** x: amount 0..1, y: roof edge height, z: roof inner d, w: unused. */
-  uRoof: { value: new THREE.Vector4(1, LAYOUT.roofInnerY, LAYOUT.roofInnerD, 0) },
+  /** x: amount 0..1, y: roof edge height, z: roof inner d, w: height above which nothing is under the roof. */
+  uRoof: { value: new THREE.Vector4(1, LAYOUT.roofInnerY, LAYOUT.roofInnerD, LAYOUT.roofBackY - 0.8) },
   /** Stand-front rounded rectangle: (straight half x, straight half z, corner r). */
   uBowl: { value: new THREE.Vector3(LAYOUT.hx - LAYOUT.rc, LAYOUT.hz - LAYOUT.rc, LAYOUT.rc) },
   uLed: { value: 1 },
@@ -400,7 +400,7 @@ float bowlD( vec2 p ) {
 float roofLit( vec3 wp ) {
   if ( uRoof.x <= 0.0 ) return 1.0;
   float t = ( uRoof.y - wp.y ) / max( uSunDir.y, 0.02 );
-  if ( t < 0.0 ) return 1.0;
+  if ( t < 0.0 || wp.y > uRoof.w ) return 1.0;
   vec2 q = wp.xz + uSunDir.xz * t;
   float w = 0.25 + 0.03 * t;
   float lit = 1.0 - smoothstep( uRoof.z - w, uRoof.z + w, bowlD( q ) );
