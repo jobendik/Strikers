@@ -405,7 +405,8 @@ export function pickKeeperColors(kitA: ResolvedKit | null, kitB: ResolvedKit | n
     if (!k) continue;
     avoid.push([k.shirt, 1]);
     // large secondary areas matter too, but less than the shirt body
-    if (k.pattern === 'stripes' || k.pattern === 'checks' || k.pattern === 'halves' || k.pattern === 'hoops') avoid.push([k.second, 0.8]);
+    const bold = k.pattern === 'stripes' || k.pattern === 'checks' || k.pattern === 'halves' || k.pattern === 'hoops';
+    if (k.pattern !== 'solid') avoid.push([k.second, bold ? 0.8 : 0.5]);
     if (!sameColor(k.sleeves, k.shirt)) avoid.push([k.sleeves, 0.6]);
     avoid.push([k.shorts, 0.45]);
   }

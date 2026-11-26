@@ -22,7 +22,7 @@ const DIGIT_H = 180;
 /** Name slots: a grid below the digits. */
 const NAME_COLS = 4;
 const NAME_W = 256;
-const NAME_H = 40;
+const NAME_H = 48;
 const NAME_TOP = 192;
 const NAME_ROWS = Math.floor((H - NAME_TOP) / NAME_H);
 export const NAME_SLOTS = NAME_COLS * NAME_ROWS;
@@ -44,18 +44,29 @@ let _tex: THREE.CanvasTexture | null = null;
 const _names: string[] = new Array<string>(NAME_SLOTS).fill('');
 let _nextSlot = 0;
 
-function drawGlyphs(text: string, cx: number, cy: number, px: number, maxWidth: number, outline: number): void {
+/**
+ * Draw `text` centred on (cx, cy) with its glyphs `height` px tall. Sizing and
+ * centring use the measured ink box, so the result is the same whichever face
+ * of the font stack is actually available.
+ */
+function drawGlyphs(text: string, cx: number, cy: number, height: number, maxWidth: number, outline: number): void {
   const x = _ctx!;
-  x.font = `700 ${px}px ${FONT_STACK}`;
   x.textAlign = 'center';
-  x.textBaseline = 'middle';
+  x.textBaseline = 'alphabetic';
   x.lineJoin = 'round';
+  x.font = `700 100px ${FONT_STACK}`;
+  const probe = x.measureText('0BH8');
+  const ink = probe.actualBoundingBoxAscent + probe.actualBoundingBoxDescent || 70;
+  const px = (height / ink) * 100;
+  x.font = `700 ${px.toFixed(1)}px ${FONT_STACK}`;
+  const m = x.measureText('0BH8');
+  const y = cy + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2;
   // outline first (green only), then the fill on top (red + green)
   x.strokeStyle = '#00ff00';
   x.lineWidth = outline;
-  x.strokeText(text, cx, cy, maxWidth);
+  x.strokeText(text, cx, y, maxWidth);
   x.fillStyle = '#ffff00';
-  x.fillText(text, cx, cy, maxWidth);
+  x.fillText(text, cx, y, maxWidth);
 }
 
 function drawDigits(): void {
@@ -64,8 +75,7 @@ function drawDigits(): void {
   x.fillRect(0, 0, W, NAME_TOP);
   for (let d = 0; d < 10; d++) {
     const cx = d * DIGIT_PITCH + 1 + DIGIT_W / 2;
-    // Teko's digits sit high in the em box; nudge down so they centre in the cell.
-    drawGlyphs(String(d), cx, DIGIT_TOP + DIGIT_H / 2 + 8, 212, DIGIT_W - 22, 16);
+    drawGlyphs(String(d), cx, DIGIT_TOP + DIGIT_H / 2, DIGIT_H - 26, DIGIT_W - 20, 14);
   }
 }
 
@@ -78,7 +88,7 @@ function drawName(slot: number): void {
   x.fillStyle = '#000';
   x.fillRect(x0, y0, NAME_W, NAME_H);
   const name = _names[slot];
-  if (name) drawGlyphs(name, x0 + NAME_W / 2, y0 + NAME_H / 2 + 3, 40, NAME_W - 16, 5);
+  if (name) drawGlyphs(name, x0 + NAME_W / 2, y0 + NAME_H / 2, NAME_H - 14, NAME_W - 14, 5);
 }
 
 function ensure(): THREE.CanvasTexture {

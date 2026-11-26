@@ -181,7 +181,7 @@ float kSkinAmt = 0.0;
     if (pat == 1) {
       m = 1.0 - kBands(bp.x / 0.09 + 0.5, 0.5);
     } else if (pat == 2) {
-      m = kBands(bp.x / 0.034 + 0.5, 0.2);
+      m = kBands(bp.x / 0.036 + 0.5, 0.14);
     } else if (pat == 3) {
       m = kBands(bp.y / 0.11 + 0.2, 0.42);
     } else if (pat == 4) {
@@ -210,6 +210,9 @@ float kSkinAmt = 0.0;
     // keep the back plain behind the name + number so they always read
     float back = smoothstep(0.1, 0.3, -bn.z) * (1.0 - sleeve);
     float panel = back * (1.0 - kStep(0.175, ax)) * kStep(1.06, bp.y) * (1.0 - kStep(1.45, bp.y));
+    // placed motifs (sash, band, yoke, chevron) are front-only; repeating
+    // patterns keep a plain rectangular number panel instead
+    if (pat == 4 || pat == 6 || pat == 7 || pat == 9) panel = back;
     m *= 1.0 - panel;
     e *= 1.0 - panel;
 
@@ -229,7 +232,7 @@ float kSkinAmt = 0.0;
 
     // name + number on the back (viewed from behind, +x is the reader's LEFT)
     vec2 qn = vec2(0.5 - bp.x / 0.27, (bp.y - 1.085) / 0.25);
-    vec2 qm = vec2(0.5 - bp.x / 0.3, (bp.y - 1.362) / 0.052);
+    vec2 qm = vec2(0.5 - bp.x / 0.32, (bp.y - 1.358) / 0.066);
     vec2 g = (kNumber(qn) + kName(qm)) * back;
     col = kInk(col, g);
 
@@ -239,7 +242,7 @@ float kSkinAmt = 0.0;
   } else if (part == 1) {
     // ------------------------------------------------------------ shorts
     float outward = bn.x * sign(bp.x);
-    float stripe = smoothstep(0.8, 0.9, outward) * kStep(0.12, ax);
+    float stripe = smoothstep(0.93, 0.975, outward) * kStep(0.12, ax);
     col = mix(uShorts, uShortsTrim, stripe);
     // small number on the front of the (player's) left thigh
     vec2 qn = vec2(0.5 + (bp.x - 0.105) / 0.1, (bp.y - 0.655) / 0.095);
