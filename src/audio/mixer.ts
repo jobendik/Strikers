@@ -59,7 +59,7 @@ export interface MixerStats {
 }
 
 /** Internal trim per bus (linear) — the mix balance. User volumes multiply these. */
-export const BUS_TRIM: Record<NodeBus, number> = { sfx: 0.62, crowd: 0.8, ui: 0.5 };
+export const BUS_TRIM: Record<NodeBus, number> = { sfx: 0.55, crowd: 0.8, ui: 0.5 };
 export const VOICE_CAP: Record<Quality, number> = { full: 28, lite: 14 };
 export const REVERB_RETURN = 0.7;
 

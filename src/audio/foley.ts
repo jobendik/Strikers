@@ -413,7 +413,7 @@ export function whistle(m: Mixer, kind: WhistleKind): void {
   let total = 0;
   for (const [d, gap] of pat.blasts) total += d + gap;
   const r = m.rand;
-  const v = m.voice({ bus: 'sfx', dur: total + 0.25, pan: (r() - 0.5) * 0.3, gain: 0.2 * pat.level, send: 0.5, prio: 9, tag: 'whistle' });
+  const v = m.voice({ bus: 'sfx', dur: total + 0.25, pan: (r() - 0.5) * 0.3, gain: 0.26 * pat.level, send: 0.5, prio: 9, tag: 'whistle' });
   if (!v) return;
   const t = v.t0;
   const tEnd = t + total + 0.2;
