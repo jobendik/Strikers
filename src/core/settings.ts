@@ -1,7 +1,7 @@
 import { CFG } from '../config/constants';
 import { Audio } from './audio';
 import { Haptics } from './haptics';
-import { renderer } from '../rendering/scene';
+import { QUALITY_TIERS, applyQualityTier, defaultQualityTier, isQualityTier, type QualityTier } from '../rendering/quality';
 import { setReplayEnabled } from '../game/replay';
 import { match } from '../game/state';
 import { DEFAULT_TEAM, TEAMS, teamMeta } from '../config/players';
@@ -17,7 +17,7 @@ import type { GameMode } from '../config/types';
 export interface Settings {
   sound: boolean;
   haptics: boolean;
-  quality: 'high' | 'lite';
+  quality: QualityTier;
   lefty: boolean;
   diff: number;
   half: number;
@@ -34,7 +34,7 @@ const MODES: GameMode[] = ['friendly', 'knockout', 'cup'];
 const DEFAULTS: Settings = {
   sound: true,
   haptics: true,
-  quality: 'high',
+  quality: defaultQualityTier(),
   lefty: false,
   diff: 1,
   half: 180,
@@ -54,6 +54,9 @@ function load(): Settings {
       const s: Settings = { ...DEFAULTS, ...JSON.parse(raw) };
       // a saved team key from an older build may no longer exist — heal it
       if (!TEAMS.some((t) => t.key === s.team)) s.team = DEFAULT_TEAM;
+      // graphics tier: 'high' | 'lite' from older builds are still valid tiers;
+      // anything unrecognised falls back to the device default
+      if (!isQualityTier(s.quality)) s.quality = DEFAULTS.quality;
       return s;
     }
   } catch {
@@ -91,12 +94,14 @@ function setSeg(id: string, value: number): void {
   });
 }
 
-/** Apply the graphics tier (replays + pixel ratio + soft shadows) to the engine. */
+/**
+ * Apply the graphics tier to the engine. Everything renderer-side (resolution,
+ * shadows, crowd density, post-processing…) lives in rendering/quality; goal
+ * replays stay on for every tier except `lite`.
+ */
 function applyQuality(): void {
-  const high = S.quality === 'high';
-  setReplayEnabled(high);
-  renderer.setPixelRatio(high ? Math.min(window.devicePixelRatio, 2) : 1);
-  renderer.shadowMap.enabled = high;
+  setReplayEnabled(S.quality !== 'lite');
+  applyQualityTier(S.quality);
 }
 
 /** Reflect the team picker's selection (highlight + the chosen team's name). */
@@ -132,7 +137,7 @@ export function applySettings(): void {
   setSeg('segRules', S.sim ? 1 : 0);
   setSeg('segMentality', S.mentality);
   setSeg('segHaptics', S.haptics ? 1 : 0);
-  setSeg('segQuality', S.quality === 'high' ? 1 : 0);
+  setSeg('segQuality', QUALITY_TIERS.indexOf(S.quality));
   setSeg('segLayout', S.lefty ? 1 : 0);
   reflectTeam();
 }
@@ -157,7 +162,7 @@ export function initSettings(): void {
   seg('segRules', (v) => (S.sim = v === 1));
   seg('segMentality', (v) => (S.mentality = v));
   seg('segHaptics', (v) => (S.haptics = v === 1));
-  seg('segQuality', (v) => (S.quality = v === 1 ? 'high' : 'lite'));
+  seg('segQuality', (v) => (S.quality = QUALITY_TIERS[v] ?? 'high'));
   seg('segLayout', (v) => (S.lefty = v === 1));
 
   // team picker (string keys, so wired separately from the numeric segments)
