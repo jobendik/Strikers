@@ -200,7 +200,7 @@ export function makeStadiumIR(ctx: BaseAudioContext, rand: Rng, seconds = 2.8): 
   return ir;
 }
 
-function makeClipCurve(): Float32Array {
+function makeClipCurve(): Float32Array<ArrayBuffer> {
   // identity up to ±0.85, then a tanh knee that tops out at ±0.956
   const n = 2049;
   const c = new Float32Array(n);
