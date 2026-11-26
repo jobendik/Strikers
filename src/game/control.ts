@@ -767,14 +767,40 @@ function keeperContact(gk: Player): boolean {
   keeperLine(gk, _line);
   distToSeg(ball.position.x, ball.position.y, ball.position.z, _line.ax, _line.ay, _line.az, _line.bx, _line.by, _line.bz);
   const diving = gk.act === 'dive';
-  const touchR = CFG.gkTouchR + CFG.ballR + (diving ? 0 : 0.3); // standing: arms out to the side
+  // standing: arms out to the side. Set for a close-range finish he spreads himself —
+  // legs and arms wide — which is how keepers actually stop shots they can't react to.
+  const spread = !diving && sim.elapsed - gk.spreadT < 0.25 && ball.position.y < 1.35 ? 0.5 * (0.55 + 0.45 * D().keeper) : 0;
+  const touchR = CFG.gkTouchR + CFG.ballR + (diving ? 0 : 0.3) + spread;
   if (_seg.d > touchR) return false;
 
   const speed = Math.hypot(ball.velocity.x, ball.velocity.y, ball.velocity.z);
-  const live = speed > CFG.gkDiveTrigger && headingForGoal(gk, 1.2);
+  const carrier = match.controlPlayer;
+  // a save is only a save if it was a strike at goal (or a wicked deflection) — never a dribble touch
+  const live = !carrier && (ball.shot || speed > 16) && speed > CFG.gkDiveTrigger && headingForGoal(gk, 1.2);
   if (!live) {
-    // nothing dangerous — just gather it if it's catchable (slow, or dropping to him)
-    if (match.controlPlayer && match.controlPlayer.team !== gk.team) return false; // at an attacker's feet: must smother via tackle
+    // the spread stance only blocks shots; for anything else he needs his normal reach
+    if (_seg.d > touchR - spread) return false;
+    if (carrier && carrier.team !== gk.team) {
+      // at an attacker's feet: only a keeper going down at them can smother it,
+      // and only while the ball is off the attacker's boot
+      if (!diving || planarToBall(carrier) < 0.55) return false;
+      if (chance(0.45 + 0.45 * D().keeper)) {
+        setControl(gk);
+        match.gkHold = 1.5;
+        emit({ t: 'save', team: teamIndex(gk.team), parry: false, diving: true, speed, x: ball.position.x, y: ball.position.y, z: ball.position.z });
+        emit({ t: 'toast', text: gk.team.isUser ? 'SMOTHERED!' : 'KEEPER SMOTHERS IT' });
+      } else {
+        // gets something on it: it squirts loose
+        const a = rngRange(-1.2, 1.2);
+        setControlLoose();
+        ball.velocity.set(-Math.sign(ownGoalX(gk.team)) * (2 + rng() * 3) * Math.cos(a), 1 + rng() * 2, Math.sin(a) * 5);
+        ball.lastTouch = gk.team;
+        gk.kickCooldown = 0.5;
+        ballStruck();
+        invalidateTrajectory();
+      }
+      return true;
+    }
     if (speed < 16) {
       resolvePendingPass(gk);
       setControl(gk);
@@ -827,7 +853,7 @@ function keeperContact(gk: Player): boolean {
     return true;
   }
 
-  const pCatch = clamp(1.2 - speed / 23 - stretch * 0.5 - (diving ? 0.12 : 0), 0.02, 0.96) * (0.55 + 0.5 * K);
+  const pCatch = clamp(1.2 - speed / 23 - stretch * 0.5 - (diving ? 0.12 : 0) - (spread > 0 ? edge * 0.6 : 0), 0.02, 0.96) * (0.55 + 0.5 * K);
   if (onTarget) creditSave(gk);
   if (chance(pCatch)) {
     resolvePendingPass(gk);

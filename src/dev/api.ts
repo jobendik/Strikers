@@ -8,6 +8,7 @@ import { ballTrajectory } from '../game/predict';
 import { replayCtl } from '../game/replay';
 import { setCameraMode, getCameraMode } from '../game/camera';
 import { renderer } from '../rendering/scene';
+import { startShootout, inShootout } from '../game/penalty';
 
 /*
  * Developer / test API — `window.__strikers`.
@@ -42,6 +43,8 @@ export function installDevApi(): void {
     run: (seconds: number) => stepTicks(Math.round(seconds * SIM_HZ)),
     trajectory: () => ballTrajectory(),
     camera: { set: setCameraMode, get: getCameraMode },
+    /** Jump straight into a penalty shoot-out (testing). */
+    shootout: { start: startShootout, active: inShootout },
     /** Renderer statistics for the last frame. */
     renderInfo: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }),
     /** A compact summary of the match right now (for assertions). */

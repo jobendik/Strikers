@@ -43,6 +43,9 @@ export function gkBrain(p: Player, _dt: number): void {
   const bx = ball.position.x;
   const bz = ball.position.z;
   const distGoal = Math.hypot(bx - own, bz);
+  // close-range danger in front of him: set big (spread) — see control.keeperContact
+  const dBall = Math.hypot(bx - p.position.x, bz - p.position.z);
+  if (dBall < 7.5 && match.controlTeam !== team && distGoal < 13) p.spreadT = sim.elapsed;
   const loose = match.controlPlayer === null;
   const theirs = match.controlTeam !== null && match.controlTeam !== team;
 

@@ -105,7 +105,7 @@ export function aiCarry(p: Player, _dt: number): void {
     const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot);
     const xg = estimateXg(team, ball.position.x, ball.position.z, press) * (0.45 + 0.75 * openness);
     // threshold falls with composure and urgency, rises when protecting a lead
-    let need = 0.2 - 0.07 * A.composure - 0.09 * urgency + 0.12 * conserve;
+    let need = 0.14 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve;
     // fuzzy approval (close + central + unmarked) lowers it; a hopeless angle raises it
     need -= (desire.shoot - 50) / 380;
     // a better pass on (someone calling in a better spot) makes him pickier
