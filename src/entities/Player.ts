@@ -10,7 +10,7 @@ import type { KickKind } from '../core/bus';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
 import { initPerception } from '../ai/perception';
-import { makeModelPlayerMesh } from '../rendering/meshes';
+import { applyPlayerLook, lookSeed, makeModelPlayerMesh } from '../rendering/meshes';
 import type { FormationEntry, PlayerAttributes, PlayerRole, RoleType, SquadPlayer } from '../config/types';
 import type { Team } from './Team';
 
@@ -222,10 +222,18 @@ export class Player extends Vehicle {
     this.ath = deriveAthlete(this.attr, this.roleType);
     this.baseSpeed = this.ath.sprint;
     this.maxSpeed = this.baseSpeed;
-    // outfielders wear the kit colour; keepers a distinct keeper kit per side
-    (this.mesh.userData.body as { material: { color: { set(c: string): void } } }).material.color.set(
-      this.roleType === 'GK' ? (this.team.side > 0 ? '#ffd23e' : '#19e0c0') : this.team.color,
-    );
+    // Dress the model: nation kit built around the (clash-resolved) team colour,
+    // a keeper strip that contrasts with both sides, squad number + name, and
+    // per-player skin / hair / boots variety from a stable identity hash.
+    applyPlayerLook(this.mesh, {
+      teamKey: this.team.name,
+      kitColor: this.team.color,
+      isGK: this.roleType === 'GK',
+      side: this.team.side,
+      num: this.num,
+      name: this.name,
+      seed: lookSeed(this.team.name, this.name, this.num),
+    });
   }
 
   /** Stable per-identity seed (looks, small behavioural quirks). */
