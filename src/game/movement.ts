@@ -331,7 +331,8 @@ export function movePlayers(dt: number): void {
         p.stamina = clamp(p.stamina + (hard ? -drain : regen) * dt, 0, 1);
       }
 
-      const mx = p.act === 'dive' ? 1.2 : 3.5;
+      // a keeper never ends up behind his own goal line (he'd carry the ball over it)
+      const mx = p.roleType === 'GK' ? -0.3 : 3.5;
       p.position.x = clamp(p.position.x, -CFG.halfL - mx, CFG.halfL + mx);
       p.position.z = clamp(p.position.z, -CFG.halfW - 2.5, CFG.halfW + 2.5);
     }
