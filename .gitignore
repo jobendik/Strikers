@@ -10,3 +10,6 @@ yarn-error.log*
 .env
 .env.*
 !.env.example
+
+.claude/
+simtest/dist/

@@ -40,6 +40,7 @@ export function refreshTeamTags(): void {
 function updatePlayerBadge(): void {
   const badge = el('pname');
   const p = match.userPlayer;
+  document.body.classList.toggle('in-match', match.state === 'play' || match.state === 'shootout');
   if (p && match.state === 'play') {
     el('pnum').textContent = String(p.num);
     el('pnm').textContent = p.name;

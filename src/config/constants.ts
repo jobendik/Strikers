@@ -21,28 +21,39 @@ export const CFG = {
   ballR: 0.18,
   playerR: 0.46,
   playerH: 1.7,
-  controlR: 1.35,
-  carryDist: 1.4,
+  /** Planar foot reach: a ball inside this (and low enough) can be played. */
+  controlR: 0.9,
+  /** While the ball is this close the carrier has it under close control. */
+  closeControlR: 1.3,
+  /** Beyond this the carrier has lost the ball (a loose ball). */
+  loseControlR: 2.6,
+  carryDist: 0.62,
   tackleEdge: 0.35,
-  ballDecel: 8,
-  ballMax: 40,
-  ballStop: 0.5,
-  spd: { out: 9.4, gk: 8.2, sprint: 1.34 },
+  /** Rolling deceleration on grass (m/s²). See physics.ts for the full model. */
+  ballDecel: 2.5,
+  ballMax: 38,
+  ballStop: 0.25,
+  /**
+   * Top speeds in m/s at a neutral (70) pace rating. `out`/`gk` are *sprint*
+   * speeds; `run` is the fraction used when not sprinting. Real footballers
+   * sprint at ~8–9.5 m/s — these are real-world numbers, not arcade ones.
+   */
+  spd: { out: 8.0, gk: 7.2, run: 0.72, sprint: 1 },
   force: 130,
-  shootRange: 20,
-  shootPow: 30,
-  passShort: 18,
-  passLong: 24,
+  shootRange: 26,
+  shootPow: 31,
+  passShort: 14,
+  passLong: 22,
   clearPow: 24,
   shootAttempts: 6,
-  potShot: 0.02,
+  potShot: 0.035,
   passInterceptScale: 0.22,
   comfortZone: 3.0,
   minPassDist: 5,
   gkInterceptR: 9,
-  gkTend: 2.4,
-  staminaDrain: 0.05,
-  staminaRegen: 0.06,
+  gkTend: 0.9,
+  staminaDrain: 0.045, // per second of sprinting (≈22 s flat-out to empty)
+  staminaRegen: 0.03, // per second when not sprinting (faster when standing)
   foulChance: 0.07,
   matchSeconds: 180, // length of ONE half (the match is two halves — see flow.ts)
   diff: 1, // 0 easy · 1 pro · 2 legend
@@ -53,51 +64,66 @@ export const CFG = {
   stoppageMax: 30, // cap on a half's added time
 
   // --- aerial ball physics (Notblox-inspired 3D ball) ---
-  gravity: 24, // world units / s² — tuned for snappy arcade arcs
-  ballRest: 0.52, // vertical restitution on bounce
-  bounceFric: 0.78, // horizontal velocity retained per bounce
-  bounceMin: 1.5, // min downward impact speed (u/s) that counts as a real bounce —
-  // below this a grounded ball is just rolling, so it must NOT be scrubbed by bounceFric
-  controlHeight: 1.25, // a ground player can only collect a ball below this height
+  gravity: 10.6, // m/s² — a hair above real (9.81) so lofted balls stay snappy
+  airDrag: 0.0115, // quadratic drag: a = −k·|v|·v  (≈ real football, Cd≈0.25)
+  ballRest: 0.6, // vertical restitution on a firm bounce (drops with impact speed)
+  groundMu: 0.42, // turf friction coefficient during a bounce (couples spin ⇄ speed)
+  bounceFric: 0.78, // legacy (unused by physics v2)
+  bounceMin: 0.9, // min downward impact speed (m/s) that counts as a real bounce —
+  // below this a grounded ball settles into a roll
+  controlHeight: 0.55, // a ball above this can't be trapped with the feet…
+  chestHeight: 1.35, // …but can be cushioned on the thigh/chest up to here (harder)
   crossbarH: 2.44, // ball must be under this to count as a goal
-  headLow: 0.9, // ball heights a player can head/volley
-  headHigh: 2.5,
-  headReach: 1.7, // planar range for contesting an aerial ball
+  headLow: 1.1, // ball heights a player can head
+  headHigh: 2.55, // (standing jump reach)
+  headReach: 1.05, // planar range for contesting an aerial ball
+  volleyLow: 0.3, // ball heights a player can volley
+  volleyHigh: 1.1,
 
   // --- new actions (footballSimulationEngine action set) ---
-  throughPow: 22, // through-ball power, played into space behind the line
+  throughPow: 20, // through-ball power cap, played into space behind the line
   crossPow: 21, // lofted cross power
   chipPow: 17, // delicate chip to lob the keeper
-  slideSpeed: 1.9, // slide-tackle lunge speed multiplier
-  slideTime: 0.42, // how long a slide commits the player
-  slideReach: 2.2, // slide-tackle ball-win range
-  slideCooldown: 1.1, // recovery before sliding again
-  slideFoulBase: 0.18, // base foul chance from a slide (scaled by tackling)
+  slideSpeed: 1.25, // slide-tackle lunge speed (× the player's sprint speed, decaying)
+  slideTime: 0.55, // how long a slide commits the player
+  slideRecover: 0.55, // on the turf afterwards before he can move again
+  slideReach: 1.15, // reach of the sliding leg (from body centre, along the slide)
+  slideCooldown: 1.6, // recovery before sliding again
+  slideFoulBase: 0.2, // base foul chance from a mistimed slide (scaled by tackling)
+  tackleReach: 1.25, // standing-tackle foot reach
+  tackleWindup: 0.09, // seconds from committing to the foot arriving
+  tackleRecover: 0.42, // stumble after a missed standing tackle
+  tackleCooldown: 0.75,
 
   // --- ball spin / swerve (Magnus effect — extends Notblox's real ball motion) ---
   // lateral accel = magnusK · spin · horizontalSpeed; tuned so a full-curl shot
   // bends ~1.5 units over its flight while a clinical AI bend stays on frame.
-  magnusK: 0.28, // how strongly spin curves the ball per unit of horizontal speed
-  spinDecay: 0.45, // fraction of spin shed per second in flight
-  curlHuman: 2.2, // max curl a human can bend onto a shot (joystick lateral at release)
-  curlAI: 0.55, // curl a clinical AI shooter bends toward goal centre (stays on target)
-  curlCross: 1.2, // curl that whips a cross into the box
+  // Magnus acceleration = magnusK · (ω × v), ω in rad/s. A 60 rad/s (~10 rev/s)
+  // side-spun 25 m/s strike bends ≈ 4 m over a 25 m flight — like a real free kick.
+  magnusK: 0.0058,
+  spinDecay: 0.28, // fraction of spin shed per second in flight
+  spinDecayGround: 3.2, // side-spin dies quickly once the ball is rolling
+  curlHuman: 62, // max side-spin (rad/s) a human can whip onto a shot
+  curlAI: 26, // side-spin a clinical AI shooter uses (kept on target by the aim solver)
+  curlCross: 34, // side-spin that swings a cross into the box
 
   // --- woodwork (posts + crossbar rebounds) ---
   postR: 0.06, // collision radius of a goalpost / crossbar
   woodRest: 0.62, // restitution off the frame
 
   // --- pass reception (Simple Soccer's intended-receiver model) ---
-  receiveSpan: 2.6, // seconds an assigned receiver chases the pass before giving up
+  receiveSpan: 3.4, // seconds an assigned receiver chases the pass before giving up
   passRequestSpan: 1.35, // seconds a teammate keeps calling for a pass
   passRequestMinScore: 7.8, // minimum lane score before a run is worth advertising
   passRequestBoost: 1.12, // small pace burst for the caller making the run
 
   // --- ground-pass weighting (scale strike power to distance so a short pass is
   // a crisp roll, not a full-power blast that overruns its target by 30 units) ---
-  passOverrun: 1.25, // aim the ball this factor past the target so a runner can chase it
-  passOverMin: 2.0, // ...with at least this many world units of overrun
-  passMinPow: 12, // floor so even the shortest pass keeps some zip
+  passArrive: 9.5, // speed (m/s) a ground pass should still carry when it reaches its target
+  passArriveThrough: 5.0, // a through-ball dies into space for the runner
+  passOverrun: 1.25, // legacy
+  passOverMin: 2.0, // legacy
+  passMinPow: 9, // floor so even the shortest pass keeps some zip
 
   // --- off-ball spacing (Yuka SeparationBehavior — the flagged-unused Yuka group
   // steering behaviour). A push-away force keeps team-mates from clumping so the
@@ -107,16 +133,19 @@ export const CFG = {
 
   // --- goalkeeper diving saves (deepens Simple Soccer's keeper, uses the aerial
   // model). The keeper predicts a shot's crossing point and flings himself. ---
-  gkDiveSpeed: 2.6, // lateral lunge speed multiplier during a dive
-  gkDiveTime: 0.5, // how long a dive commits the keeper
-  gkDiveCooldown: 0.7, // recovery before he can dive again
-  gkDiveReach: 1.05, // small catch-radius bonus at full stretch (the lunge does the work)
-  gkDiveTrigger: 14, // min ball speed (u/s) toward goal to trigger a dive
+  gkDiveSpeed: 3.4, // body speed through a full-stretch dive (m/s) — ~3.3 m covered in ~0.6 s with the arms
+  gkDiveTime: 0.62, // airborne phase of a dive
+  gkDiveRecover: 0.7, // on the ground afterwards
+  gkDiveCooldown: 1.2, // recovery before he can dive again
+  gkDiveReach: 1.05, // legacy
+  gkArm: 0.9, // hips-to-fingertips reach at full stretch
+  gkTouchR: 0.27, // ball within this of the keeper's body/arm line is touched
+  gkDiveTrigger: 9, // min ball speed (m/s) toward goal to treat it as a shot
   // The keeper can only fling himself so far. With his standing catch radius this
   // still leaves the corners beatable from a central position — place it, curl it
   // around him, wrong-foot him, or pick the far top corner.
-  gkDiveLunge: 2.0, // furthest lateral distance a dive physically covers
-  gkParrySpeed: 24, // a save above this speed may be parried (rebound) not caught
+  gkDiveLunge: 1.45, // furthest his body travels in a dive (arms add gkArm beyond that)
+  gkParrySpeed: 17, // above this a stretched save is usually parried, not held
 
   // --- game-feel juice ---
   goalSlowmo: 0.32, // time scale at the instant of a goal
@@ -128,9 +157,9 @@ export const CFG = {
   // --- penalty shootout (settles drawn knockout ties; reuses the diving keeper) ---
   pen: {
     spotOut: 9, // penalty spot distance from the goal line
-    power: 25, // base shot speed (scaled up by charge)
-    keeperReach: 1.45, // planar catch radius of the diving keeper at the ball
-    keeperSpeed: 13.5, // dive speed (u/s) — reaches a corner in time *if* he reads it
+    power: 23, // base shot speed (scaled up by charge)
+    keeperReach: 1.2, // planar catch radius of the diving keeper at the ball
+    keeperSpeed: 7.5, // dive speed (m/s) — reaches a corner in time *if* he reads it
     setupTime: 0.9, // pause before each kick can be taken
     resultTime: 1.7, // how long a kick result is shown
     flightTimeout: 2.4, // failsafe: an unresolved kick is recorded as a miss
@@ -140,9 +169,9 @@ export const CFG = {
   },
 
   // --- knock-on burst (double-tap sprint): push the ball ahead and explode past ---
-  knockSpeed: 15, // speed the ball is knocked ahead
-  knockBoost: 1.58, // running-speed multiplier during the burst (overrides sprint)
-  knockBoostTime: 0.6, // how long the burst lasts
+  knockSpeed: 13.5, // speed the ball is knocked ahead
+  knockBoost: 1.07, // sprint-speed multiplier while chasing the knock-on (no ball at feet)
+  knockBoostTime: 1.1, // how long the burst lasts
 
   // --- corner kicks: a defender's last touch over his own byline ---
   cornerInset: 0.7, // how far inside the lines the corner ball is placed
@@ -150,23 +179,33 @@ export const CFG = {
   // --- goalkeeper angle-narrowing (off-the-line positioning to compress shot angle) ---
   // When an attacker enters the penalty box with the ball on the ground, the keeper
   // steps forward along the goal-to-ball axis by up to `gkAngleStep` units.
-  gkAngleStep: 3.8, // maximum units the keeper advances off his line to narrow the angle
+  gkAngleStep: 3.0, // maximum units the keeper advances off his line to narrow the angle
 
   // --- perception: sound cue (Legend difficulty only) ---
   // A fast ball within this radius is always sensed, even from behind, simulating
   // elite players reacting to the sound and feel of the ball.
   soundBallR: 10, // sensing radius (world units) for the sound cue
   soundBallSpd: 12, // minimum ball ground speed (u/s) that triggers the cue
+
+  // --- restarts ---
+  deadBallTime: 0.9, // the ball keeps flying this long after going out before the restart
+
 };
 
 /** Per-difficulty AI tuning. Indexed by CFG.diff (0 Easy → 4 World Class). */
 export const DIFF: DiffSetting[] = [
-  { label: 'EASY', aiSpd: 0.88, react: 0.34, passSafe: 2.6, shootBias: 0.55, keeper: 0.74 },
-  { label: 'PRO', aiSpd: 0.97, react: 0.22, passSafe: 2.1, shootBias: 0.78, keeper: 0.78 },
-  { label: 'LEGEND', aiSpd: 1.05, react: 0.12, passSafe: 1.7, shootBias: 0.95, keeper: 0.82 },
-  // G4 — extra tiers above Legend (sharper reads, riskier passing, better keeper).
-  { label: 'ULTIMATE', aiSpd: 1.11, react: 0.08, passSafe: 1.45, shootBias: 1.05, keeper: 0.86 },
-  { label: 'WORLD CLASS', aiSpd: 1.16, react: 0.06, passSafe: 1.25, shootBias: 1.12, keeper: 0.9 },
+  // Difficulty changes how well the AI *thinks and executes* — never how fast it
+  // can physically run (`aiSpd` is a mild work-rate factor: how readily players
+  // commit to a sprint, capped at 1.0 = the same physics the human gets).
+  //   react  — seconds of reaction lag (keeper reads, tackle timing, decisions)
+  //   noise  — execution error multiplier on passes/shots
+  //   keeper — keeper quality 0..1 (read accuracy, reaction, handling)
+  //   press  — how aggressively/cohesively the team closes down (0..1)
+  { label: 'EASY', aiSpd: 0.9, react: 0.4, passSafe: 2.6, shootBias: 0.55, keeper: 0.55, noise: 1.7, press: 0.35 },
+  { label: 'PRO', aiSpd: 0.95, react: 0.27, passSafe: 2.1, shootBias: 0.78, keeper: 0.68, noise: 1.3, press: 0.55 },
+  { label: 'LEGEND', aiSpd: 1.0, react: 0.19, passSafe: 1.7, shootBias: 0.95, keeper: 0.78, noise: 1.0, press: 0.72 },
+  { label: 'ULTIMATE', aiSpd: 1.0, react: 0.15, passSafe: 1.45, shootBias: 1.05, keeper: 0.86, noise: 0.8, press: 0.86 },
+  { label: 'WORLD CLASS', aiSpd: 1.0, react: 0.12, passSafe: 1.25, shootBias: 1.12, keeper: 0.93, noise: 0.62, press: 1.0 },
 ];
 
 /**

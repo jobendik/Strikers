@@ -1,64 +1,82 @@
-import * as THREE from 'three';
 import { CFG } from '../config/constants';
-import { camera } from '../rendering/scene';
-import { ball, match } from './state';
-import { clearTrail } from './render';
+import { clamp } from '../core/math';
+import { SIM_HZ } from '../core/time';
+import { applyView, clearTrail, currentSnapshot } from './render';
+import { lerpSnapshot } from './snapshot';
+import { setCameraDirect, snapCamera } from './camera';
 import { showReplayUI } from '../ui/hud';
-import type { Player } from '../entities/Player';
 
 /*
- * Instant goal replay. Every frame of live play we push the ball + player
- * transforms into a ring buffer; when a goal is scored we freeze the last few
- * seconds into a clip and play it back from a dramatic low camera during the
- * celebration, with a SKIP control. Pure presentation — it never touches the
- * simulation, and it lifts straight from the recorded transforms so it is exact.
+ * Instant replay.
+ *
+ * The recorder keeps the last few seconds of presentation snapshots (the exact
+ * frames that were drawn — positions, facing, stride phase, action clocks, ball
+ * spin). Playback feeds them back through the same presenter the live game uses,
+ * so the replay is what happened, re-animated faithfully, never a re-simulation.
+ *
+ * A goal is shown as a short broadcast sequence: the build-up from a low
+ * touchline camera, then the finish again from behind the goal in slower motion.
+ * Playback can be scrubbed and its speed changed (see replayCtl).
  */
 
-const RECORD_SECONDS = 3.4; // how much lead-up to keep
-const CAP = Math.round(RECORD_SECONDS * 60); // ring capacity in frames (≈60fps)
-const PLAYBACK = 0.7; // slow-motion playback rate
+const RECORD_SECONDS = 7;
+const REC_HZ = 60; // record every 2nd tick
+const EVERY = SIM_HZ / REC_HZ;
+const CAP = RECORD_SECONDS * REC_HZ;
 
-let players: Player[] = [];
-let stride = 0;
 let ring: Float32Array | null = null;
+let stride = 0;
 let head = 0;
 let count = 0;
+let tickN = 0;
 
 let clip: Float32Array | null = null;
 let clipFrames = 0;
-let cursor = 0;
+let view: Float32Array | null = null;
 let active = false;
-let scoredBy = 0;
 let enabled = true;
+let scoredBy = 0;
 
-const _v = new THREE.Vector3();
+/** Playback state (also driven by the dev lab / replay UI). */
+export const replayCtl = {
+  /** current playback position in frames (fractional) */
+  cursor: 0,
+  /** playback rate multiplier on top of the shot's own speed */
+  rate: 1,
+  paused: false,
+  /** index of the current camera shot */
+  shot: 0,
+};
 
-/** Toggle goal replays from settings (the lower quality tier turns them off). */
+interface Shot {
+  /** clip range in seconds-from-end (start, end) */
+  from: number;
+  to: number;
+  speed: number;
+  cam: 'touchline' | 'behindGoal' | 'high';
+}
+const SEQUENCE: Shot[] = [
+  { from: 4.2, to: 0, speed: 0.75, cam: 'touchline' },
+  { from: 1.9, to: 0, speed: 0.4, cam: 'behindGoal' },
+];
+
+/** Toggle goal replays from settings (the lite quality tier turns them off). */
 export function setReplayEnabled(v: boolean): void {
   enabled = v;
 }
 
-function ensure(): void {
-  if (ring) return;
-  players = [...match.teams[0].players, ...match.teams[1].players];
-  stride = 3 + players.length * 3; // ball xyz + (x,z,heading) per player
-  ring = new Float32Array(CAP * stride);
-}
-
-/** Record the current transforms into the ring buffer. Call once per live frame. */
+/** Record the latest snapshot. Call once per live simulation tick. */
 export function recordFrame(): void {
   if (!enabled) return;
-  ensure();
-  if (!ring) return;
-  let o = head * stride;
-  ring[o++] = ball.position.x;
-  ring[o++] = ball.position.y;
-  ring[o++] = ball.position.z;
-  for (const p of players) {
-    ring[o++] = p.position.x;
-    ring[o++] = p.position.z;
-    ring[o++] = p.heading;
+  if (tickN++ % EVERY !== 0) return;
+  const snap = currentSnapshot();
+  if (!ring || stride !== snap.length) {
+    stride = snap.length;
+    ring = new Float32Array(CAP * stride);
+    head = 0;
+    count = 0;
   }
+  ring.set(snap, head * stride);
   head = (head + 1) % CAP;
   count = Math.min(count + 1, CAP);
 }
@@ -69,81 +87,107 @@ export function resetReplayBuffer(): void {
   count = 0;
 }
 
-/** Is there a goal worth replaying? */
+/** Is there enough recorded play to be worth showing? */
 export function hasReplay(): boolean {
-  return enabled && count > 20;
+  return enabled && count > REC_HZ * 0.8;
 }
 
 export function isReplaying(): boolean {
   return active;
 }
 
-/** Freeze the buffered lead-up into a clip and start playing it back. */
+function shotStart(i: number): number {
+  return Math.max(0, clipFrames - 1 - SEQUENCE[i].from * REC_HZ);
+}
+function shotEnd(i: number): number {
+  return Math.max(0, clipFrames - 1 - SEQUENCE[i].to * REC_HZ);
+}
+
+/** Freeze the buffered play into a clip and start the replay sequence. */
 export function startReplay(scorer: number): void {
-  ensure();
-  if (!ring) return;
+  if (!ring || count < 2) return;
   scoredBy = scorer;
   clipFrames = count;
   clip = new Float32Array(clipFrames * stride);
+  view = new Float32Array(stride);
   const start = (head - count + CAP) % CAP;
   for (let i = 0; i < clipFrames; i++) {
     const src = ((start + i) % CAP) * stride;
     clip.set(ring.subarray(src, src + stride), i * stride);
   }
-  cursor = 0;
+  replayCtl.shot = 0;
+  replayCtl.cursor = shotStart(0);
+  replayCtl.rate = 1;
+  replayCtl.paused = false;
   active = true;
-  clearTrail(); // don't leave a frozen streak across the replay
+  clearTrail();
   showReplayUI(true);
 }
 
-/** Tear down playback once it has finished. */
 function finish(): void {
   active = false;
   clip = null;
   showReplayUI(false);
+  snapCamera();
 }
 
-/**
- * SKIP — fast-forward to the end. We keep `active` true (so the loop doesn't
- * restart the clip) and let {@link updateReplay} run the natural teardown.
- */
+/** SKIP — jump to the end; {@link updateReplay} then tears down normally. */
 export function skipReplay(): void {
-  if (active) cursor = clipFrames;
+  if (!active) return;
+  replayCtl.shot = SEQUENCE.length - 1;
+  replayCtl.cursor = clipFrames;
+}
+
+/** Total length of the recorded clip in seconds (for a scrub bar). */
+export function replayDuration(): number {
+  return clipFrames / REC_HZ;
+}
+
+function replayCamera(cam: Shot['cam'], bx: number, by: number, bz: number, prog: number): void {
+  const gx = scoredBy === 0 ? CFG.halfL : -CFG.halfL;
+  const s = Math.sign(gx);
+  if (cam === 'behindGoal') {
+    // low, behind and just outside the far post, looking back up the pitch through the net
+    const zs = Math.sign(bz || 1);
+    setCameraDirect(gx + s * (CFG.goalDepth + 3.2), 1.9, -zs * (CFG.goalHalf + 0.6), bx * 0.55 + gx * 0.45, Math.max(0.6, by * 0.7), bz * 0.7, 46);
+  } else if (cam === 'high') {
+    setCameraDirect(gx * 0.5, 22, 30, bx, by, bz, 28);
+  } else {
+    // pitch-side tracking camera, a little ahead of the ball, easing toward the goal
+    const cx = clamp(bx + s * 5, -CFG.halfL + 2, CFG.halfL - 2);
+    setCameraDirect(cx * (0.9 + 0.1 * prog), 2.6 + 1.2 * (1 - prog), CFG.halfW + 5.5, bx + s * 1.5, 0.9 + by * 0.5, bz, 34);
+  }
 }
 
 /**
- * Drive the meshes + camera from the clip. Returns true when playback is done so
- * the loop can resume to kickoff. While replaying, the loop skips its normal
- * mesh/camera sync.
+ * Advance and draw the replay. Returns true when it has finished (the loop then
+ * kicks off). `dt` is real seconds.
  */
 export function updateReplay(dt: number): boolean {
-  if (!active || !clip) return true;
-  const f = Math.min(clipFrames - 1, Math.floor(cursor));
-  let o = f * stride;
-  const bx = clip[o++];
-  const by = clip[o++];
-  const bz = clip[o++];
-  ball.mesh.position.set(bx, Math.max(CFG.ballR, by), bz);
-  for (const p of players) {
-    const x = clip[o++];
-    const z = clip[o++];
-    const h = clip[o++];
-    p.mesh.position.set(x, 0, z);
-    p.mesh.rotation.set(0, h, 0);
-    (p.mesh.userData.ring as THREE.Mesh).visible = false;
-  }
+  if (!active || !clip || !view) return true;
+  const shot = SEQUENCE[replayCtl.shot];
+  const end = shotEnd(replayCtl.shot);
+  const start = shotStart(replayCtl.shot);
+  const adv = replayCtl.paused ? 0 : dt * REC_HZ * shot.speed * replayCtl.rate;
+  replayCtl.cursor = Math.max(0, replayCtl.cursor + adv);
 
-  // dramatic low camera by the goal that was breached, easing in toward the ball
-  const gx = scoredBy === 0 ? CFG.halfL : -CFG.halfL;
-  const prog = clipFrames > 1 ? cursor / clipFrames : 1;
-  _v.set(gx * (0.5 + prog * 0.28), 5.5 - prog * 1.2, 16 - prog * 5);
-  camera.position.lerp(_v, Math.min(1, 3 * dt));
-  camera.lookAt(bx, Math.max(CFG.ballR, by) + 0.5, bz);
+  const c = clamp(replayCtl.cursor, 0, clipFrames - 1);
+  const i0 = Math.floor(c);
+  const i1 = Math.min(clipFrames - 1, i0 + 1);
+  lerpSnapshot(clip.subarray(i0 * stride, i0 * stride + stride), clip.subarray(i1 * stride, i1 * stride + stride), c - i0, view);
+  applyView(view, adv / REC_HZ, dt);
+  const prog = end > start ? clamp((c - start) / (end - start), 0, 1) : 1;
+  replayCamera(shot.cam, view[0], view[1], view[2], prog);
 
-  cursor += dt * 60 * PLAYBACK;
-  if (cursor >= clipFrames) {
-    finish();
-    return true;
+  if (replayCtl.cursor >= end) {
+    if (replayCtl.shot < SEQUENCE.length - 1 && replayCtl.cursor < clipFrames) {
+      replayCtl.shot++;
+      replayCtl.cursor = shotStart(replayCtl.shot);
+      clearTrail();
+    } else {
+      finish();
+      return true;
+    }
   }
   return false;
 }

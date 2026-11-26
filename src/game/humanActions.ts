@@ -1,158 +1,203 @@
 import type { Vector3 } from 'yuka';
 import { CFG } from '../config/constants';
-import { attr01 } from '../config/players';
-import { V3, clamp, distSq, headingVec } from '../core/math';
-import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
-import { ball, match, oppOf, setPassRequest, setReceiver } from './state';
-import {
-  canChipKeeper,
-  canShoot,
-  clampShot,
-  findBestPass,
-  findThroughBall,
-  getBestPassToReceiver,
-  goalX,
-  passWeight,
-} from '../ai/analysis';
-import { headBall, kick, lobKick, startSlide } from './control';
-import { canHead } from './aerial';
-import { setUser } from './movement';
-import { flashToast } from '../ui/hud';
+import { V3, clamp, headingVec } from '../core/math';
+import { emit } from '../core/bus';
+import { ball, match, oppOf } from './state';
+import { canChipKeeper, findThroughBall, goalX, passWeight, pickShotTarget } from '../ai/analysis';
+import { headBall, kick, lobKick, makeKick, requestKick, shootAt, startSlide, startTackle } from './control';
+import { canHead, planarToBall } from './aerial';
+import { interceptPoint } from './predict';
+import { nextUserPlayer, setUser } from './movement';
+import { timeBall } from '../entities/Ball';
 import type { Player } from '../entities/Player';
+
+/*
+ * The human control layer: turns button presses into football actions.
+ *
+ * Design rules
+ *   · Contextual, not modal — the same button does the sensible thing for the
+ *     situation (SHOOT is a shot on the ball, a header under a high ball, a slide
+ *     off it), so a beginner needs four buttons.
+ *   · Expressive on top — modifiers (finesse, chip, through-ball, lob, jockey)
+ *     and the stick add mastery without being required.
+ *   · Aim is the player's — the stick chooses the corner / the receiver; assists
+ *     only tidy the result (keep a shot inside the frame, lead a pass onto a run).
+ *   · Buffered — an action pressed just before the ball arrives is played
+ *     first-time as it arrives (first-time shots and one-touch passing).
+ */
+
+export interface ShotMods {
+  /** Curl it with the inside of the foot: less pace, more bend, more accurate. */
+  finesse?: boolean;
+  /** Dink it over the keeper. */
+  chip?: boolean;
+}
 
 const _tmp = V3();
 
-/**
- * SHOOT — charge-and-release strike on goal. A light tap when the keeper has
- * rushed out becomes a delicate chip; otherwise `charge` (0–1) scales the
- * power. With no possession it becomes a header (if the ball is up) or a slide
- * tackle (footballSimulationEngine action set).
- */
-export function userShoot(charge = 1): void {
-  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
-  const p = match.userPlayer;
-  const opp = oppOf(p.team);
+function live(): Player | null {
+  if (match.paused || match.state !== 'play' || match.restart) return null;
+  return match.userPlayer;
+}
 
-  if (match.controlPlayer === p) {
-    // dink it over an advancing keeper on a soft tap (target sits just beyond the line)
-    if (charge < 0.4 && canChipKeeper(ball.position, p.team, opp, _tmp)) {
-      lobKick(p, _tmp, 3.1, 'kick');
-      ball.shot = true;
-      match.stats.shots[0]++;
-      flashToast('CHEEKY CHIP!');
+/** Is the ball about to arrive at this player (so an action can be played first-time)? */
+function ballArriving(p: Player): boolean {
+  if (match.controlPlayer) return false;
+  if (match.receivingPlayer === p) return true;
+  const hit = interceptPoint(p.position.x, p.position.z, p.ath.sprint, 0, CFG.volleyHigh);
+  return !!hit && hit.t < 0.55;
+}
+
+function stick(): { x: number; z: number; l: number } {
+  const l = Math.hypot(match.input.x, match.input.z);
+  return l > 0.25 ? { x: match.input.x / l, z: match.input.z / l, l } : { x: 0, z: 0, l: 0 };
+}
+
+/**
+ * SHOOT. `charge` 0–1 sets pace and height (a tap is a low placed finish, a full
+ * hold a rising drive). The stick picks the side of the goal; with the stick
+ * idle the shot goes away from the keeper.
+ */
+export function userShoot(charge = 1, mods: ShotMods = {}): void {
+  const p = live();
+  if (!p) return;
+  const team = p.team;
+  const opp = oppOf(team);
+  const onBall = match.controlPlayer === p;
+
+  if (onBall || ballArriving(p)) {
+    const gx = goalX(team);
+    const dGoal = Math.hypot(gx - ball.position.x, ball.position.z);
+
+    // chip: explicit modifier, or a soft tap with the keeper off his line
+    if (mods.chip || (charge < 0.3 && canChipKeeper(ball.position, team, opp, _tmp))) {
+      if (!mods.chip || !canChipKeeper(ball.position, team, opp, _tmp)) {
+        // a manual chip with the keeper home: float it toward the far post
+        _tmp.set(gx - team.side * 0.8, 0, clamp(-opp.gk.position.z * 2, -(CFG.goalHalf - 0.8), CFG.goalHalf - 0.8));
+      }
+      if (lobKick(p, _tmp, clamp(dGoal * 0.24, 3.0, 5.4), 'kick', 0, 'chip')) emit({ t: 'toast', text: 'CHIP!' });
       return;
     }
-    const power = clamp(
-      CFG.shootPow * (0.55 + 0.45 * charge) * (0.9 + 0.2 * attr01(p.attr.shooting)),
-      16,
-      CFG.shootPow * 1.05,
-    );
-    if (!canShoot(ball.position, power, p.team, opp, _tmp)) {
-      // aim into the far corner away from the keeper
-      _tmp.set(goalX(p.team), 0, (opp.gk.position.z >= 0 ? -1 : 1) * CFG.goalHalf * 0.6);
+
+    // aim: stick chooses the corner (lateral component across the goal mouth)
+    const s = stick();
+    const G = CFG.goalHalf;
+    let tz: number;
+    if (s.l > 0) {
+      // screen-space lateral is world z; pushing toward a post aims at it
+      tz = clamp(s.z * 1.25, -1, 1) * (G - 0.25);
+      // assist: don't let a slight stick lean put it straight at the keeper
+      if (Math.abs(tz - opp.gk.position.z) < 0.6) tz += Math.sign(tz - opp.gk.position.z || 1) * 0.6;
+    } else {
+      pickShotTarget(ball.position, team, opp, p.ath.composure, _tmp);
+      tz = _tmp.z;
     }
-    clampShot(_tmp, p.team);
-    // bend the shot with the joystick: holding the stick across the shot line at
-    // release whips curl onto it — lean left/right to swerve it around the keeper.
-    const dx = _tmp.x - ball.position.x;
-    const dz = _tmp.z - ball.position.z;
-    const dl = Math.hypot(dx, dz) || 1;
-    const il = Math.hypot(match.input.x, match.input.z);
-    let curl = 0;
-    if (il > 0.25) {
-      const cross = (match.input.z / il) * (dx / dl) - (match.input.x / il) * (dz / dl);
-      curl = CFG.curlHuman * clamp(cross, -1, 1) * (0.6 + 0.4 * attr01(p.attr.shooting));
+    // shooting assist keeps the *aim* inside the frame; execution error can still miss
+    const margin = 0.35 + 0.35 * (1 - p.ath.shooting);
+    tz = clamp(tz, -(G - margin), G - margin);
+    const finesse = !!mods.finesse;
+    // height from charge: tap = along the turf, full = just under the bar
+    const ty = finesse ? 0.3 + 1.5 * charge : 0.25 + (CFG.crossbarH - 0.55) * charge * charge;
+    let power = CFG.shootPow * (0.6 + 0.4 * charge) * (0.9 + 0.14 * p.ath.shooting);
+    if (finesse) power *= 0.78;
+    // finesse bends it away from the keeper and back inside the far post
+    const curlSign = Math.sign(tz - opp.gk.position.z || 1) * team.side;
+    const curl = finesse ? CFG.curlHuman * (0.55 + 0.45 * p.ath.shooting) * -curlSign : CFG.curlHuman * 0.12 * -curlSign;
+    const airborne = ball.position.y > CFG.volleyLow && !onBall;
+    if (shootAt(p, gx, ty, tz, power, curl, airborne ? 'volley' : finesse ? 'finesse' : 'shot')) {
+      emit({ t: 'toast', text: airborne ? 'VOLLEY!' : finesse ? 'FINESSE' : charge > 0.8 ? 'SHOOT!' : charge < 0.35 ? 'PLACED' : 'SHOT' });
     }
-    kick(p, V3(dx, 0, dz), power, 'kick', curl);
-    ball.shot = true;
-    match.stats.shots[0]++;
-    flashToast(Math.abs(curl) > 0.8 ? 'CURLER!' : charge > 0.8 ? 'SHOOT!' : 'PLACED');
     return;
   }
 
-  // no possession — head a high ball, else commit a slide tackle
+  // off the ball: a high ball is headed, otherwise it's a slide tackle
   if (canHead(p)) {
-    const tz = clamp(ball.position.z * 0.4, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
-    headBall(p, V3(goalX(p.team) - ball.position.x, 0, tz - ball.position.z), CFG.passShort);
-    ball.shot = true;
-    match.stats.shots[0]++;
-    flashToast('HEADER!');
-  } else {
-    if (startSlide(p)) flashToast('SLIDE!');
+    const gx = goalX(team);
+    const dGoal = Math.hypot(gx - ball.position.x, ball.position.z);
+    if (dGoal < 16) {
+      const tz = clamp(ball.position.z * 0.35, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
+      if (headBall(p, V3(gx - ball.position.x, 0, tz - ball.position.z), 15, true)) emit({ t: 'toast', text: 'HEADER!' });
+    } else {
+      const s = stick();
+      headBall(p, V3(s.l > 0 ? s.x : team.side, 0, s.l > 0 ? s.z : 0), 13, false);
+    }
+    return;
   }
+  if (match.controlTeam !== team && startSlide(p)) emit({ t: 'toast', text: 'SLIDE!' });
 }
 
-/** Pick the teammate best aligned with the joystick (for directional passing). */
-function directionalMate(p: Player, power: number, opp: ReturnType<typeof oppOf>, lob: boolean): { mate: Player; target: Vector3 } | null {
-  const inLen = Math.hypot(match.input.x, match.input.z);
-  if (inLen <= 0.35) return null;
-  const ix = match.input.x / inLen;
-  const iz = match.input.z / inLen;
-  let mate: Player | null = null;
-  let target: Vector3 | null = null;
-  let bestA = -2;
+/** The team-mate the stick is pointing at (angle first, then distance), or null. */
+function aimedMate(p: Player, maxAngleCos = 0.55): Player | null {
+  const s = stick();
+  let best: Player | null = null;
+  let bs = -Infinity;
   for (const m of p.team.players) {
-    if (m === p || p.position.distanceTo(m.position) < 3) continue;
-    const dx = m.position.x - p.position.x;
-    const dz = m.position.z - p.position.z;
-    const dl = Math.hypot(dx, dz) || 1;
-    const a = (dx / dl) * ix + (dz / dl) * iz;
-    if (a <= bestA) continue;
-    if (lob) {
-      bestA = a;
-      mate = m;
-      target = V3(m.position.x + p.team.side, 0, m.position.z);
-    } else if (getBestPassToReceiver(p, m, power, opp, _tmp)) {
-      bestA = a;
-      mate = m;
-      target = _tmp.clone();
+    if (m === p || m.sentOff) continue;
+    const dx = m.position.x + m.velocity.x * 0.25 - p.position.x;
+    const dz = m.position.z + m.velocity.z * 0.25 - p.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d < 2.2) continue;
+    let score: number;
+    if (s.l > 0) {
+      const cos = (dx / d) * s.x + (dz / d) * s.z;
+      if (cos < maxAngleCos) continue;
+      // angle dominates; a nearer option wins between two in the same direction
+      score = cos * 3 - d * 0.03;
+    } else {
+      // stick idle: the nearest open, forward option
+      const fwd = (dx / d) * p.team.side;
+      score = 1.2 * fwd - d * 0.06 - (m.roleType === 'GK' ? 1.5 : 0);
+    }
+    if (score > bs) {
+      bs = score;
+      best = m;
     }
   }
-  return mate && target ? { mate, target } : null;
+  return best;
+}
+
+/** Where to put a ground pass so it meets a moving team-mate in his stride. */
+function leadTarget(p: Player, m: Player, power: number, out: Vector3): void {
+  const d0 = Math.hypot(m.position.x - ball.position.x, m.position.z - ball.position.z);
+  let t = timeBall(power, d0);
+  if (t < 0) t = d0 / Math.max(6, power * 0.7);
+  // he keeps running for most of the ball's travel time
+  const k = Math.min(t, 1.4) * 0.75;
+  out.set(
+    clamp(m.position.x + m.velocity.x * k, -CFG.halfL + 1, CFG.halfL - 1),
+    0,
+    clamp(m.position.z + m.velocity.z * k, -CFG.halfW + 1, CFG.halfW - 1),
+  );
+  void p;
 }
 
 /**
- * PASS — `lob` (held button) plays a lofted cross/ball over the top; a tap plays
- * a ground pass, preferring a through-ball into space when the joystick points
- * forward. Falls back to the safest pass, then the nearest teammate.
+ * PASS. A tap is a ground pass to the team-mate the stick points at; `lob`
+ * (a held press) lofts it — a cross from wide, a ball over the top elsewhere.
+ * With nobody in the stick's direction it is played into space that way.
  */
 export function userPass(lob = false): void {
-  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
-  const p = match.userPlayer;
-  if (match.controlPlayer !== p) return;
+  const p = live();
+  if (!p) return;
   const team = p.team;
-  const opp = oppOf(team);
-  const power = CFG.passLong * 0.9;
-  const inLen = Math.hypot(match.input.x, match.input.z);
+  const onBall = match.controlPlayer === p;
+  if (!onBall && !ballArriving(p)) {
+    // off the ball, PASS is the standing tackle
+    if (match.controlTeam !== team) startTackle(p);
+    return;
+  }
+  const s = stick();
   const call =
-    match.callingPlayer &&
-    match.callingPlayer.team === team &&
-    match.callingPlayer !== p &&
-    !match.callingPlayer.sentOff &&
-    match.callTarget
-      ? { mate: match.callingPlayer, target: match.callTarget.clone() }
+    match.callingPlayer && match.callingPlayer.team === team && match.callingPlayer !== p && !match.callingPlayer.sentOff && match.callTarget
+      ? { mate: match.callingPlayer, target: match.callTarget }
       : null;
-  const callAligned =
-    call && inLen > 0.35
-      ? (() => {
-          const dx = call.target.x - p.position.x;
-          const dz = call.target.z - p.position.z;
-          const dl = Math.hypot(dx, dz) || 1;
-          return (dx / dl) * (match.input.x / inLen) + (dz / dl) * (match.input.z / inLen) > 0.12;
-        })()
-      : true;
+
+  let mate = aimedMate(p);
+  // stick idle: honour the team-mate calling for it
+  if (s.l === 0 && call) mate = call.mate;
 
   if (lob) {
-    // lofted ball — toward the joystick if aimed, else to the most advanced mate
-    const dir = inLen > 0.35 ? directionalMate(p, power, opp, true) : null;
-    let target = dir?.target ?? null;
-    let mate: Player | null = dir?.mate ?? null;
-    if (!target && call && callAligned) {
-      target = call.target;
-      mate = call.mate;
-    }
-    if (!target) {
+    if (!mate) {
       let adv = -Infinity;
       for (const m of team.outfield()) {
         if (m === p) continue;
@@ -162,101 +207,111 @@ export function userPass(lob = false): void {
           mate = m;
         }
       }
-      if (mate) target = V3(mate.position.x + team.side, 0, mate.position.z);
     }
-    if (target) {
-      const swing = CFG.curlCross * -Math.sign(p.position.z || 1) * p.team.side;
-      lobKick(p, target, 2.7, 'pass', swing);
-      if (mate) setReceiver(mate);
-      flashToast(mate ? `LOFTED TO ${mate.name}` : 'LOFTED BALL');
+    if (!mate) return;
+    const wide = Math.abs(p.position.z) > 9 && p.position.x * team.side > 6;
+    const d = Math.hypot(mate.position.x - p.position.x, mate.position.z - p.position.z);
+    const flight = 0.9 + d * 0.035;
+    _tmp.set(
+      clamp(mate.position.x + mate.velocity.x * flight * 0.7 + team.side * 1.2, -CFG.halfL + 1.5, CFG.halfL - 1.5),
+      0,
+      clamp(mate.position.z + mate.velocity.z * flight * 0.7, -CFG.halfW + 1.5, CFG.halfW - 1.5),
+    );
+    const swing = wide ? CFG.curlCross * Math.sign(p.position.z || 1) * team.side : 0;
+    if (lobKick(p, _tmp, clamp(d * 0.2, 2.6, 6), 'pass', swing, wide ? 'cross' : 'lob', mate)) {
+      emit({ t: 'toast', text: wide ? `CROSS — ${mate.name}` : `OVER THE TOP — ${mate.name}` });
     }
     return;
   }
 
-  // through-ball when pushing forward and a runner is in behind
-  const forward = inLen > 0.35 && (match.input.x / inLen) * team.side > 0.4;
-  if (forward) {
-    const thr = findThroughBall(p, opp);
-    if (thr) {
-      kick(p, V3(thr.target.x - ball.position.x, 0, thr.target.z - ball.position.z), CFG.throughPow, 'pass');
-      setReceiver(thr.receiver);
-      flashToast('THROUGH BALL!');
-      return;
-    }
-  }
-
-  // no strong aim: honour the teammate actively calling for the ball.
-  if (call && callAligned) {
-    const dx = call.target.x - ball.position.x;
-    const dz = call.target.z - ball.position.z;
-    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), power), 'pass');
-    setReceiver(call.mate);
-    flashToast(`TO ${call.mate.name}!`);
+  if (mate) {
+    const useCall = call && call.mate === mate && s.l === 0;
+    if (useCall) _tmp.copy(call.target);
+    else leadTarget(p, mate, CFG.passLong * 0.8, _tmp);
+    const dx = _tmp.x - ball.position.x;
+    const dz = _tmp.z - ball.position.z;
+    const dist = Math.hypot(dx, dz);
+    kick(p, V3(dx, 0, dz), passWeight(dist, CFG.passLong), 'pass', 0, 'pass', mate);
     return;
   }
-
-  // directional ground pass, else safest pass, else nearest
-  let chosen = directionalMate(p, power, opp, false);
-  if (!chosen) {
-    const pass = findBestPass(p, power, CFG.minPassDist, opp);
-    if (pass) chosen = { mate: pass.receiver, target: pass.target };
-  }
-  if (!chosen) {
-    let nd = Infinity;
-    let nm: Player | null = null;
-    for (const m of team.outfield()) {
-      if (m === p) continue;
-      const d = distSq(m.position, p.position);
-      if (d < nd) {
-        nd = d;
-        nm = m;
-      }
-    }
-    if (nm) chosen = { mate: nm, target: V3(nm.position.x, 0, nm.position.z) };
-  }
-  if (chosen) {
-    const dx = chosen.target.x - ball.position.x;
-    const dz = chosen.target.z - ball.position.z;
-    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), power), 'pass');
-    setReceiver(chosen.mate);
+  // nobody that way: play it into space where the stick points
+  if (s.l > 0) {
+    const spec = makeKick(p, 'pass', 'ground', ball.position.x + s.x * 14, 0, ball.position.z + s.z * 14, 14, { pass: true });
+    requestKick(p, spec);
   }
 }
 
 /**
- * KNOCK-ON — a skill burst (double-tap sprint): the carrier pushes the ball into
- * space ahead and explodes after it, blowing past a flat-footed defender. High
- * risk/reward — knock it too far and you'll run it out or lose it.
+ * THROUGH-BALL. Played into space ahead of a runner, weighted to die in front of
+ * him. `lob` floats it over the defensive line instead.
  */
-export function userKnockOn(): void {
-  if (match.paused || match.state !== 'play' || !match.userPlayer) return;
-  const p = match.userPlayer;
-  if (match.controlPlayer !== p) return;
-  const h = headingVec(p.heading);
-  ball.position.set(p.position.x + h.x * 0.6, CFG.ballR, p.position.z + h.z * 0.6);
-  ball.velocity.set(h.x * CFG.knockSpeed, 0, h.z * CFG.knockSpeed);
-  ball.spin = 0;
-  ball.lastTouch = p.team;
-  ball.lastKicker = p;
-  p.kickCooldown = 0.12;
-  p.boost = CFG.knockBoostTime;
-  match.controlPlayer = null;
-  match.controlTeam = null;
-  match.controlCooldown = 0.14;
-  match.gkHold = 0;
-  setPassRequest(null);
-  Audio.kick();
-  Haptics.tap();
-  flashToast('KNOCK ON!');
+export function userThrough(lob = false): void {
+  const p = live();
+  if (!p) return;
+  if (match.controlPlayer !== p && !ballArriving(p)) return;
+  const team = p.team;
+  const opp = oppOf(team);
+  const s = stick();
+  // prefer the runner the stick points at; else the best one the AI can see
+  let runner = s.l > 0 ? aimedMate(p, 0.3) : null;
+  let tx = 0;
+  let tz = 0;
+  if (runner && runner.roleType !== 'GK') {
+    const fwdV = Math.max(0, runner.velocity.x * team.side);
+    const lead = 6 + fwdV * 0.75;
+    tx = clamp(runner.position.x + team.side * lead, -CFG.halfL + 2, CFG.halfL - 2);
+    tz = clamp(runner.position.z + runner.velocity.z * 0.5 + s.z * 2, -CFG.halfW + 2, CFG.halfW - 2);
+  } else {
+    const thr = findThroughBall(p, opp);
+    if (!thr) {
+      userPass(lob);
+      return;
+    }
+    runner = thr.receiver;
+    tx = thr.target.x;
+    tz = thr.target.z;
+  }
+  const dx = tx - ball.position.x;
+  const dz = tz - ball.position.z;
+  const dist = Math.hypot(dx, dz);
+  if (lob) {
+    if (lobKick(p, _tmp.set(tx, 0, tz), clamp(dist * 0.17, 2.4, 5), 'pass', 0, 'lob', runner)) emit({ t: 'toast', text: 'LOBBED THROUGH!' });
+  } else if (kick(p, V3(dx, 0, dz), passWeight(dist, CFG.throughPow, CFG.passArriveThrough), 'pass', 0, 'through', runner)) {
+    emit({ t: 'toast', text: 'THROUGH BALL!' });
+  }
 }
 
-/** SWITCH — cycle control to the next-nearest outfield player (when defending). */
-export function switchPlayer(): void {
+/**
+ * KNOCK-ON — push the ball well ahead and sprint onto it. Beats a flat-footed
+ * defender for pace, but the ball is anyone's while it's away from his feet.
+ */
+export function userKnockOn(): void {
+  const p = live();
+  if (!p || match.controlPlayer !== p) return;
+  const s = stick();
+  const h = s.l > 0 ? { x: s.x, z: s.z } : headingVec(p.heading);
+  const spec = makeKick(p, 'knock', 'ground', ball.position.x + h.x * 12, 0, ball.position.z + h.z * 12, CFG.knockSpeed, { pass: false, shot: false });
+  if (requestKick(p, spec)) {
+    p.boost = CFG.knockBoostTime;
+    // he chases his own knock-on: keep him as the receiver so he isn't frozen out of it
+    emit({ t: 'toast', text: 'KNOCK ON!' });
+  }
+}
+
+/** Standing tackle (off the ball). */
+export function userTackle(): void {
+  const p = live();
+  if (!p || match.controlTeam === p.team) return;
+  if (planarToBall(p) < CFG.tackleReach + 1.2) startTackle(p);
+}
+
+/** SWITCH — to the next-best-placed player, or the one in the stick's direction. */
+export function switchPlayer(dirX = 0, dirZ = 0): void {
   if (match.paused || match.state !== 'play' || !match.userPlayer) return;
-  if (match.controlTeam === match.teams[0]) return;
-  const of = match.teams[0]
-    .outfield()
-    .slice()
-    .sort((a, b) => distSq(a.position, ball.position) - distSq(b.position, ball.position));
-  setUser(of[(of.indexOf(match.userPlayer) + 1) % of.length]);
-  match.switchLock = 2.0;
+  if (match.controlTeam === match.teams[0] && match.controlPlayer && match.controlPlayer.roleType !== 'GK') return;
+  const next = nextUserPlayer(dirX, dirZ);
+  if (next) {
+    setUser(next);
+    match.switchLock = 1.6;
+  }
 }

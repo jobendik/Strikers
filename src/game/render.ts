@@ -2,273 +2,128 @@ import * as THREE from 'three';
 import { CFG } from '../config/constants';
 import { clamp } from '../core/math';
 import { ball, match } from './state';
-import { camera, renderer, scene, sun } from '../rendering/scene';
-import type { Player } from '../entities/Player';
-import type { AnimName, PlayerAnimState } from '../rendering/playerLoader';
+import { renderer, scene } from '../rendering/scene';
+import { B_STRIDE, FLAG, PF, P_STRIDE, lerpSnapshot, snapshotPlayers, snapshotSize, writeSnapshot } from './snapshot';
+import { calibrateClips, posePlayer } from './playerAnim';
+import { addShake, updateCamera } from './camera';
 
-/* ------------------------------------------------------------------ animation */
+/*
+ * The presenter: draws a snapshot.
+ *
+ * `applyView` is the only code that moves meshes. It is fed either the live
+ * interpolation between the last two simulation ticks, or a frame from the
+ * replay buffer — the two are indistinguishable to it.
+ */
 
-const ONESHOTS = new Set<AnimName>(['kick', 'gkDiveLeft', 'gkDiveRight', 'celebrate']);
+export { addShake };
 
-// Foot-sync calibration: the run/sprint clips play at a fixed authored cadence,
-// but the player moves at a game-driven speed, so the feet "skate" whenever the
-// two disagree. We scale each locomotion clip's playback rate to the player's
-// actual speed, expressed as a fraction of their baseSpeed. The fractions are
-// chosen so timeScale sits near 1.0 in the middle of each clip's speed band
-// (run: 0.5..0.8×base, sprint: >0.8×base), and the clamp stops it ever looking
-// like a comedy sprint or a moonwalk. Tune these two if cadence still drifts.
-const RUN_REF_FRAC = 0.55;
-const SPRINT_REF_FRAC = 0.95;
+let prev: Float32Array | null = null;
+let cur: Float32Array | null = null;
+let view: Float32Array | null = null;
+let calibrated = false;
 
-// Players far from the ball update their mixer at half rate (with accumulated dt)
-// — the camera never scrutinises them, and skinned-mesh bone updates are the
-// single biggest per-player CPU cost. Anyone nearer than this (squared) distance
-// to the ball, or otherwise "busy", always updates every frame.
-const NEAR_BALL_SQ = 12 * 12;
+function ensure(): void {
+  const n = snapshotSize();
+  if (cur && cur.length === n) return;
+  prev = new Float32Array(n);
+  cur = new Float32Array(n);
+  view = new Float32Array(n);
+}
 
-let _frame = 0;
+/** Record the simulation state after a tick (keeps the previous one for interpolation). */
+export function captureSnapshot(): void {
+  ensure();
+  const t = prev!;
+  prev = cur;
+  cur = t;
+  writeSnapshot(cur);
+}
+
+/** The most recent tick's snapshot (the replay recorder copies it). */
+export function currentSnapshot(): Float32Array {
+  ensure();
+  return cur!;
+}
+
+/** Draw the live match, interpolated `alpha` (0..1) of the way from the previous tick to the latest. */
+export function presentLive(alpha: number, dt: number): void {
+  ensure();
+  lerpSnapshot(prev!, cur!, clamp(alpha, 0, 1), view!);
+  // animation time follows the simulation's time scale (goal slow-motion slows the bodies too)
+  applyView(view!, dt * match.timeScale, dt);
+  updateCamera(dt, view![0], view![1], view![2]);
+}
+
+const _q = new THREE.Quaternion();
+const _ax = new THREE.Vector3();
 
 /**
- * Drive the AnimationMixer for a 3-D model player.
- * Chooses the correct clip based on game state and crossfades when it changes.
- * No-ops when the player uses the legacy stub mesh (no mixer in userData).
+ * Pose every mesh from a snapshot.
+ * @param animDt  seconds of animation time to advance (scaled; negative when scrubbing back)
+ * @param realDt  real seconds (UI pulses, trail fade)
  */
-function updatePlayerAnimation(p: Player, dt: number): void {
-  const mixer = p.mesh.userData.mixer as THREE.AnimationMixer | undefined;
-  if (!mixer) return;
-
-  const clips = p.mesh.userData.clips as Record<AnimName, THREE.AnimationClip>;
-  const animState = p.mesh.userData.animState as PlayerAnimState;
-  const speed = Math.hypot(p.velocity.x, p.velocity.z);
-
-  // --- choose the target animation ---
-  let target: AnimName;
-  if (p.dive > 0) {
-    // GK dives: stay visually facing the field; choose left/right clip from the
-    // direction the ball is relative to the keeper's forward axis.
-    // side > 0 → GK faces +x, so right = +z; side < 0 → GK faces -x, right = -z.
-    const dz = p.diveTarget.z - p.position.z;
-    target = dz * p.team.side > 0 ? 'gkDiveRight' : 'gkDiveLeft';
-  } else if (match.state === 'celebrate') {
-    target = 'celebrate';
-  } else {
-    // Detect a kick on the rising edge of kickCooldown.
-    const kicked = p.kickCooldown > animState.prevKickCd + 0.05;
-    if (kicked || (animState.current === 'kick' && animState.action)) {
-      target = 'kick';
-    } else if (p.slide > 0) {
-      // No dedicated slide clip — kick is the closest available action pose.
-      // (A real slide-tackle clip is the main remaining animation gap.)
-      target = 'kick';
-    } else {
-      if (speed < 0.5) target = 'idle';
-      else if (speed > p.baseSpeed * 0.8) target = 'sprint';
-      else target = 'run';
+export function applyView(v: Float32Array, animDt: number, realDt: number): void {
+  const ps = snapshotPlayers();
+  if (!calibrated && ps.length && ps[0].mesh.userData.mixer) {
+    calibrated = true;
+    try {
+      calibrateClips(ps[0].mesh);
+    } catch {
+      /* calibration is a nicety — never let it break rendering */
     }
   }
-  animState.prevKickCd = p.kickCooldown;
-
-  // --- crossfade when target changes ---
-  if (target !== animState.current) {
-    const newClip = clips[target];
-    const newAction = mixer.clipAction(newClip);
-    const isOneShot = ONESHOTS.has(target);
-
-    if (isOneShot) {
-      newAction.setLoop(THREE.LoopOnce, 1);
-      newAction.clampWhenFinished = true;
-    } else {
-      newAction.setLoop(THREE.LoopRepeat, Infinity);
-    }
-
-    // Longer blend into/out of dissimilar poses (a full sprint snapping straight
-    // into a kick looked jarring); quick snap between same-family loops.
-    const prev = animState.action;
-    const fadeDuration = isOneShot ? 0.18 : 0.15;
-    if (prev && !prev.paused) {
-      newAction.reset().crossFadeFrom(prev, fadeDuration, true).play();
-    } else {
-      newAction.reset().fadeIn(fadeDuration).play();
-    }
-    animState.current = target;
-    animState.action = newAction;
-  }
-
-  // --- foot-sync: match locomotion playback rate to real ground speed ---
-  if (animState.action) {
-    if (target === 'run') {
-      animState.action.timeScale = clamp(speed / (p.baseSpeed * RUN_REF_FRAC), 0.6, 1.7);
-    } else if (target === 'sprint') {
-      animState.action.timeScale = clamp(speed / (p.baseSpeed * SPRINT_REF_FRAC), 0.6, 1.7);
-    } else {
-      animState.action.timeScale = 1;
-    }
-  }
-
-  // --- throttled mixer update (distant, idle-ish players run at half rate) ---
-  animState.accum += dt;
-  const busy =
-    p === match.userPlayer ||
-    p.dive > 0 ||
-    p.slide > 0 ||
-    (animState.current !== null && ONESHOTS.has(animState.current));
-  const dx = p.position.x - ball.position.x;
-  const dz = p.position.z - ball.position.z;
-  const near = dx * dx + dz * dz < NEAR_BALL_SQ;
-  // Stagger which half of the distant crowd updates on a given frame via idx+side.
-  const phase = (p.idx + (p.team.side > 0 ? 0 : 1)) & 1;
-  const doUpdate = busy || near || ((_frame + phase) & 1) === 0;
-  if (doUpdate) {
-    mixer.update(animState.accum);
-    animState.accum = 0;
-  }
-
-  // Detect one-shot completion: Three.js sets action.paused = true when a
-  // LoopOnce action with clampWhenFinished reaches its last frame.
-  if (animState.current && ONESHOTS.has(animState.current) && animState.action?.paused) {
-    animState.current = null;
-    animState.action = null;
-  }
-}
-
-/** Push simulation state onto the Three.js meshes each frame. */
-export function syncMeshes(dt: number): void {
-  _frame++;
-  // Hide the cheap fake blob shadow whenever real shadow mapping is on, so we
-  // never stack a real cast shadow on top of a painted one. In the `lite` tier
-  // (shadowMap disabled) the blob is the only thing grounding the player.
+  // the cheap blob shadow only when real shadow mapping is off (lite tier)
   const blobsVisible = !renderer.shadowMap.enabled;
-  for (const t of match.teams)
-    for (const p of t.players) {
-      p.mesh.position.set(p.position.x, 0, p.position.z);
-
-      const hasMixer = !!(p.mesh.userData.mixer);
-
-      if (hasMixer && p.dive > 0) {
-        // Freeze the GK's facing direction during a dive so the left/right
-        // animations look correct (the body moves via position, not rotation).
-        const stored = p.mesh.userData.fieldHeading as number | undefined;
-        if (stored !== undefined) p.mesh.rotation.y = stored;
-        // No x-lean for model meshes — the animation poses the body.
-        p.mesh.rotation.x = 0;
-      } else {
-        // Normal heading interpolation.
-        const cur = p.mesh.rotation.y;
-        let diff = p.heading - cur;
-        while (diff > Math.PI) diff -= 2 * Math.PI;
-        while (diff < -Math.PI) diff += 2 * Math.PI;
-        p.mesh.rotation.y = cur + diff * Math.min(1, 12 * dt);
-        // Persist the last non-dive heading so the freeze above is correct.
-        p.mesh.userData.fieldHeading = p.mesh.rotation.y;
-
-        if (hasMixer) {
-          // Model mesh: animation handles all posing; clear any residual x tilt.
-          p.mesh.rotation.x = 0;
-        } else {
-          // Stub mesh: a diving keeper pitches forward; sliding tacklers lean.
-          const leanTo = p.dive > 0 ? 1.25 : p.slide > 0 ? 0.7 : 0;
-          p.mesh.rotation.x += (leanTo - p.mesh.rotation.x) * Math.min(1, 14 * dt);
-        }
+  const pulseT = 0.5 + 0.5 * Math.sin(performance.now() * 0.011);
+  let o = B_STRIDE;
+  for (const p of ps) {
+    posePlayer(p.mesh, v, o, animDt, p.ath.run);
+    const flags = v[o + PF.Flags];
+    const ud = p.mesh.userData as { ring?: THREE.Object3D; call?: THREE.Mesh; blob?: THREE.Object3D };
+    if (ud.ring) ud.ring.visible = (flags & FLAG.user) !== 0;
+    if (ud.blob) ud.blob.visible = blobsVisible;
+    if (ud.call) {
+      const active = (flags & FLAG.calling) !== 0;
+      ud.call.visible = active;
+      if (active) {
+        ud.call.scale.setScalar(0.92 + pulseT * 0.18);
+        (ud.call.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulseT * 0.45;
       }
-
-      (p.mesh.userData.ring as THREE.Mesh).visible = p === match.userPlayer && match.state !== 'menu';
-      const blob = p.mesh.userData.blob as THREE.Mesh | undefined;
-      if (blob) blob.visible = blobsVisible;
-      const call = p.mesh.userData.call as THREE.Mesh | undefined;
-      if (call) {
-        const active = p === match.callingPlayer && match.state === 'play';
-        call.visible = active;
-        if (active) {
-          const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.013);
-          call.scale.setScalar(0.92 + pulse * 0.18);
-          (call.material as THREE.MeshBasicMaterial).opacity = 0.35 + pulse * 0.45;
-        }
-      }
-
-      // Drive animation clips for 3-D model players.
-      updatePlayerAnimation(p, dt);
     }
-  ball.mesh.position.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);
-  const sp = Math.hypot(ball.velocity.x, ball.velocity.z);
-  if (sp > 0.1) {
-    const ax = new THREE.Vector3(ball.velocity.z, 0, -ball.velocity.x).normalize();
-    ball.mesh.rotateOnWorldAxis(ax, (sp * dt) / CFG.ballR);
+    o += P_STRIDE;
   }
-  // ground shadow shrinks as the ball climbs, selling the height
+
+  // ---- ball ----
+  const bx = v[0];
+  const by = Math.max(CFG.ballR, v[1]);
+  const bz = v[2];
+  ball.mesh.position.set(bx, by, bz);
+  // spin the mesh by the simulated angular velocity (so curl and back-spin are visible)
+  const wl = Math.hypot(v[3], v[4], v[5]);
+  if (wl > 0.05 && animDt !== 0) {
+    _ax.set(v[3] / wl, v[4] / wl, v[5] / wl);
+    _q.setFromAxisAngle(_ax, wl * animDt);
+    ball.mesh.quaternion.premultiply(_q);
+  }
+  // ground shadow blob shrinks/fades as the ball climbs — sells the height
   const shadow = ball.mesh.userData.shadow as THREE.Mesh | undefined;
   if (shadow) {
-    shadow.position.set(ball.position.x, 0.02, ball.position.z);
-    const h = Math.max(0, ball.position.y - CFG.ballR);
-    const s = clamp(1 - h * 0.07, 0.4, 1);
+    shadow.position.set(bx, 0.015, bz);
+    const h = Math.max(0, by - CFG.ballR);
+    const s = clamp(1 + h * 0.18, 1, 2.4);
     shadow.scale.set(s, s, s);
-    (shadow.material as THREE.MeshBasicMaterial).opacity = 0.34 * s;
+    (shadow.material as THREE.MeshBasicMaterial).opacity = clamp(0.42 - h * 0.05, 0.1, 0.42);
   }
-  updateTrail(sp);
-}
-
-/* ----------------------------- camera shake ------------------------------ */
-
-let shake = 0;
-/** Add an impulse of screen-shake; decays over the next few frames. */
-export function addShake(amount: number): void {
-  shake = Math.min(1.4, shake + amount);
-}
-
-const _camTarget = new THREE.Vector3();
-const _look = new THREE.Vector3();
-
-/** Broadcast-style camera that tracks the ball, zooms for goals and shakes on impacts. */
-export function updateCamera(dt: number): void {
-  // Dev/test hook: `window.__camOverride = { pos:[x,y,z], look:[x,y,z], fov? }`
-  // pins the camera (used by automated screenshots and visual inspection).
-  const ov = (window as unknown as { __camOverride?: { pos: number[]; look: number[]; fov?: number } }).__camOverride;
-  if (ov) {
-    camera.position.set(ov.pos[0], ov.pos[1], ov.pos[2]);
-    if (ov.fov && camera.fov !== ov.fov) {
-      camera.fov = ov.fov;
-      camera.updateProjectionMatrix();
-    }
-    camera.lookAt(ov.look[0], ov.look[1], ov.look[2]);
-    return;
-  }
-  const live = match.state === 'play' || match.state === 'celebrate';
-  const fx = live ? clamp(ball.position.x * 0.6, -14, 14) : Math.sin(performance.now() * 0.00018) * 12;
-
-  if (match.state === 'shootout') {
-    // a tight, dramatic angle behind the spot looking at the goal (always +X)
-    _camTarget.set(CFG.halfL - 20, 12, 17);
-    _look.set(CFG.halfL - 2, 1.3, ball.position.z * 0.4);
-  } else if (match.state === 'celebrate') {
-    // cinematic push-in toward the goal that was just breached
-    const gx = match.scoredBy === 0 ? CFG.halfL : -CFG.halfL;
-    _camTarget.set(gx * 0.62, 17, 26);
-    _look.set(gx * 0.8, 1.4, ball.position.z * 0.2);
-  } else {
-    _camTarget.set(fx, 26, 38);
-    _look.set(fx * 0.7, 0, live ? -2 + ball.position.z * 0.12 : 0);
-  }
-
-  camera.position.lerp(_camTarget, Math.min(1, (match.state === 'celebrate' ? 3.4 : 2.6) * dt));
-
-  if (shake > 0.001) {
-    const s = shake * shake; // ease the falloff so it punches then settles
-    camera.position.x += (Math.random() - 0.5) * s * 2.4;
-    camera.position.y += (Math.random() - 0.5) * s * 1.6;
-    camera.position.z += (Math.random() - 0.5) * s * 2.4;
-    shake = Math.max(0, shake - dt * 3.2);
-  }
-
-  camera.lookAt(_look);
-  sun.target.position.set(ball.position.x * 0.3, 0, 0);
+  updateTrail(v[6], bx, by, bz, realDt);
 }
 
 /* ------------------------------ ball trail ------------------------------- */
 
-const TRAIL_N = 16;
+const TRAIL_N = 20;
 let trail: THREE.Line | null = null;
 let trailPos: Float32Array;
 let trailActive = false;
-const _p = new THREE.Vector3();
+let trailFade = 0;
 
 function ensureTrail(): void {
   if (trail) return;
@@ -276,9 +131,9 @@ function ensureTrail(): void {
   const colors = new Float32Array(TRAIL_N * 3);
   for (let i = 0; i < TRAIL_N; i++) {
     const t = i / (TRAIL_N - 1); // head (latest) = 1 → bright, tail = 0 → dark (fades under additive blending)
-    colors[i * 3] = 0.65 * t;
-    colors[i * 3 + 1] = 0.85 * t;
-    colors[i * 3 + 2] = 1.0 * t;
+    colors[i * 3] = 0.9 * t * t;
+    colors[i * 3 + 1] = 0.95 * t * t;
+    colors[i * 3 + 2] = 1.0 * t * t;
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
@@ -290,44 +145,38 @@ function ensureTrail(): void {
   scene.add(trail);
 }
 
-/** A glowing streak behind a fast or airborne ball — pure arcade juice. */
-function updateTrail(speed: number): void {
+/** A faint streak behind a hard-struck ball — only for genuinely fast balls (shots, driven passes). */
+function updateTrail(speed: number, x: number, y: number, z: number, dt: number): void {
   ensureTrail();
   if (!trail) return;
-  const airborne = ball.position.y > CFG.ballR + 0.05;
-  const live = (match.state === 'play' || match.state === 'celebrate') && (speed > 14 || airborne);
-  trail.visible = live;
-  if (!live) {
+  const want = (match.state === 'play' || match.state === 'celebrate') && speed > 19;
+  trailFade = clamp(trailFade + (want ? dt * 8 : -dt * 3), 0, 1);
+  if (trailFade <= 0) {
+    trail.visible = false;
     trailActive = false;
     return;
   }
-
-  _p.set(ball.position.x, Math.max(CFG.ballR, ball.position.y), ball.position.z);
+  trail.visible = true;
   if (!trailActive) {
-    // first frame visible: collapse the whole streak onto the ball so it grows out cleanly
     for (let i = 0; i < TRAIL_N; i++) {
-      trailPos[i * 3] = _p.x;
-      trailPos[i * 3 + 1] = _p.y;
-      trailPos[i * 3 + 2] = _p.z;
+      trailPos[i * 3] = x;
+      trailPos[i * 3 + 1] = y;
+      trailPos[i * 3 + 2] = z;
     }
     trailActive = true;
   } else {
-    // shift history down one slot, then write the newest sample at the head
-    for (let i = 0; i < TRAIL_N - 1; i++) {
-      trailPos[i * 3] = trailPos[(i + 1) * 3];
-      trailPos[i * 3 + 1] = trailPos[(i + 1) * 3 + 1];
-      trailPos[i * 3 + 2] = trailPos[(i + 1) * 3 + 2];
-    }
-    trailPos[(TRAIL_N - 1) * 3] = _p.x;
-    trailPos[(TRAIL_N - 1) * 3 + 1] = _p.y;
-    trailPos[(TRAIL_N - 1) * 3 + 2] = _p.z;
+    trailPos.copyWithin(0, 3);
+    trailPos[(TRAIL_N - 1) * 3] = x;
+    trailPos[(TRAIL_N - 1) * 3 + 1] = y;
+    trailPos[(TRAIL_N - 1) * 3 + 2] = z;
   }
   (trail.geometry.getAttribute('position') as THREE.BufferAttribute).needsUpdate = true;
-  (trail.material as THREE.LineBasicMaterial).opacity = clamp(speed / 30, 0.25, 0.9);
+  (trail.material as THREE.LineBasicMaterial).opacity = clamp((speed - 14) / 22, 0.1, 0.55) * trailFade;
 }
 
 /** Reset the trail history so it doesn't streak across a restart/kickoff. */
 export function clearTrail(): void {
   trailActive = false;
+  trailFade = 0;
   if (trail) trail.visible = false;
 }

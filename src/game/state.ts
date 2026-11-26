@@ -4,6 +4,8 @@ import { Team } from '../entities/Team';
 import type { Player } from '../entities/Player';
 import { flagOffside } from './rules';
 import type { InputState, MatchStateName } from '../config/types';
+import type { PendingRestart } from './physics';
+import { resetSimClock } from '../core/time';
 import type { Vector3 } from 'yuka';
 
 /**
@@ -52,6 +54,35 @@ export interface MatchState {
   input: InputState;
   joy: { x: number; z: number };
   stats: MatchStats;
+  /** A restart that has been awarded but not yet taken — the ball is dead. */
+  restart: PendingRestart | null;
+  /** >0 while a restart is being taken: only the taker may play the ball. */
+  setPieceT: number;
+  setPieceTaker: Player | null;
+  /** Team that last had the ball under control (possession for the pulse / turnovers). */
+  lastPossession: Team | null;
+  /** The passer of a pass that has not yet been received or cut out. */
+  pendingPass: Player | null;
+  /** Every shot of the match (for shot maps / xG). */
+  shotLog: ShotRecord[];
+  /** Assist: with the stick idle, the user's player runs onto passes automatically. */
+  assistReceive: boolean;
+  /** Assist: the user's player makes a standing tackle automatically when he gets to the ball. */
+  assistTackle: boolean;
+  /** Presentation is showing a goal replay: don't kick off until it releases the hold. */
+  holdKickoff: boolean;
+  /** Seed the current match's simulation RNG stream was started from. */
+  seed: number;
+}
+
+/** One attempt on goal. */
+export interface ShotRecord {
+  team: 0 | 1;
+  x: number;
+  z: number;
+  xg: number;
+  goal: boolean;
+  t: number;
 }
 
 /** Accumulated team match statistics (for the half-time / full-time cards). */
@@ -63,6 +94,12 @@ export interface MatchStats {
   saves: [number, number];
   /** Possession measured as seconds in control; rendered as a percentage. */
   possession: [number, number];
+  /** Passes that reached a team-mate. */
+  passesDone: [number, number];
+  /** Opposition passes cut out. */
+  interceptions: [number, number];
+  /** Accumulated expected goals (an estimate). */
+  xg: [number, number];
 }
 
 /** A fresh, zeroed stats block. */
@@ -74,6 +111,9 @@ export function freshStats(): MatchStats {
     tackles: [0, 0],
     saves: [0, 0],
     possession: [0, 0],
+    passesDone: [0, 0],
+    interceptions: [0, 0],
+    xg: [0, 0],
   };
 }
 
@@ -85,6 +125,7 @@ export let match!: MatchState;
 
 /** Constructs the ball, both teams and the match state. Call once at boot. */
 export function createGameState(): void {
+  resetSimClock();
   ball = new Ball();
   home = new Team(+1, 'USA', true);
   away = new Team(-1, 'BRAZIL', false);
@@ -114,9 +155,19 @@ export function createGameState(): void {
     celebrateT: 0,
     celebrateBallT: 0,
     timeScale: 1,
-    input: { x: 0, z: 0, sprint: false },
+    input: { x: 0, z: 0, sprint: false, jockey: false },
     joy: { x: 0, z: 0 },
     stats: freshStats(),
+    restart: null,
+    setPieceT: 0,
+    setPieceTaker: null,
+    lastPossession: null,
+    pendingPass: null,
+    shotLog: [],
+    assistReceive: true,
+    assistTackle: true,
+    holdKickoff: false,
+    seed: 1,
   };
   ball.mesh.position.set(0, CFG.ballR, 0);
 }

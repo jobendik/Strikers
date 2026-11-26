@@ -1,14 +1,11 @@
 import { CFG } from '../config/constants';
 import { attr01 } from '../config/players';
 import { V3, clamp, rand } from '../core/math';
-import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
-import { ball, match } from './state';
-import { GROUND_Y } from './aerial';
-import { updateBall } from './physics';
-import { addShake } from './render';
+import { chance } from '../core/rng';
+import { emit } from '../core/bus';
+import { ball, match, teamIndex } from './state';
+import { ballStruck, updateBall } from './physics';
 import { finishShootout } from './flow';
-import { flashToast } from '../ui/hud';
 import { showShootout, updateShootoutBoard } from '../ui/hud';
 import { commentate } from '../ui/commentary';
 import type { Player } from '../entities/Player';
@@ -59,15 +56,14 @@ export function inShootout(): boolean {
 /** Tear down a shootout in progress (e.g. on quit to menu). */
 export function abortShootout(): void {
   if (!SO) return;
-  SO.keeper.dive = 0;
-  SO.keeper.mesh.rotation.x = 0;
+  SO.keeper.clearAction();
   SO = null;
   showShootout(false);
 }
 
 /** Begin a shootout between the two teams (called from `fullTime` on a drawn tie). */
 export function startShootout(): void {
-  const starter = Math.random() < 0.5 ? 0 : 1;
+  const starter = chance(0.5) ? 0 : 1;
   SO = {
     starter,
     current: starter,
@@ -93,9 +89,9 @@ export function startShootout(): void {
   // clearing this avoids leaving multiple players flagged human for the next match
   for (const t of match.teams) for (const p of t.players) p.isHuman = false;
   match.userPlayer = null;
-  Audio.whistle();
+  match.restart = null;
   showShootout(true);
-  flashToast('PENALTY SHOOTOUT');
+  emit({ t: 'toast', text: 'PENALTY SHOOTOUT' });
   setupKick();
 }
 
@@ -107,9 +103,8 @@ function parkBystanders(): void {
     for (const p of t.players) {
       if (p === SO.taker || p === SO.keeper) continue;
       p.velocity.set(0, 0, 0);
-      p.dive = 0;
-      p.slide = 0;
-      p.mesh.rotation.x = 0;
+      p.clearAction();
+      p.deact();
       const z = (-2 + (i % 4) * 1.3) * (t.side > 0 ? 1 : -1) - t.side * 0.5;
       p.position.set(t.side * 2.2, 0, z + (t.side > 0 ? -7 : 7));
       i++;
@@ -133,9 +128,7 @@ function setupKick(): void {
   SO.resolved = false;
   SO.power01 = 0;
 
-  ball.position.set(SPOT.x, GROUND_Y, SPOT.z);
-  ball.velocity.set(0, 0, 0);
-  ball.spin = 0;
+  ball.place(SPOT.x, SPOT.z);
   ball.lastTouch = takeTeam;
 
   SO.taker.position.set(SPOT.x - 1.5, 0, 0);
@@ -143,8 +136,8 @@ function setupKick(): void {
   SO.taker.heading = Math.atan2(1, 0); // face the goal (+X)
   SO.keeper.position.set(GOAL_X - 0.4, 0, 0);
   SO.keeper.velocity.set(0, 0, 0);
-  SO.keeper.dive = 0;
-  SO.keeper.mesh.rotation.x = 0;
+  SO.keeper.clearAction();
+  SO.taker.clearAction();
   SO.keeper.heading = Math.atan2(-1, 0); // face the taker (−X)
 
   // highlight the actor the user is responsible for this kick (ring only — we
@@ -165,25 +158,38 @@ function strike(aimZ: number, power01: number): void {
   const dx = GOAL_X - ball.position.x;
   const dz = aimZ - ball.position.z;
   const dl = Math.hypot(dx, dz) || 1;
-  ball.velocity.set((dx / dl) * speed, 0, (dz / dl) * speed);
-  ball.spin = 0;
+  // the harder he hits it, the more it rises — leather it and it can clear the bar
+  const lift = 1.2 + 6.4 * power01 * power01 + rand(-0.6, 0.9);
+  ball.velocity.set((dx / dl) * speed, lift, (dz / dl) * speed);
+  ball.w.set(0, 0, 0);
+  ballStruck();
   ball.lastTouch = match.teams[SO.current];
   ball.lastKicker = SO.taker;
+  ball.shot = true;
   SO.taker.heading = Math.atan2(dx, dz);
+  SO.taker.startAction('kick', 0.35, 0);
+  SO.taker.actHit = true;
   SO.power01 = power01;
   SO.phase = 'flight';
   SO.timer = CFG.pen.flightTimeout;
-  Audio.kick();
-  Audio.roar();
-  if (SO.taker.team.isUser) Haptics.kick();
+  const ti = teamIndex(SO.taker.team);
+  emit({ t: 'kick', kind: 'shot', power: speed, team: ti, human: SO.taker.team.isUser, x: ball.position.x, y: ball.position.y, z: ball.position.z });
+  emit({ t: 'shot', team: ti, power: speed, xg: 0.76, human: SO.taker.team.isUser, x: ball.position.x, y: ball.position.y, z: ball.position.z });
 }
 
 /** Commit the keeper to a dive toward corner side `side` (−1/0/+1). */
 function keeperDive(side: number): void {
   if (!SO) return;
   SO.diving = true;
-  SO.diveZ = side * (CFG.goalHalf - 0.2);
-  SO.keeper.dive = 1; // drives the mesh lean in syncMeshes
+  SO.diveZ = side * (CFG.goalHalf - 0.35);
+  if (side !== 0) {
+    SO.keeper.startAction('dive', 5); // held until the kick is resolved
+    SO.keeper.actDirX = 0;
+    SO.keeper.actDirZ = side;
+    SO.keeper.diveTarget.set(SO.keeper.position.x, 0, SO.diveZ);
+    SO.keeper.diveY = 1;
+    emit({ t: 'dive', team: teamIndex(SO.keeper.team), x: SO.keeper.position.x, y: 1, z: SO.keeper.position.z });
+  }
 }
 
 /**
@@ -206,7 +212,6 @@ export function penaltyAction(charge = 1): void {
     // user keeps: dive to the joystick side, then the AI taker strikes
     const side = Math.abs(match.input.x) < 0.3 ? 0 : Math.sign(match.input.x);
     keeperDive(side);
-    Haptics.tap();
     aiStrike();
   }
 }
@@ -215,7 +220,7 @@ export function penaltyAction(charge = 1): void {
 function aiKeeperGuess(aimZ: number): void {
   const read = CFG.pen.aiKeeperRead[CFG.diff];
   const side = Math.abs(aimZ) < 0.6 ? 0 : Math.sign(aimZ);
-  const guess = Math.random() < read ? side : side === 0 ? (Math.random() < 0.5 ? 1 : -1) : -side;
+  const guess = chance(read) ? side : side === 0 ? (chance(0.5) ? 1 : -1) : -side;
   keeperDive(guess);
 }
 
@@ -223,8 +228,8 @@ function aiKeeperGuess(aimZ: number): void {
 function aiStrike(): void {
   if (!SO) return;
   const comp = attr01(SO.taker.attr.composure);
-  const onTarget = Math.random() < CFG.pen.aiOnTarget[CFG.diff] * (0.85 + 0.15 * comp);
-  const side = Math.random() < 0.5 ? -1 : 1;
+  const onTarget = chance(CFG.pen.aiOnTarget[CFG.diff] * (0.85 + 0.15 * comp));
+  const side = chance(0.5) ? -1 : 1;
   const aim = onTarget
     ? side * CORNER * (0.7 + 0.3 * comp)
     : side * (CFG.goalHalf + rand(0.4, 1.2)); // sprayed wide
@@ -267,8 +272,8 @@ export function updateShootout(dt: number): void {
       const dz = SO.diveZ - SO.keeper.position.z;
       const step = Math.sign(dz) * Math.min(Math.abs(dz), CFG.pen.keeperSpeed * dt);
       SO.keeper.position.z += step;
-      SO.keeper.heading = Math.atan2(-1, Math.sign(SO.diveZ) || 1);
-      SO.keeper.dive = Math.max(0.01, SO.keeper.dive - dt); // keep the lean while diving
+      SO.keeper.velocity.set(0, 0, step / dt);
+      if (SO.keeper.act === 'dive') SO.keeper.actT = Math.min(SO.keeper.actT + dt, CFG.gkDiveTime * 0.95);
     }
     updateBall(dt); // free-ball physics (woodwork/bounds are no-ops outside 'play')
     resolveFlight();
@@ -294,16 +299,16 @@ function beginAim(): void {
     aiStrike(); // AI vs AI (shouldn't happen — the user is always involved)
     aiKeeperGuess(0);
   } else if (takeTeam.isUser) {
-    flashToast('AIM + SHOOT TO STRIKE');
+    emit({ t: 'toast', text: 'AIM + SHOOT TO STRIKE' });
   } else {
-    flashToast('PICK A CORNER — SHOOT TO DIVE');
+    emit({ t: 'toast', text: 'PICK A CORNER — SHOOT TO DIVE' });
   }
 }
 
 /** Geometric outcome check once the ball reaches the goal area. */
 function resolveFlight(): void {
   if (!SO || SO.resolved) return;
-  const onLine = ball.position.x >= GOAL_X - 0.6;
+  const onLine = ball.position.x >= GOAL_X - 0.5;
   const stopped = Math.hypot(ball.velocity.x, ball.velocity.z) < 1.5 && ball.position.x < GOAL_X - 0.6;
   if (stopped) {
     recordKick('miss');
@@ -316,11 +321,11 @@ function resolveFlight(): void {
     recordKick('miss'); // wide or over — no save to credit
     return;
   }
-  const saved = Math.abs(SO.keeper.position.z - ball.position.z) < CFG.pen.keeperReach;
+  const saved = Math.abs(SO.keeper.position.z - ball.position.z) < CFG.pen.keeperReach && ball.position.y < 2.3;
   if (saved) {
     // a hard strike into the very corner can still beat a correct dive
     const cornerCloseness = Math.abs(ball.position.z) / CFG.goalHalf;
-    const beat = cornerCloseness > 0.78 && Math.random() < 0.32 * SO.power01;
+    const beat = cornerCloseness > 0.78 && chance(0.32 * SO.power01);
     recordKick(beat ? 'goal' : 'save');
   } else {
     recordKick('goal');
@@ -336,22 +341,25 @@ function recordKick(kind: 'goal' | 'save' | 'miss'): void {
   if (kind === 'goal') {
     SO.goals[t]++;
     SO.marks[t].push('goal');
-    Audio.goal();
-    Audio.roar(true);
-    addShake(0.8);
-    flashToast(match.teams[t].isUser ? 'SCORED!' : 'NETS IT');
+    ball.inNet = 1; // it's in: let the net take it
+    emit({ t: 'goal', team: t as 0 | 1, big: SO.suddenDeath, scorer: SO.taker.name, assist: null, score: [SO.goals[0], SO.goals[1]], lastGasp: false });
+    emit({ t: 'toast', text: match.teams[t].isUser ? 'SCORED!' : 'NETS IT' });
   } else {
     SO.marks[t].push('miss');
-    Audio.save();
     if (kind === 'save') {
-      Audio.roar();
-      addShake(0.5);
-      flashToast(SO.keeper.team.isUser ? 'YOU SAVE IT!' : 'SAVED!');
+      const sp = ball.velocity.length();
+      emit({ t: 'save', team: teamIndex(SO.keeper.team), parry: true, diving: SO.diving, speed: sp, x: ball.position.x, y: ball.position.y, z: ball.position.z });
+      emit({ t: 'toast', text: SO.keeper.team.isUser ? 'YOU SAVE IT!' : 'SAVED!' });
       commentate(SO.keeper.team.isUser ? 'WONDER SAVE!' : 'HUGE SAVE!', 'save');
-    } else flashToast(match.teams[t].isUser ? 'MISSED!' : 'OFF TARGET');
+      // beaten away
+      ball.velocity.set(-4 - sp * 0.15, 2.5, Math.sign(ball.position.z || 1) * 6);
+      ballStruck();
+    } else {
+      emit({ t: 'nearmiss', team: t as 0 | 1, x: ball.position.x, y: ball.position.y, z: ball.position.z });
+      emit({ t: 'toast', text: match.teams[t].isUser ? 'MISSED!' : 'OFF TARGET' });
+    }
   }
-  // ball trickles dead; keeper holds his lean a beat
-  ball.velocity.multiplyScalar(0.2);
+  ball.shot = false;
   updateShootoutBoard(SO.goals, SO.taken, SO.marks, SO.starter, SO.current, SO.suddenDeath);
   SO.phase = 'result';
   SO.timer = CFG.pen.resultTime;
@@ -370,8 +378,7 @@ function nextKick(): void {
     SO.suddenDeath = true;
     commentate('SUDDEN-DEATH DRAMA!', 'drama');
   }
-  SO.keeper.dive = 0;
-  SO.keeper.mesh.rotation.x = 0;
+  SO.keeper.clearAction();
   SO.current = 1 - SO.current;
   setupKick();
 }
@@ -398,10 +405,9 @@ function end(winner: number): void {
   if (!SO) return;
   const score: [number, number] = [SO.goals[0], SO.goals[1]];
   commentate(match.teams[winner].isUser ? 'SHOOTOUT HEROES!' : 'SETTLED FROM THE SPOT!', 'drama');
-  Audio.whistle();
+  emit({ t: 'whistle', kind: 'full' });
   showShootout(false);
-  SO.keeper.dive = 0;
-  SO.keeper.mesh.rotation.x = 0;
+  SO.keeper.clearAction();
   SO = null;
   finishShootout(winner, score);
 }
