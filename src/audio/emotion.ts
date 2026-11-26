@@ -581,6 +581,13 @@ export function createCrowdModel(): CrowdModel {
           arousalBase = Math.max(arousalBase, 0.6 + 0.3 * I);
           arousalKick = Math.max(arousalKick, 0.25 + 0.2 * I);
           kickValence(0.45 + 0.5 * I);
+          if (I >= 0.65) {
+            // the one event that flips the mood at once (no dwell): the house erupts
+            s.valence = Math.max(s.valence, 0.55);
+            s.mood = 'delirious';
+            moodCand = 'delirious';
+            moodCandT = 0;
+          }
           stunT = 0;
           s.stun = 0;
           // the celebration rolls into a song
