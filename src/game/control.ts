@@ -513,9 +513,17 @@ export function updateDribble(_dt: number): void {
   const sa = Math.sin(a);
   const ux = dxn * ca - dzn * sa;
   const uz = dxn * sa + dzn * ca;
+  // He can only push the ball as fast as he can follow it: the touch is paced off
+  // the speed he is *actually* carrying in the wanted direction (plus what he can
+  // add in a stride), not off the speed he is asking for. Setting off from a
+  // standstill is a soft touch; cutting back at full tilt is a drag-back, not a
+  // 10 m/s pass to nobody.
+  const curAlong = Math.max(0, p.velocity.x * dxn + p.velocity.z * dzn);
+  const pace = Math.min(sw, curAlong + 1.6);
+  lead *= 0.45 + 0.55 * Math.min(1, curAlong / Math.max(1, sw));
   // if the ball has got beside/behind him, the touch also drags it back in front
-  const drag = along < 0.2 ? 1.2 : 0;
-  const v = sw + lead + drag;
+  const drag = along < 0.2 ? 0.9 : 0;
+  const v = pace + lead + drag;
   ball.velocity.set(ux * v, 0, uz * v);
   ball.w.y = 0;
   ballStruck();
