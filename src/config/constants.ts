@@ -8,14 +8,17 @@ import type { DiffSetting, FormationEntry } from './types';
 export const CFG = {
   halfL: 30,
   halfW: 20,
-  goalHalf: 4.4,
-  goalH: 4.0,
-  goalDepth: 2.2,
+  // Real-world proportions (1 unit = 1 m): a 6.4 m × 2.44 m goal for the 5-a-side
+  // pitch (full-size 7.32 m arrives with 11-a-side), a slightly oversized 0.18 m
+  // ball for broadcast readability, 0.06 m posts.
+  goalHalf: 3.2,
+  goalH: 2.44,
+  goalDepth: 2.0,
   boxDepth: 11,
   boxHalfW: 13,
   sixDepth: 3.6,
   sixHalfW: 7,
-  ballR: 0.42,
+  ballR: 0.18,
   playerR: 0.46,
   playerH: 1.7,
   controlR: 1.35,
@@ -56,7 +59,7 @@ export const CFG = {
   bounceMin: 1.5, // min downward impact speed (u/s) that counts as a real bounce —
   // below this a grounded ball is just rolling, so it must NOT be scrubbed by bounceFric
   controlHeight: 1.25, // a ground player can only collect a ball below this height
-  crossbarH: 4.0, // ball must be under this to count as a goal
+  crossbarH: 2.44, // ball must be under this to count as a goal
   headLow: 0.9, // ball heights a player can head/volley
   headHigh: 2.5,
   headReach: 1.7, // planar range for contesting an aerial ball
@@ -81,7 +84,7 @@ export const CFG = {
   curlCross: 1.2, // curl that whips a cross into the box
 
   // --- woodwork (posts + crossbar rebounds) ---
-  postR: 0.16, // collision radius of a goalpost / crossbar
+  postR: 0.06, // collision radius of a goalpost / crossbar
   woodRest: 0.62, // restitution off the frame
 
   // --- pass reception (Simple Soccer's intended-receiver model) ---
