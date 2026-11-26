@@ -9,6 +9,7 @@ import { replayCtl } from '../game/replay';
 import { setCameraMode, getCameraMode } from '../game/camera';
 import { renderer } from '../rendering/scene';
 import { startShootout, inShootout } from '../game/penalty';
+import { toggleLab } from './lab';
 
 /*
  * Developer / test API — `window.__strikers`.
@@ -43,6 +44,8 @@ export function installDevApi(): void {
     run: (seconds: number) => stepTicks(Math.round(seconds * SIM_HZ)),
     trajectory: () => ballTrajectory(),
     camera: { set: setCameraMode, get: getCameraMode },
+    /** Show/hide the development lab overlay. */
+    lab: toggleLab,
     /** Jump straight into a penalty shoot-out (testing). */
     shootout: { start: startShootout, active: inShootout },
     /** Renderer statistics for the last frame. */
@@ -61,4 +64,12 @@ export function installDevApi(): void {
     }),
   };
   (window as unknown as { __strikers: typeof api }).__strikers = api;
+  // F2 toggles the lab; `?lab` opens it on load
+  addEventListener('keydown', (e) => {
+    if (e.code === 'F2') {
+      e.preventDefault();
+      toggleLab();
+    }
+  });
+  if (new URLSearchParams(location.search).has('lab')) toggleLab(true);
 }

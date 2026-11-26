@@ -10,6 +10,7 @@ import { hasReplay, isReplaying, recordFrame, startReplay, updateReplay } from '
 import { captureSnapshot, presentLive } from './render';
 import { updateHUD, updateToast } from '../ui/hud';
 import { updateRadar } from '../ui/radar';
+import { updateLab } from '../dev/lab';
 
 /*
  * The frame loop: fixed-timestep simulation, interpolated presentation.
@@ -119,6 +120,7 @@ function frame(now: number): void {
   updateRadar();
   updateStadium(realDt);
   Audio.update(realDt);
+  updateLab();
   renderFrame();
 }
 
