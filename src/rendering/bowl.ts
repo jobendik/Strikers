@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GeoBuilder, v3, type P3 } from './geo';
-import { LAYOUT, SECTIONS, lowerRowD, lowerRowY, roofY, upperRowD, upperRowY, type Section } from './layout';
+import { LAYOUT, SECTIONS, lowerRowD, lowerRowY, mainUpperD, mainUpperY, roofY, upperRowD, upperRowY, type Section } from './layout';
 
 /*
  * The stadium bowl: stepped terraces, vomitories, aisles, fascia, roof with
@@ -79,7 +79,7 @@ interface Cut {
 }
 
 const LOWER: Tier = { rows: LAYOUT.lowerRows, r0: 0, D: lowerRowD, Y: lowerRowY, frontD: 0, id: 0 };
-const WALL_UP: Tier = { rows: LAYOUT.wallRows, r0: LAYOUT.lowerRows, D: lowerRowD, Y: lowerRowY, frontD: lowerRowD(LAYOUT.lowerRows), id: 2 };
+const MAIN_UP: Tier = { rows: LAYOUT.mainUpperRows, r0: 0, D: mainUpperD, Y: mainUpperY, frontD: LAYOUT.mainDeckD, id: 2 };
 const UPPER: Tier = { rows: LAYOUT.upperRows, r0: 0, D: upperRowD, Y: upperRowY, frontD: LAYOUT.upperD0, id: 1 };
 
 /** Aisle positions (u) of a section. Straights own the aisles at their ends. */
@@ -103,7 +103,7 @@ export function buildBowl(): BowlBuild {
   const seatData: number[] = [];
   const tmp: P3 = v3(0, 0, 0);
   const nrm = { x: 0, z: 0 };
-  const maxD = lowerRowD(LAYOUT.lowerRows + LAYOUT.wallRows);
+  const maxD = LAYOUT.backD;
 
   const subtract = (cuts: Cut[], r: number, len: number): Array<[number, number]> => {
     let spans: Array<[number, number]> = [[0, 1]];
@@ -217,14 +217,12 @@ export function buildBowl(): BowlBuild {
     const nb = sec.corner ? 0 : bayCount(sec);
     const lowerCuts: Cut[] = [];
     const upperCuts: Cut[] = [];
-    const wallCuts: Cut[] = [];
     if (!sec.corner) {
       for (let k = 1; k < nb; k += 2) {
         const u = (k + 0.5) / nb;
         const centre = sec.wall && Math.abs(u - 0.5) < 0.01;
         if (!centre) lowerCuts.push({ u, halfW: 1.15, rA: 6, rB: 11, floorY: lowerRowY(6) });
         upperCuts.push({ u, halfW: 1.15, rA: 3, rB: 7, floorY: upperRowY(3) });
-        wallCuts.push({ u, halfW: 1.15, rA: 4, rB: 9, floorY: lowerRowY(LAYOUT.lowerRows + 4) });
       }
       if (sec.wall) lowerCuts.push({ u: 0.5, halfW: 2.3, rA: 0, rB: 6, floorY: 0 }); // players' tunnel
     }
@@ -270,34 +268,59 @@ export function buildBowl(): BowlBuild {
       // back wall of the upper tier up to the roof
       S.sweep(sec, 0, 1, upTopD, upTopY, upTopD, roofY(upTopD), -1, 0, COL.concreteDark, { col2: COL.dark });
     } else {
-      buildTier(sec, WALL_UP, wallCuts, aisles);
-      const topD = lowerRowD(LAYOUT.lowerRows + LAYOUT.wallRows);
-      const topY = lowerRowY(LAYOUT.lowerRows + LAYOUT.wallRows);
-      // back of the wall stand: concourse band, a strip of glazed boxes, cladding
-      S.sweep(sec, 0, 1, topD, topY, topD, topY + 2.4, -1, 0, COL.dark);
-      S.sweep(sec, 0, 1, topD, topY + 2.4, topD, topY + 2.7, -1, 0, COL.accent);
-      S.sweep(sec, 0, 1, topD, topY + 2.7, topD, topY + 5.6, -1, 0, COL.glass, { col2: COL.facadeLight });
-      S.sweep(sec, 0, 1, topD, topY + 5.6, topD, roofY(topD), -1, 0, COL.concreteDark, { col2: COL.dark });
+      // Main (camera-side) stand: the lower tier, then an open broadcast deck
+      // that the gameplay cameras fly over, a strip of glazed boxes and a short
+      // upper tier — all of it behind / below the camera positions.
+      const deckD = LAYOUT.mainDeckD;
+      S.sweep(sec, 0, 1, lowTopD, lowTopY, deckD, lowTopY, 0, 1, COL.tread, { col2: COL.concreteDark });
+      S.sweep(sec, 0, 1, deckD, lowTopY, deckD, lowTopY + 0.35, -1, 0, COL.dark);
+      S.sweep(sec, 0, 1, deckD, lowTopY + 0.35, deckD, lowTopY + 2.9, -1, 0, COL.glass, { col2: COL.facadeLight });
+      S.sweep(sec, 0, 1, deckD, lowTopY + 2.9, deckD, lowTopY + 3.2, -1, 0, COL.accent);
+      S.sweep(sec, 0, 1, deckD, lowTopY + 3.2, deckD, mainUpperY(0) + 1.0, -1, 0, COL.concreteDark);
+      // box mullions
+      {
+        const len = sec.length(deckD);
+        const n = Math.round(len / 3.8);
+        for (let i = 0; i <= n; i++) {
+          const u = i / n;
+          const hw = 0.09 / len;
+          S.sweep(sec, Math.max(0, u - hw), Math.min(1, u + hw), deckD - 0.05, lowTopY + 0.35, deckD - 0.05, lowTopY + 2.9, -1, 0, COL.steelDark, { segs: 1 });
+        }
+      }
+      buildTier(sec, MAIN_UP, [], aisles);
+      const topD = mainUpperD(LAYOUT.mainUpperRows);
+      const topY = mainUpperY(LAYOUT.mainUpperRows);
+      S.sweep(sec, 0, 1, topD, topY, topD, roofY(topD), -1, 0, COL.concreteDark, { col2: COL.dark });
 
-      // end walls where the horseshoe's upper tier meets the wall stand
+      // end walls where the horseshoe's (taller) upper tier meets the main stand
+      const mainY = (dd: number): number => (dd < lowTopD ? lowerRowY(Math.max(0, (dd - LAYOUT.row0) / LAYOUT.rowDepth)) : dd < deckD ? lowTopY : mainUpperY(Math.max(0, (dd - deckD - 0.4) / LAYOUT.rowDepth)));
+      const hornY = (dd: number): number => upperRowY(Math.max(0, (dd - LAYOUT.upperD0 - 0.4) / LAYOUT.rowDepth)) + 1.1;
       for (const u of [0, 1]) {
+        const d0 = LAYOUT.upperD0;
+        const d1 = upperRowD(LAYOUT.upperRows);
+        const steps = 12;
+        for (let i = 0; i < steps; i++) {
+          const da = d0 + ((d1 - d0) * i) / steps;
+          const db = d0 + ((d1 - d0) * (i + 1)) / steps;
+          const a = v3(0, 0, 0),
+            b = v3(0, 0, 0),
+            cc = v3(0, 0, 0),
+            d = v3(0, 0, 0);
+          sec.point(u, da, Math.min(mainY(da), mainY(db)) - 0.3, a);
+          sec.point(u, db, Math.min(mainY(da), mainY(db)) - 0.3, b);
+          sec.point(u, db, hornY(db), cc);
+          sec.point(u, da, hornY(da), d);
+          S.quad(a, b, cc, d, COL.concreteDark, { col2: COL.concrete });
+        }
+        // close the remaining gap up to the roof at the back
         const a = v3(0, 0, 0),
           b = v3(0, 0, 0),
           cc = v3(0, 0, 0),
           d = v3(0, 0, 0);
-        const d0 = LAYOUT.upperD0;
-        const d1 = upperRowD(LAYOUT.upperRows);
-        const yAt = (dd: number): number => lowerRowY(Math.max(0, (dd - LAYOUT.row0) / LAYOUT.rowDepth));
-        sec.point(u, d0, yAt(d0), a);
-        sec.point(u, d1, yAt(d1), b);
-        sec.point(u, d1, upperRowY(LAYOUT.upperRows) + 1.1, cc);
-        sec.point(u, d0, LAYOUT.upperY0 + 1.1, d);
-        S.quad(a, b, cc, d, COL.concreteDark, { col2: COL.concrete });
-        // close the gap up to the roof at the back
-        sec.point(u, d1, upperRowY(LAYOUT.upperRows) + 1.1, a);
-        sec.point(u, LAYOUT.backD, upperRowY(LAYOUT.upperRows) + 1.1, b);
-        sec.point(u, LAYOUT.backD, yAt(LAYOUT.backD) - 2, cc);
-        sec.point(u, d1, yAt(d1), d);
+        sec.point(u, d1, mainY(d1) - 0.3, a);
+        sec.point(u, LAYOUT.backD, mainY(d1) - 0.3, b);
+        sec.point(u, LAYOUT.backD, roofY(LAYOUT.backD), cc);
+        sec.point(u, d1, roofY(d1), d);
         S.quad(a, b, cc, d, COL.concreteDark);
       }
     }
@@ -342,7 +365,7 @@ export function buildBowl(): BowlBuild {
       const c0 = v3(0, 0, 0),
         c1 = v3(0, 0, 0);
       sec.point(u, LAYOUT.backD - 0.6, roofY(LAYOUT.backD) - 2.6, c0);
-      sec.point(u, LAYOUT.backD - 0.6, sec.upper ? upperRowY(LAYOUT.upperRows) : lowerRowY(LAYOUT.lowerRows + LAYOUT.wallRows), c1);
+      sec.point(u, LAYOUT.backD - 0.6, sec.upper ? upperRowY(LAYOUT.upperRows) : mainUpperY(LAYOUT.mainUpperRows), c1);
       S.beam(c0, c1, 0.4, 0.4, COL.steelDark);
     }
   }

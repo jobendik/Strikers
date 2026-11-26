@@ -207,9 +207,10 @@ void main() {
   vec3 teamCol = mix( uHome, uAway, team );
   vec3 pal = 0.32 + 0.28 * cos( 6.283 * ( r1 + vec3( 0.0, 0.33, 0.67 ) ) );
   vec3 neutral = mix( pal, vec3( 0.04 + 0.6 * r3 * r3 ), 0.55 );
-  float fan = step( r2, 0.74 );
-  vec3 fanCol = teamCol * ( 0.7 + 0.6 * r3 );
-  fanCol = mix( fanCol, vec3( 0.85 ), step( 0.9, r1 ) * 0.8 ); // the odd white shirt / scarf
+  float fan = step( r2, 0.6 );
+  vec3 fanCol = teamCol * ( 0.55 + 0.7 * r3 );
+  fanCol = mix( fanCol, vec3( dot( fanCol, vec3( 0.33 ) ) ), 0.25 * r1 );
+  fanCol = mix( fanCol, vec3( 0.8 ), step( 0.84, r1 ) * 0.85 ); // the odd white shirt / scarf
   vShirt = mix( neutral, fanCol, fan );
   vSkin = mix( vec3( 0.80, 0.56, 0.42 ), vec3( 0.20, 0.11, 0.07 ), r3 * r3 );
   vDark = mix( vec3( 0.02, 0.022, 0.03 ), vec3( 0.12, 0.10, 0.08 ), r1 );

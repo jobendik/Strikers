@@ -166,10 +166,17 @@ function makeLedAtlas(maxSize: number): THREE.CanvasTexture {
     const y0 = ROW_RIBBON * rh;
     g.fillStyle = '#05070b';
     g.fillRect(0, y0, W, rh);
-    g.font = `900 ${Math.round(rh * 0.56)}px ${FONT}`;
-    const msg = ["STRIKERS '26", '★', 'WORLD CHAMPIONSHIP', '★', 'MATCHDAY LIVE', '★', 'THE MERIDIAN BOWL', '★'];
+    const msg = ["STRIKERS '26", '★', 'WORLD CHAMPIONSHIP', '★', 'THE MERIDIAN BOWL', '★'];
+    // fit the message to the strip whatever font the platform resolves
+    let px = rh * 0.56;
+    g.font = `900 ${Math.round(px)}px ${FONT}`;
+    let total = msg.reduce((s, m) => s + g.measureText(m).width, 0);
+    if (total > W * 0.8) {
+      px *= (W * 0.8) / total;
+      g.font = `900 ${Math.round(px)}px ${FONT}`;
+      total = msg.reduce((s, m) => s + g.measureText(m).width, 0);
+    }
     let x = W * 0.01;
-    const total = msg.reduce((s, m) => s + g.measureText(m).width, 0);
     const gap = (W - total - W * 0.02) / msg.length;
     msg.forEach((m, i) => {
       g.fillStyle = m === '★' ? '#5dff3a' : i % 4 === 0 ? '#ffffff' : '#ffc93a';
@@ -313,7 +320,7 @@ export class LedBoards {
   private away = new THREE.Color('#1e63d8');
   private scoreCanvas: HTMLCanvasElement;
   private scoreTex: THREE.CanvasTexture;
-  private lastScore = '';
+  private lastScore = -1;
   private homeName = 'HOME';
   private awayName = 'AWAY';
 
@@ -493,7 +500,7 @@ export class LedBoards {
     this.away.set(away);
     if (homeName) this.homeName = homeName;
     if (awayName) this.awayName = awayName;
-    this.lastScore = '';
+    this.lastScore = -1;
   }
 
   goalFlash(team: 0 | 1): void {
@@ -507,7 +514,7 @@ export class LedBoards {
 
   update(dt: number, scoreHome: number, scoreAway: number): void {
     if (this.goal.value > 0) this.goal.value = Math.max(0, this.goal.value - dt / 6.5);
-    const key = `${scoreHome}-${scoreAway}`;
+    const key = scoreHome * 1000 + scoreAway; // no per-frame string allocation
     if (key !== this.lastScore) {
       this.lastScore = key;
       this.drawScore(scoreHome, scoreAway);

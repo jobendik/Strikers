@@ -111,7 +111,7 @@ const COLOR = /* glsl */ `
   float sz = bands( p.y + HW, uPitch.y / 4.0 ) * 2.0 - 1.0; // 8 cross bands
   float stripe = sx * ( 0.045 + 0.10 * abs( vd.y ) ) * sign( vd.y + 0.2 ) + sz * ( 0.015 + 0.075 * abs( vd.x ) ) * sign( vd.x + 0.001 );
 
-  vec3 grass = mix( uGrassA, uGrassB, clamp( 0.5 + stripe * 3.2, 0.0, 1.0 ) );
+  vec3 grass = mix( uGrassA, uGrassB, clamp( 0.5 + stripe * 2.2, 0.0, 1.0 ) );
   grass *= ( 0.74 + 0.52 * fine ) * ( 0.88 + 0.24 * clump );
   grass = mix( grass, grass * vec3( 1.22, 1.05, 0.72 ), clamp( ( broad - 0.42 ) * 1.3, 0.0, 0.45 ) );
 
@@ -194,8 +194,8 @@ export class Pitch {
       uPitch: { value: new THREE.Vector4(CFG.halfL, CFG.halfW, LINE_W, LAYOUT.grassMargin) },
       uBox: { value: new THREE.Vector4(CFG.boxDepth, CFG.boxHalfW, CFG.sixDepth, CFG.sixHalfW) },
       uMark: { value: new THREE.Vector4(CFG.pen.spotOut, CENTRE_R, CORNER_R, LAYOUT.boardSide + 0.75) },
-      uGrassA: { value: new THREE.Color('#2f7a27') },
-      uGrassB: { value: new THREE.Color('#4a9a34') },
+      uGrassA: { value: new THREE.Color('#2a6424') },
+      uGrassB: { value: new THREE.Color('#3e8232') },
     };
 
     const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, envMapIntensity: 0.4 });

@@ -90,8 +90,8 @@ export function buildProps(): PropsBuild {
   {
     const hw = 2.3;
     const z0 = LAYOUT.hz + 0.2;
-    const z1 = CFG.halfW + 5.2;
-    const h = 2.5;
+    const z1 = CFG.halfW + 5.6;
+    const h = 2.2;
     const stripes = 7;
     for (let i = 0; i < stripes; i++) {
       const za = z0 + ((z1 - z0) * i) / stripes;

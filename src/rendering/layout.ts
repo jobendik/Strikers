@@ -9,10 +9,14 @@ import { CFG } from '../config/constants';
  * the shaders and the shadow-map proxy are all derived from these numbers, so
  * they always agree with each other.
  *
- * Camera constraint (see docs/RENDERING_DESIGN.md): the gameplay camera sits on
- * the +Z side at roughly (x, 16…20, 42…46) (legacy camera: y 26, z 38) looking
- * down at the pitch. The +Z stand is therefore a single ≤ 29° tier that starts at
- * z = halfW + 8, and the roof above it clears y = 26.9 at the camera line.
+ * Camera constraint (see docs/RENDERING_DESIGN.md): the gameplay cameras sit on
+ * the +Z side — broadcast (y 17, z ≈ 43…46, fov 30), tele (y 12.5, z 45, fov 24),
+ * dynamic (y 9.5, z 34, fov 38) — looking down at the ball. On that side nothing
+ * may rise above y = 0.45·(z − halfW) between the touchline and z = 36. So the
+ * +Z stand is: a 26.6° lower tier starting at z = halfW + 8 (seated head line
+ * ≈ 0.50·(z − 28) + 2.4, standing fans stay under the limit), then an open
+ * broadcast deck at y ≈ 8 from z = 42 to 48 that the cameras fly over, with the
+ * glazed boxes and a short upper tier behind them. The roof clears y = 27.
  */
 
 const HL = CFG.halfL;
@@ -39,15 +43,17 @@ export const LAYOUT = {
   row0: 0.5, // d of the first riser
   rowDepth: 0.8,
   lowerRows: 17,
-  lowerRise: 0.44,
+  lowerRise: 0.4,
   lowerY0: 1.15,
 
-  /** The +Z "wall" stand continues the lower rake as a single tier. */
-  wallRows: 15,
+  /** Camera-side main stand: broadcast deck behind the lower tier, then a short upper tier. */
+  mainDeckD: 20.0,
+  mainUpperRows: 8,
+  mainUpperY0: 11.6,
 
   /** Upper tier (horseshoe: every side except +Z). */
   upperD0: 11.6,
-  upperY0: 11.6,
+  upperY0: 11.2,
   upperRows: 16,
   upperRise: 0.56,
   fasciaH: 2.2,
@@ -77,6 +83,13 @@ export function lowerRowD(r: number): number {
 }
 export function upperRowD(r: number): number {
   return LAYOUT.upperD0 + 0.4 + r * LAYOUT.rowDepth;
+}
+/** Short upper tier of the camera-side main stand (behind the broadcast deck). */
+export function mainUpperY(r: number): number {
+  return LAYOUT.mainUpperY0 + r * LAYOUT.upperRise;
+}
+export function mainUpperD(r: number): number {
+  return LAYOUT.mainDeckD + 0.4 + r * LAYOUT.rowDepth;
 }
 
 /** Roof underside height at outward distance d. */
