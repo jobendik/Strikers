@@ -168,7 +168,7 @@ export const KITS: Record<string, NationKit> = {
     awayPattern: 'band',
     away: { trim: '#13295b' },
   },
-  // Indigo with fine white hoops, red trim, white shorts.
+  // Indigo and deep-indigo halves, red trim, white shorts.
   JAPAN: {
     home: { pattern: 'halves', second: '#3b3399', trim: '#e23048', shorts: WHITE, shortsTrim: '#5a4fcf', socks: '#5a4fcf', socksTrim: '#e23048', number: WHITE },
     awayPattern: 'pinstripes',
@@ -180,7 +180,7 @@ export const KITS: Record<string, NationKit> = {
     awayPattern: 'band',
     away: { second: '#c9202f', trim: '#157347' },
   },
-  // Bright green with yellow stripes on the body, yellow shorts.
+  // Bright green with a yellow shoulder panel and sleeves, yellow shorts.
   SENEGAL: {
     home: { pattern: 'yoke', second: '#f7d21c', trim: '#d3202c', sleeves: '#f7d21c', shorts: '#f7d21c', shortsTrim: '#11a658', socks: '#11a658', socksTrim: '#f7d21c', number: '#f7d21c' },
     awayPattern: 'chevron',
