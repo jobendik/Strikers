@@ -219,6 +219,18 @@ const _look = new THREE.Vector3();
 
 /** Broadcast-style camera that tracks the ball, zooms for goals and shakes on impacts. */
 export function updateCamera(dt: number): void {
+  // Dev/test hook: `window.__camOverride = { pos:[x,y,z], look:[x,y,z], fov? }`
+  // pins the camera (used by automated screenshots and visual inspection).
+  const ov = (window as unknown as { __camOverride?: { pos: number[]; look: number[]; fov?: number } }).__camOverride;
+  if (ov) {
+    camera.position.set(ov.pos[0], ov.pos[1], ov.pos[2]);
+    if (ov.fov && camera.fov !== ov.fov) {
+      camera.fov = ov.fov;
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(ov.look[0], ov.look[1], ov.look[2]);
+    return;
+  }
   const live = match.state === 'play' || match.state === 'celebrate';
   const fx = live ? clamp(ball.position.x * 0.6, -14, 14) : Math.sin(performance.now() * 0.00018) * 12;
 

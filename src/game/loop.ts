@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { CFG } from '../config/constants';
 import { advanceTime } from '../core/time';
 import { Audio } from '../core/audio';
-import { camera, renderer, scene } from '../rendering/scene';
+import { renderFrame } from '../rendering/scene';
+import { updateStadium } from '../rendering/stadium';
 import { ball, match, setPassRequest, setReceiver, teamIndex } from './state';
 import { pollInput } from './input';
 import { resolveControl, resolveSlides, updateGkHold, updatePressure } from './control';
@@ -28,7 +29,7 @@ function frame(): void {
 
   // paused: freeze the simulation but keep presenting the (static) scene
   if (match.paused) {
-    renderer.render(scene, camera);
+    renderFrame();
     return;
   }
   advanceTime(sdt);
@@ -93,7 +94,9 @@ function frame(): void {
   }
   updateHUD();
   updateRadar();
-  renderer.render(scene, camera);
+  updateStadium(dt);
+  Audio.update(dt);
+  renderFrame();
 }
 
 /** Starts the render/simulation loop. */

@@ -221,3 +221,11 @@ function buildGoal(sx: number): void {
 
   world.add(grp);
 }
+
+/**
+ * Per-frame environment animation (crowd, nets, LED boards, flags…). Called once
+ * per rendered frame with the real (undilated) frame delta in seconds.
+ */
+export function updateStadium(_dt: number): void {
+  /* nothing animated yet */
+}

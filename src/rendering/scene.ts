@@ -85,3 +85,12 @@ export function handleResize(): void {
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 }
+
+/**
+ * Render one frame. Everything that presents the 3-D scene goes through here (not
+ * `renderer.render` directly) so the renderer is free to add a post-processing
+ * chain per quality tier without touching the game loop.
+ */
+export function renderFrame(): void {
+  renderer.render(scene, camera);
+}

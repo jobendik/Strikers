@@ -165,6 +165,10 @@ function createAudio() {
     resume(): void {
       ensure();
     },
+    /** Per-frame audio update (crowd emotion model etc.). Real seconds. */
+    update(_dt: number): void {
+      /* nothing time-driven yet */
+    },
   };
 }
 
