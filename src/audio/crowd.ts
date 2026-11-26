@@ -26,7 +26,7 @@ export const CROWD_LEVELS = {
   body: 0.17,
   murmur: 0.16,
   shout: 0.32,
-  ooh: 0.3,
+  ooh: 0.24,
   away: 0.4,
   /** crowd bus → stadium reverb. */
   send: 0.16,
@@ -35,7 +35,7 @@ export const CROWD_LEVELS = {
 } as const;
 
 /** Stereo position of the away end. */
-const AWAY_PAN = 0.68;
+const AWAY_PAN = 0.75;
 
 export interface CrowdTextures {
   murmur: AudioBuffer | null;
@@ -87,6 +87,7 @@ export class Crowd {
   private wantChant = -1;
   private wantChantCue: CrowdCue | null = null;
   private lastMix: CrowdMix | null = null;
+  private sparkT = 1.5;
 
   constructor(m: Mixer) {
     this.m = m;
@@ -151,7 +152,7 @@ export class Crowd {
     // rumble
     const rs = this.loop(m.noise.brown, 0.8);
     const rlp = this.filter('lowpass', 150, 0.7);
-    const rmod = this.wanderGain(0.3);
+    const rmod = this.wanderGain(0.4);
     this.gRumble = this.gainNode(0);
     rs.connect(rlp);
     rlp.connect(rmod);
@@ -169,8 +170,8 @@ export class Crowd {
       // independent wander per side: waves of noise roll around the bowl
       const split = this.reg(m.ctx.createChannelSplitter(2));
       const merge = this.reg(m.ctx.createChannelMerger(2));
-      const l = this.wanderGain(0.35);
-      const r = this.wanderGain(0.35);
+      const l = this.wanderGain(0.5);
+      const r = this.wanderGain(0.5);
       this.fBody.connect(split);
       split.connect(l, 0);
       split.connect(r, 1);
@@ -204,13 +205,13 @@ export class Crowd {
       this.fVoice = this.filter('lowpass', 1800, 0.5);
       this.gMurmur = this.gainNode(0);
       const a = this.loop(buf, 0.94);
-      const am = this.wanderGain(0.3);
+      const am = this.wanderGain(0.45);
       a.connect(am);
       am.connect(this.fVoice);
       if (full) {
         // a second pass at another speed: doubles the density and hides the loop
         const b = this.loop(buf, 1.09);
-        const bm = this.wanderGain(0.3);
+        const bm = this.wanderGain(0.45);
         b.connect(bm);
         bm.connect(this.fVoice);
         // the away end: same people, thinner, off to one side
@@ -341,7 +342,7 @@ export class Crowd {
         break;
       case 'awayRoar':
         // a few thousand in one corner: thinner, narrower, off to the side
-        this.shot({ buf: this.texOr('roar'), at, attack: 0.14, hold: c.dur * 0.3, release: c.dur * 0.7, gain: 0.42 * I, rate0: 1.12, rate1: 0.98, ftype: 'bandpass', f0: 1500, f1: 1000, q: 0.5, pan: AWAY_PAN, send: 0.4, prio: 7, tag: 'awayRoar' });
+        this.shot({ buf: this.texOr('roar'), at, attack: 0.14, hold: c.dur * 0.3, release: c.dur * 0.7, gain: 0.75 * I, rate0: 1.12, rate1: 0.98, ftype: 'bandpass', f0: 1500, f1: 1000, q: 0.5, pan: AWAY_PAN, send: 0.4, prio: 7, tag: 'awayRoar' });
         break;
       case 'groan':
         // "ooohhh": pitch and brightness sag together
@@ -366,7 +367,7 @@ export class Crowd {
         break;
       case 'gasp': {
         // a stadium's worth of sharp in-breaths: airy band sweeping up, gone in 300 ms
-        const v = m.voice({ bus: 'crowd', at, dur: 0.5, gain: 0.5 * I * CROWD_LEVELS.shot, send: 0.3, prio: 6, tag: 'gasp' });
+        const v = m.voice({ bus: 'crowd', at, dur: 0.5, gain: 1.2 * I * CROWD_LEVELS.shot, send: 0.3, prio: 6, tag: 'gasp' });
         if (!v) break;
         const t = v.t0;
         const s = m.noiseSrc(v, 'pink', t, t + 0.4);
@@ -416,7 +417,7 @@ export class Crowd {
     const m = this.m;
     const A = CROWD_LEVELS.shot;
     // 1) burst
-    const b = m.voice({ bus: 'crowd', at, dur: 1.1, gain: 0.9 * I * A, send: 0.4, prio: 9, tag: 'roar' });
+    const b = m.voice({ bus: 'crowd', at, dur: 1.1, gain: 1.1 * Math.pow(I, 1.3) * A, send: 0.4, prio: 9, tag: 'roar' });
     if (b) {
       const t = b.t0;
       const s = m.noiseSrc(b, 'pink', t, t + 0.9);
@@ -435,7 +436,7 @@ export class Crowd {
       g2.connect(b.out);
     }
     // 2) sustained roar
-    const v = m.voice({ bus: 'crowd', at, dur: dur * 1.6, gain: 2.3 * Math.pow(I, 0.8) * A, send: 0.4, prio: 9, tag: 'roar' });
+    const v = m.voice({ bus: 'crowd', at, dur: dur * 1.6, gain: 2.0 * Math.pow(I, 1.5) * A, send: 0.4, prio: 9, tag: 'roar' });
     if (v) {
       const t = v.t0;
       const buf = this.texOr('roar');
@@ -473,15 +474,15 @@ export class Crowd {
     // 3) ovation
     const app = this.tex.applause;
     if (app) {
-      this.shot({ buf: app, at: at + 0.7, attack: 1.3, hold: dur * 0.5, release: dur * 0.7, gain: 0.8 * I, rate0: 1.0, rate1: 0.94, ftype: 'highpass', f0: 500, f1: 420, send: 0.3, prio: 6, tag: 'applause' });
+      this.shot({ buf: app, at: at + 0.7, attack: 1.3, hold: dur * 0.55, release: dur * 0.7, gain: 1.5 * I, rate0: 1.0, rate1: 0.94, ftype: 'highpass', f0: 500, f1: 420, send: 0.3, prio: 6, tag: 'applause' });
     }
   }
 
   /** Derisive whistles scattered round the bowl: high gliding sines, far away, wet. */
-  private jeer(at: number, I: number, dur: number): void {
+  private jeer(at: number, I: number, dur: number, count = 0): void {
     const m = this.m;
     const r = m.rand;
-    const n = Math.round(3 + 6 * I);
+    const n = count > 0 ? count : Math.round(3 + 6 * I);
     const v = m.voice({ bus: 'crowd', at, dur: dur + 1.2, gain: (0.5 + 0.5 * I) * CROWD_LEVELS.shot, send: 0.7, prio: 5, tag: 'jeer' });
     if (!v) return;
     const pans = [m.panner(v, -0.6), m.panner(v, 0.55)];
@@ -501,6 +502,31 @@ export class Crowd {
       o.connect(g);
       g.connect(pans[i % 2]);
     }
+  }
+
+  /**
+   * Spontaneous life. A real stand is never uniform: a pocket reacts to something
+   * only it saw, a ripple of claps starts and dies, someone whistles. Small random
+   * one-shots, panned around the bowl, rate and size scaled by how awake the house is.
+   */
+  idle(dt: number, mix: CrowdMix, active: boolean): void {
+    if (!active || !this.built) return;
+    this.sparkT -= dt;
+    if (this.sparkT > 0) return;
+    const r = this.m.rand;
+    const energy = clamp(mix.level, 0.2, 1.6);
+    this.sparkT = (1.0 + 3.2 * r()) / (0.5 + energy);
+    if (mix.duck > 0.3) return; // nobody shouts into a held breath
+    const at = this.m.now;
+    const pan = (r() * 2 - 1) * 0.85;
+    const pick = r();
+    if (pick < 0.6) {
+      const shout = pick < 0.3;
+      this.shot({ buf: this.texOr(shout ? 'roar' : 'ooh'), at, attack: 0.12 + 0.25 * r(), hold: 0.1 + 0.4 * r(), release: 0.4 + 0.6 * r(), gain: (0.25 + 0.3 * r()) * energy, rate0: 0.9 + 0.25 * r(), rate1: 0.84 + 0.22 * r(), ftype: 'bandpass', f0: 700 + 900 * r(), f1: 600 + 600 * r(), q: 0.7, pan, send: 0.5, prio: 1, tag: 'spark' });
+    } else if (pick < 0.85) {
+      const sparse = this.tex.sparse;
+      if (sparse) this.shot({ buf: sparse, at, attack: 0.2, hold: 0.3 + 0.7 * r(), release: 0.7, gain: (0.22 + 0.25 * r()) * energy, rate0: 0.95 + 0.1 * r(), rate1: 0.95, ftype: 'highpass', f0: 600, f1: 500, pan, send: 0.4, prio: 1, tag: 'spark' });
+    } else this.jeer(at, 0.25 * energy, 0.6, 1 + Math.floor(r() * 2));
   }
 
   // ---- chants -------------------------------------------------------------------------------
@@ -541,7 +567,7 @@ export class Crowd {
   private playChant(buf: AudioBuffer, c: CrowdCue): void {
     const m = this.m;
     if (m.hasTag('chant')) return;
-    const v = m.voice({ bus: 'crowd', dur: c.dur + 4, pan: c.away ? AWAY_PAN : 0, gain: (c.away ? 0.55 : 1.25) * c.intensity * CROWD_LEVELS.shot, send: 0.4, prio: 7, tag: 'chant' });
+    const v = m.voice({ bus: 'crowd', dur: c.dur + 4, pan: c.away ? AWAY_PAN : 0, gain: (c.away ? 0.4 : 0.7) * c.intensity * CROWD_LEVELS.shot, send: 0.4, prio: 7, tag: 'chant' });
     if (!v) return;
     const t = v.t0;
     // a few start it, the rest join over the first phrase or two

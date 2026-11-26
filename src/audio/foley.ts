@@ -194,7 +194,7 @@ export function woodwork(m: Mixer, bar: boolean, speed: number, pl: Place): void
   const p = clamp((speed - 4) / 26, 0, 1);
   const r = m.rand;
   const dur = bar ? 2.6 : 2.0;
-  const v = m.voice({ bus: 'sfx', dur, pan: pl.pan, gain: (0.3 + 0.7 * p) * pl.att, send: 0.6, prio: 8, tag: 'post' });
+  const v = m.voice({ bus: 'sfx', dur, pan: pl.pan, gain: (0.2 + 0.8 * p) * pl.att, send: 0.6, prio: 8, tag: 'post' });
   if (!v) return;
   const t = v.t0;
   // Hollow aluminium section. Free-bar-like inharmonic series; the 7.32 m bar is
@@ -250,14 +250,14 @@ export function net(m: Mixer, speed: number, goal: boolean, pl: Place): void {
   g.connect(v.out);
   // cords snapping back: a few dry high ticks as the net settles
   const s2 = m.noiseSrc(v, 'white', t, t + 0.5);
-  const hp = m.biquad(v, 'highpass', 3600, 0.7);
+  const hp = m.biquad(v, 'bandpass', 4200, 0.8);
   const tg = m.gain(v, 0);
   tg.gain.setValueAtTime(0, t);
   let tt = t + 0.05;
   const ticks = goal ? 5 : 3;
   for (let i = 0; i < ticks; i++) {
     tt += 0.035 + 0.05 * m.rand();
-    const a = 0.3 * p * (1 - i / (ticks + 1));
+    const a = 0.22 * p * (1 - i / (ticks + 1));
     tg.gain.setValueAtTime(0, tt);
     tg.gain.linearRampToValueAtTime(a, tt + 0.002);
     tg.gain.linearRampToValueAtTime(0, tt + 0.012);

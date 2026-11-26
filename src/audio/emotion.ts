@@ -424,15 +424,15 @@ export function createCrowdModel(): CrowdModel {
     if (!inPlay && st !== 'shootout' && s.anticipation < 0.02) s.side = -1;
 
     // ---- held breath ----------------------------------------------------------------
-    const develop = inPlay || st === 'shootout' ? 0.6 * smoothstep(0.6, 0.92, s.anticipation) : 0;
+    const develop = inPlay || st === 'shootout' ? 0.7 * smoothstep(0.6, 0.92, s.anticipation) : 0;
     const holdTarget = Math.max(develop, holdT > 0 ? 0.55 + 0.45 * holdLevel : 0);
     s.hold = clamp(follow(s.hold, holdTarget, dt, holdTarget > s.hold ? EMO.duckAttack : EMO.duckRelease), 0, 1);
 
     // ---- stun (after conceding) -----------------------------------------------------
     if (stunT > 0) {
       stunT -= dt;
-      // full for the first ~40 % of the spell, then the murmur creeps back
-      s.stun = clamp(stunPeak * smoothstep(0, 0.6, Math.max(0, stunT) / stunLen), 0, 1);
+      // full for the first half of the spell, then the murmur creeps back
+      s.stun = clamp(stunPeak * smoothstep(0, 0.5, Math.max(0, stunT) / stunLen), 0, 1);
     } else s.stun = follow(s.stun, 0, dt, 0.4);
 
     // ---- valence -----------------------------------------------------------------------
@@ -459,7 +459,8 @@ export function createCrowdModel(): CrowdModel {
         0.1 * Math.max(0, s.valence) -
         0.16 * s.flat +
         0.2 * s.tension +
-        0.3 * s.anticipation * (s.side === 1 ? 0.6 : 1) +
+        // the build-up lifts the house; a held breath takes that lift away again
+        0.22 * s.anticipation * (s.side === 1 ? 0.6 : 1) * (1 - s.hold) +
         0.05 * Math.min(1, (p.ballSpeed || 0) / 25);
     } else if (st === 'shootout') aTarget = EMO.baseShootout + 0.25 * s.anticipation;
     else if (st === 'halftime') aTarget = EMO.baseHalftime;
@@ -589,10 +590,10 @@ export function createCrowdModel(): CrowdModel {
           const imp = curState === 'shootout' ? 0.8 : importance(-d);
           const I = clamp(0.3 + 0.4 * imp + 0.2 * lateNow * imp + (e.lastGasp ? 0.2 : 0), 0.3, 1);
           cue('gasp', 0.5, 0, 0.4);
-          cue('groan', 0.5 + 0.5 * I, 0.14, 1.6 + 1.2 * I);
+          cue('groan', 0.5 + 0.5 * I, 0.25, 1.6 + 1.2 * I);
           cue('awayRoar', 0.4 + 0.6 * I, 0, 3 + 2.5 * I, 0, true);
           stunPeak = 0.6 + 0.4 * I;
-          stunLen = 3 + 4 * I;
+          stunLen = 6 + 8 * I;
           stunT = stunLen;
           arousalKick = 0;
           arousalBase = Math.min(arousalBase, 0.3);
@@ -609,8 +610,8 @@ export function createCrowdModel(): CrowdModel {
         if (e.team === 1) {
           // the away keeper denies the home side
           cue('gasp', 0.4 + 0.5 * q, 0, 0.4);
-          cue('groan', 0.35 + 0.5 * q, 0.15, 1.2 + 0.6 * q);
-          cue('applause', 0.18 + 0.2 * q, 1.1, 2.6);
+          cue('groan', 0.35 + 0.5 * q, 0.25, 1.2 + 0.6 * q);
+          cue('applause', 0.18 + 0.2 * q, 1.6, 2.6);
           kickArousal(0.2 * q + (wasHold ? 0.05 : 0));
           kickValence(-0.04);
         } else {
@@ -625,8 +626,8 @@ export function createCrowdModel(): CrowdModel {
         resolveHold();
         if (e.team === 0) {
           cue('gasp', 0.8, 0, 0.4);
-          cue('groan', 0.7, 0.14, 1.9);
-          cue('applause', 0.25, 1.4, 2.6);
+          cue('groan', 0.7, 0.25, 1.9);
+          cue('applause', 0.25, 1.9, 2.6);
           kickArousal(0.25);
         } else {
           cue('sigh', 0.5, 0.1, 1.1);
@@ -641,7 +642,7 @@ export function createCrowdModel(): CrowdModel {
         const q = clamp((e.speed || 0) / 28, 0.4, 1);
         if (team === 0) {
           cue('gasp', 0.6 + 0.4 * q, 0, 0.45);
-          cue('groan', 0.6 + 0.4 * q, 0.16, 2.2);
+          cue('groan', 0.6 + 0.4 * q, 0.25, 2.2);
           kickArousal(0.3);
         } else {
           cue('gasp', 0.45 + 0.3 * q, 0, 0.4);
@@ -726,9 +727,9 @@ export function createCrowdModel(): CrowdModel {
     const st = curState;
     const playLike = st === 'play' || st === 'celebrate' || st === 'shootout';
     // the menu is heard from outside the ground: quieter as well as duller
-    const level = (0.5 + 1.1 * Math.pow(a, 1.3)) * (1 - 0.5 * s.hold) * (1 - 0.45 * s.stun) * (st === 'menu' ? 0.5 : 1);
+    const level = (0.5 + 1.1 * Math.pow(a, 1.3)) * (1 - 0.6 * s.hold) * (1 - 0.5 * s.stun) * (st === 'menu' ? 0.5 : 1);
     const shoutMix = smoothstep(0.42, 0.9, a);
-    let cutoff = 800 + 3200 * Math.pow(a, 1.2) - 400 * s.flat;
+    let cutoff = 1300 + 4200 * Math.pow(a, 1.2) - 500 * s.flat;
     if (st === 'menu') cutoff = 520;
     else if (st === 'halftime') cutoff = Math.min(cutoff, 1300);
     return {

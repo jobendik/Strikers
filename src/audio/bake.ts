@@ -316,7 +316,7 @@ function clapGrain(L: Float32Array, R: Float32Array, sr: number, t0: number, ran
     const y = x + a1 * y1 + a2 * y2;
     y2 = y1;
     y1 = y;
-    const o = y * (1 - r) * 3 + x * 0.3;
+    const o = y * (1 - r) * 3 + x * 0.45; // resonance of the cupped hands + the raw slap
     let idx = i0 + i;
     if (idx >= len) {
       if (!wrap) break;
@@ -340,7 +340,7 @@ export function bakeApplause(ctx: BaseAudioContext, clappers: number, seconds: n
   const R = new Float32Array(n);
   for (let c = 0; c < clappers; c++) {
     const rate = 2.6 + 2.6 * rand();
-    const fc = 900 + 1700 * rand();
+    const fc = 1100 + 2100 * rand();
     const gain = 0.2 + 0.8 * rand() * rand();
     let t = rand() / rate;
     while (t < seconds) {

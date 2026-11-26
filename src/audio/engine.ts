@@ -163,11 +163,13 @@ export function createEngine(ctx: BaseAudioContext, opts: EngineOpts = {}): Engi
       try {
         const list = model.update(dt, p);
         cues(list);
+        const mix = model.mix();
         mixT += dt;
         if (mixT >= MIX_INTERVAL) {
           mixT = 0;
-          crowd.apply(model.mix());
+          crowd.apply(mix);
         }
+        crowd.idle(dt, mix, p.state !== 'menu');
         mixer.sweep();
       } catch {
         /* ignore */
