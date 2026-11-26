@@ -102,6 +102,7 @@ function setSeg(id: string, value: number): void {
 function applyQuality(): void {
   setReplayEnabled(S.quality !== 'lite');
   applyQualityTier(S.quality);
+  Audio.setQuality(S.quality === 'lite' ? 'lite' : 'full'); // fewer voices / no reverb on the lite tier
 }
 
 /** Reflect the team picker's selection (highlight + the chosen team's name). */

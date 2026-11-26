@@ -1,5 +1,6 @@
 import { TEAMS, teamMeta } from '../config/players';
 import { match } from './state';
+import { setCrowdColors, setScoreboardTeams } from '../rendering/stadium';
 import { returnToMenu, startMatch } from './flow';
 import { refreshTeamTags } from '../ui/hud';
 import { showResultScreen, type ResultScreenData, type ResultStat, type ResultChip, type ResultBar } from '../ui/resultScreen';
@@ -87,6 +88,9 @@ function configureTeams(homeKey: string, awayKey: string): void {
   }
   match.teams[0].mentality = getSettings().mentality; // keep the user's chosen approach
   refreshTeamTags();
+  // dress the stadium for the fixture: supporters in both sets of colours, names on the big screen
+  setCrowdColors(match.teams[0].color, match.teams[1].color);
+  setScoreboardTeams(match.teams[0].short, match.teams[1].short);
 }
 
 /**
