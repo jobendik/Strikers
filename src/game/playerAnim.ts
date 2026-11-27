@@ -46,11 +46,17 @@ const NAMES: AnimName[] = ['idle', 'run', 'sprint', 'kick', 'gkDiveLeft', 'gkDiv
 
 /** Where in each clip the interesting moment sits (fractions of clip duration). */
 export const CLIP_CAL = {
-  /** boot-meets-ball frame of the kick clip */
-  kickContact: 0.4,
-  /** flight segment of the keeper dive clips: take-off → full stretch → landing */
+  /** boot-meets-ball frame of the kick clip (measured from a frame strip: foot reaches the ball at ≈0.47) */
+  kickContact: 0.47,
+  /**
+   * Keeper dive clips, measured from frame strips (fractions of the 3.3 s clip):
+   * 0.08 set · 0.20 push-off · 0.28 airborne · 0.34 full stretch · 0.42 landed ·
+   * 0.46–0.70 on the turf · 0.76 kneeling · 0.92 standing.
+   */
   diveStart: 0.2,
-  diveEnd: 0.5,
+  diveEnd: 0.42,
+  /** the getting-up part of the same clip, played during the keeper's recovery */
+  getUpEnd: 0.93,
   /** phase offsets so run and sprint plant the same foot at stride phase 0 */
   runPhase: 0,
   sprintPhase: 0,
@@ -177,16 +183,26 @@ export function posePlayer(mesh: THREE.Group, v: Float32Array, o: number, dt: nu
   } else if (act === ACT.recover) {
     // getting up: from the floor back to standing over the action
     const k = clamp(actT / Math.max(0.05, actK), 0, 1);
-    const down = 1 - sm(0.25, 1, k);
     if (flags & FLAG.fromDive) {
-      rollT = 0;
-      dropT = 0.35 * down;
-      pitchT = 0.9 * down;
+      // the dive clip carries on: on the turf → to his knees → up
+      const name: AnimName = flags & FLAG.left ? 'gkDiveLeft' : 'gkDiveRight';
+      const clip = A[name].getClip();
+      // linger on the ground, then get up briskly
+      const e = k < 0.25 ? k * 0.3 : 0.075 + ((k - 0.25) / 0.75) * 0.925;
+      A[name].time = clip.duration * (CLIP_CAL.diveEnd + (CLIP_CAL.getUpEnd - CLIP_CAL.diveEnd) * e);
+      const w = 1 - sm(0.85, 1, k);
+      target.idle *= 1 - w;
+      target.run *= 1 - w;
+      target.sprint *= 1 - w;
+      target[name] = w;
+      fade = 30;
+      yaw = av.baseY;
     } else {
+      const down = 1 - sm(0.25, 1, k);
       pitchT = -1.1 * down;
       dropT = 0.5 * down;
+      fade = 7;
     }
-    fade = 7;
   } else if (act === ACT.stumble) {
     pitchT = 0.32;
     fade = 14;
@@ -196,7 +212,7 @@ export function posePlayer(mesh: THREE.Group, v: Float32Array, o: number, dt: nu
     pitchT = k < 0.35 ? -0.22 : 0.3;
     fade = 18;
   }
-  if (act !== ACT.dive) av.baseY = heading;
+  if (act !== ACT.dive && !(act === ACT.recover && flags & FLAG.fromDive)) av.baseY = heading;
 
   // ---------- scrub locomotion by stride phase ----------
   const steps = v[o + PF.Stride];
@@ -224,6 +240,13 @@ export function posePlayer(mesh: THREE.Group, v: Float32Array, o: number, dt: nu
     sum = 1;
   }
   for (const n of NAMES) A[n].setEffectiveWeight(av.w[n] / sum);
+  // Dev hook for calibrating clips: `window.__animDebug = { clip, frac }` freezes the
+  // user-controlled player on one frame of one clip (see docs/ANIMATION_DESIGN.md).
+  const dbg = flags & FLAG.user ? (globalThis as { __animDebug?: { clip: AnimName; frac: number } }).__animDebug : undefined;
+  if (dbg && A[dbg.clip]) {
+    for (const n of NAMES) A[n].setEffectiveWeight(n === dbg.clip ? 1 : 0);
+    A[dbg.clip].time = clamp(dbg.frac, 0, 0.999) * A[dbg.clip].getClip().duration;
+  }
   av.mixer.update(0);
 
   // ---------- procedural layer on the model root ----------

@@ -69,14 +69,30 @@ function loadFBX(url: string): Promise<THREE.Group> {
 }
 
 /**
- * Strip root-bone position tracks from a clip so the character doesn't drift
- * away from its game-driven position during locomotion or action animations.
+ * Remove horizontal root motion from a clip.
+ *
+ * The simulation owns where a player is; a clip must only pose him. These Mixamo
+ * clips move the body two ways: a position track on the hips, and one on the
+ * `Armature` node above the skeleton (the keeper dives travel ~2.5 m sideways on
+ * it; even the "in place" sprint wanders ~0.5 m). Hips translation is dropped
+ * entirely. On the armature track the horizontal components are pinned to their
+ * first key and only the *vertical* motion is kept — so a dive still drops to the
+ * turf and a stride still bobs, but the body can never drift off its simulated
+ * position.
  */
 function stripRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
-  // Mixamo root bone is always named "mixamorig:Hips"
-  clip.tracks = clip.tracks.filter(
-    (t) => !(t.name.toLowerCase().includes('hips') && t.name.endsWith('.position')),
-  );
+  clip.tracks = clip.tracks.filter((t) => !(t.name.toLowerCase().includes('hips') && t.name.endsWith('.position')));
+  for (const t of clip.tracks) {
+    if (!t.name.endsWith('.position')) continue;
+    const v = t.values;
+    if (v.length < 3) continue;
+    const x0 = v[0];
+    const z0 = v[2];
+    for (let i = 0; i < v.length; i += 3) {
+      v[i] = x0;
+      v[i + 2] = z0;
+    }
+  }
   return clip;
 }
 

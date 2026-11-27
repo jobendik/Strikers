@@ -70,6 +70,7 @@ export function snapshotSize(): number {
 
 /** Remember what each player was last doing before 'recover' so the pose can match. */
 const lastAct = new WeakMap<Player, string>();
+const lastLeft = new WeakMap<Player, boolean>();
 
 /** Write the current simulation state into `out`. */
 export function writeSnapshot(out: Float32Array): void {
@@ -110,8 +111,10 @@ export function writeSnapshot(out: Float32Array): void {
       const cross = hx * p.actDirZ - hz * p.actDirX; // >0 ⇒ direction is to his left (x→z handedness)
       if (cross < 0) f |= FLAG.left;
       lastAct.set(p, p.act);
+      lastLeft.set(p, cross < 0);
     } else if (p.act === 'recover') {
       if (lastAct.get(p) === 'dive') f |= FLAG.fromDive;
+      if (lastLeft.get(p)) f |= FLAG.left; // which way he went down — he gets up from that side
     }
     out[o + PF.Flags] = f;
     o += P_STRIDE;
