@@ -61,6 +61,9 @@
     <button class="btn sprint" id="bSprint">»<span>SPRINT</span></button>
   </div>
 
+  <!-- Desktop key hints (shown instead of the touch pad when there is no touchscreen) -->
+  <div id="keyhints"><span><b>WASD</b>MOVE</span><span><b>⇧</b>SPRINT</span><span><b>J</b>PASS / TACKLE</span><span><b>K</b>SHOOT / SLIDE</span><span><b>L</b>THROUGH</span><span><b>I</b>FINESSE</span><span><b>O</b>CHIP</span><span><b>C</b>JOCKEY</span><span><b>␣</b>SWITCH</span><span><b>V</b>CAMERA</span></div>
+
   <!-- Goal FX -->
   <div id="goalFx"><div class="g">GOAL!</div></div>
   <div id="scorerFlash"></div>
@@ -221,13 +224,13 @@
           <div class="seg" id="segHaptics"><button data-v="0">OFF</button><button data-v="1" class="on">ON</button></div>
         </div>
         <div class="opt-row"><div class="label">Graphics</div>
-          <div class="seg" id="segQuality"><button data-v="0">LITE</button><button data-v="1" class="on">HIGH</button></div>
+          <div class="seg" id="segQuality"><button data-v="0">LITE</button><button data-v="1">STANDARD</button><button data-v="2" class="on">HIGH</button><button data-v="3">ULTRA</button></div>
         </div>
         <div class="opt-row"><div class="label">Layout</div>
           <div class="seg" id="segLayout"><button data-v="0" class="on">RIGHT-HAND</button><button data-v="1">LEFT-HAND</button></div>
         </div>
       </div>
-      <div class="sub" style="font-size:12px;opacity:.7">LITE graphics turns off replays and lowers resolution on weaker phones. Left-hand swaps the joystick and buttons.</div>
+      <div class="sub" style="font-size:12px;opacity:.7">LITE turns off replays, shadows and effects for weaker phones; STANDARD suits most phones; HIGH adds bloom and full crowds; ULTRA is for fast desktops. Left-hand swaps the joystick and buttons.</div>
       <button class="cta small" id="btnSettingsDone">DONE ▸</button>
     </div>
   </div>

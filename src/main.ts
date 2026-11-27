@@ -27,6 +27,8 @@ import { initOnboarding } from './ui/onboarding';
 import { initProfileCard, refreshProfileCard } from './ui/profile';
 import { initCrazyGames, loadingStop } from './platform/crazygames';
 import { loadPlayerModels } from './rendering/playerLoader';
+import { initFeedback } from './presentation/feedback';
+import { installDevApi } from './dev/api';
 
 /* ============================================================================
    YUKA STRIKERS — AI Soccer
@@ -78,6 +80,7 @@ for (const id of ['teamPick', 'segMode']) {
   );
 }
 
+initFeedback(); // bus → toasts, goal graphics, haptics, camera kicks
 initRadar();
 initInput();
 window.addEventListener('resize', handleResize);
@@ -103,5 +106,6 @@ void loadPlayerModels().then(() => {
   applySettings();
   refreshTeamTags();
   updateHUD();
+  installDevApi();
   startLoop();
 });

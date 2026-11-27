@@ -1,7 +1,7 @@
 import { Vector3 } from 'yuka';
 import { CFG } from '../config/constants';
 import { V3, clamp, distSq, rand } from '../core/math';
-import { timeBall } from '../entities/Ball';
+import { rollSpeedFor, timeBall } from '../entities/Ball';
 import { ball, oppOf } from '../game/state';
 import type { Player } from '../entities/Player';
 import type { Team } from '../entities/Team';
@@ -75,12 +75,15 @@ export function isPassSafeFromOpp(
   const d2st = distSq(start, target);
   const d2so = distSq(start, opp.position);
   if (d2st < d2so) {
-    if (receiver) return distSq(target, opp.position) > distSq(target, receiver.position);
+    // the opponent is beyond the target: safe only if the receiver clearly gets there first
+    if (receiver) return Math.sqrt(distSq(target, opp.position)) > Math.sqrt(distSq(target, receiver.position)) + 2.4;
     return true;
   }
   const t = timeBall(power, lz);
   if (t < 0) return true;
-  const reach = opp.maxSpeed * t + CFG.ballR + CFG.playerR;
+  // he needs a moment to read it, then covers ground at close to his sprint speed
+  const react = opp.roleType === 'GK' ? 0.12 : 0.2;
+  const reach = opp.ath.sprint * 0.92 * Math.max(0, t - react) + CFG.controlR + 0.25;
   return reach < Math.abs(lx);
 }
 
@@ -91,8 +94,12 @@ export function isPassSafe(
   power: number,
   oppTeam: Team,
   skipGK = false,
+  weighted = true,
 ): boolean {
+  // judge the pass at the pace it will actually be played (weighted to arrive), not flat out
+  if (weighted) power = passWeight(Math.hypot(target.x - start.x, target.z - start.z), power);
   for (const o of oppTeam.players) {
+    if (o.sentOff) continue;
     if (skipGK && o.roleType === 'GK') continue;
     if (!isPassSafeFromOpp(start, target, receiver, o, power)) return false;
   }
@@ -107,7 +114,7 @@ export function canShoot(origin: Vector3, power: number, team: Team, oppTeam: Te
     const z = rand(-hw + CFG.ballR, hw - CFG.ballR);
     const tgt = V3(gX, 0, z);
     if (timeBall(power, Math.hypot(gX - origin.x, z - origin.z)) < 0) continue;
-    if (isPassSafe(origin, tgt, null, power, oppTeam, true)) {
+    if (isPassSafe(origin, tgt, null, power, oppTeam, true, false)) {
       out.copy(tgt);
       return true;
     }
@@ -187,8 +194,9 @@ export function findBestPass(
  * sprays the ball far less than a journeyman.
  */
 export function addNoise(t: Vector3, accuracy = 0.5): void {
-  // floor at 0 so the top tiers (Ultimate/World Class) shoot clean, never negative
-  const n = Math.max(0, 0.78 - CFG.diff * 0.2) * (1.25 - accuracy);
+  // Execution error is now applied to the strike itself (see control.makeKick);
+  // this only adds a small *decision* imprecision to where the AI means to put it.
+  const n = 0.22 * (1.25 - accuracy);
   t.z += rand(-n, n);
   t.x += rand(-n, n) * 0.4;
 }
@@ -200,9 +208,9 @@ export function addNoise(t: Vector3, accuracy = 0.5): void {
  * runner can chase it, clamped to a floor and the caller's budget `maxPow`. A
  * 5-unit pass becomes a crisp ~12 u/s roll instead of a 24 u/s missile.
  */
-export function passWeight(dist: number, maxPow: number): number {
-  const reach = dist * CFG.passOverrun + CFG.passOverMin;
-  const v = Math.sqrt(2 * CFG.ballDecel * reach);
+export function passWeight(dist: number, maxPow: number, arrive = CFG.passArrive): number {
+  // exact inverse of the rolling model: hit it so it is still doing `arrive` m/s on arrival
+  const v = rollSpeedFor(dist, arrive);
   return clamp(v, Math.min(CFG.passMinPow, maxPow), maxPow);
 }
 
@@ -222,14 +230,17 @@ export function findThroughBall(passer: Player, oppTeam: Team): { receiver: Play
     if (m === passer) continue;
     const ahead = (m.position.x - passer.position.x) * team.side;
     if (ahead < -1.5) continue; // only thread it forward
+    // lead the runner: further when he is already moving forward at pace
+    const fwdV = Math.max(0, m.velocity.x * team.side);
+    const lead = 5 + fwdV * 0.6;
     tgt.set(
-      clamp(m.position.x + team.side * 6.5, -CFG.halfL + 3, CFG.halfL - 3),
+      clamp(m.position.x + team.side * lead, -CFG.halfL + 2.5, CFG.halfL - 2.5),
       0,
-      clamp(m.position.z * 0.85, -CFG.halfW + 3, CFG.halfW - 3),
+      clamp(m.position.z * 0.88 + m.velocity.z * 0.4, -CFG.halfW + 3, CFG.halfW - 3),
     );
     if (!isInside(tgt)) continue;
     if (passer.position.distanceTo(m.position) < CFG.minPassDist) continue;
-    if (!isPassSafe(ball.position, tgt, m, CFG.throughPow, oppTeam, true)) continue;
+    if (!isPassSafe(ball.position, tgt, m, passWeight(Math.hypot(tgt.x - ball.position.x, tgt.z - ball.position.z), CFG.throughPow, CFG.passArriveThrough), oppTeam, true, false)) continue;
     const score = -Math.abs(gx - tgt.x) + ahead * 0.6;
     if (score > bestScore) {
       bestScore = score;
@@ -248,18 +259,60 @@ export function findThroughBall(passer: Player, oppTeam: Team): { receiver: Play
 export function canChipKeeper(origin: Vector3, team: Team, oppTeam: Team, out: Vector3): boolean {
   const gk = oppTeam.gk;
   const gx = goalX(team);
-  if (Math.abs(gx - gk.position.x) < 3.5) return false; // keeper still on his line
+  if (Math.abs(gx - gk.position.x) < 4.2) return false; // keeper still near his line
   if ((gk.position.x - origin.x) * team.side <= 0) return false; // keeper not between ball and goal
   const dgoal = Math.abs(gx - origin.x);
-  if (dgoal > 17 || dgoal < 3.5) return false;
-  // aim ~2 units beyond the line so the ball is still dropping (over the keeper,
-  // under the bar) as it crosses the goal line, rather than bottoming out on it.
-  out.set(gx + team.side * 2, 0, clamp(origin.z * 0.3, -(CFG.goalHalf - 0.7), CFG.goalHalf - 0.7));
+  const dkeeper = Math.hypot(gk.position.x - origin.x, gk.position.z - origin.z);
+  if (dgoal > 24 || dgoal < 8 || dkeeper < 3.5) return false;
+  // land it a metre short of the line so it drops under the bar behind him
+  out.set(gx - team.side * 1.0, 0, clamp(origin.z * 0.3, -(CFG.goalHalf - 0.9), CFG.goalHalf - 0.9));
   return true;
 }
 
 /** Snaps a shot target onto the goal line, inside the posts. */
 export function clampShot(t: Vector3, team: Team): void {
   t.x = goalX(team);
-  t.z = clamp(t.z, -(CFG.goalHalf - 0.35), CFG.goalHalf - 0.35);
+  t.z = clamp(t.z, -(CFG.goalHalf - 0.45), CFG.goalHalf - 0.45);
+}
+
+/**
+ * Choose where in the goal mouth to shoot: the reachable point furthest from the
+ * keeper (low corners when he is central, the open side when he is off-centre).
+ * Writes the aim point (x on the goal line, y height, z) into `out` and returns a
+ * 0..1 "openness" score (how much of the goal the keeper leaves uncovered there).
+ * `composure` decides how fine the shooter dares to cut it toward the post/bar.
+ */
+export function pickShotTarget(origin: Vector3, team: Team, oppTeam: Team, composure: number, out: Vector3): number {
+  const gx = goalX(team);
+  const gk = oppTeam.gk;
+  const G = CFG.goalHalf;
+  const margin = 1.15 - 0.5 * composure; // metres inside the post he aims
+  // where the keeper's body would be on the shot line when the ball passes him
+  let best = -1;
+  for (let i = 0; i < 6; i++) {
+    const side = i % 2 === 0 ? -1 : 1;
+    const z = side * (G - margin - (i >= 4 ? 1.1 : 0));
+    const y = i >= 2 && i < 4 ? CFG.crossbarH - 0.8 - 0.3 * (1 - composure) : 0.35;
+    // keeper's lateral offset from the shot line, measured at the keeper's depth
+    const tK = clamp((gk.position.x - origin.x) / (gx - origin.x || 1e-6), 0, 1);
+    const zAtK = origin.z + (z - origin.z) * tK;
+    const off = Math.abs(zAtK - gk.position.z);
+    // high shots are harder to save but harder to hit; low corners are the percentage ball
+    // low into the corner is the percentage finish; going high only pays when the keeper is close and set
+    const dK = Math.hypot(gk.position.x - origin.x, gk.position.z - origin.z);
+    let score = clamp(off / 2.6, 0, 1) + (y > 1 ? (dK < 7 ? 0.1 : -0.08) : 0);
+    // an outfield defender standing on the line of the shot blocks it
+    for (const o of oppTeam.players) {
+      if (o === gk || o.sentOff) continue;
+      const tO = (o.position.x - origin.x) / (gx - origin.x || 1e-6);
+      if (tO <= 0.03 || tO >= 1) continue;
+      const zO = origin.z + (z - origin.z) * tO;
+      if (Math.abs(zO - o.position.z) < 0.7 && (y < 1.2 || tO < 0.25)) score -= 0.6;
+    }
+    if (score > best) {
+      best = score;
+      out.set(gx, y, z);
+    }
+  }
+  return clamp(best, 0, 1);
 }

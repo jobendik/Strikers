@@ -1,11 +1,9 @@
 import { CFG } from '../config/constants';
-import { V3 } from '../core/math';
-import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
-import { ball, match, oppOf } from './state';
-import { setPiece } from './physics';
+import { chance } from '../core/rng';
+import { emit } from '../core/bus';
+import { ball, match, oppOf, teamIndex } from './state';
+import { awardRestart } from './physics';
 import { addStoppage } from './flow';
-import { flashToast } from '../ui/hud';
 import type { Player } from '../entities/Player';
 
 /*
@@ -61,11 +59,10 @@ export function resolveOffside(p: Player): boolean {
     return false;
   }
   pendingOffside = null;
-  Audio.whistle();
-  Haptics.whistle();
   addStoppage(CFG.stoppagePerFoul);
-  setPiece(V3(p.position.x, 0, p.position.z), oppOf(p.team), 'OFFSIDE', false);
-  flashToast(p.team.isUser ? 'OFFSIDE!' : 'FLAG UP — OFFSIDE');
+  emit({ t: 'offside', team: teamIndex(p.team), player: p.name });
+  emit({ t: 'whistle', kind: 'offside' });
+  awardRestart('freekick', p.position.x, p.position.z, oppOf(p.team), p.team.isUser ? 'OFFSIDE!' : 'FLAG UP — OFFSIDE', 0.6);
   return true;
 }
 
@@ -74,22 +71,23 @@ export function resolveOffside(p: Player): boolean {
  * is more likely to be carded; a second yellow — or a rare straight red — sends
  * the offender off, leaving their team a player down for the rest of the match.
  */
-export function foulCard(fouler: Player, reckless: boolean): void {
-  if (!match.simRules || fouler.sentOff) return;
-  if (reckless && Math.random() < 0.06) {
+export function foulCard(fouler: Player, reckless: boolean): 0 | 1 | 2 {
+  if (!match.simRules || fouler.sentOff) return 0;
+  if (reckless && chance(0.06)) {
     sendOff(fouler, true);
-    return;
+    return 2;
   }
   const yellowChance = reckless ? 0.42 : 0.18;
-  if (Math.random() < yellowChance) {
+  if (chance(yellowChance)) {
     fouler.yellows++;
     if (fouler.yellows >= 2) {
       sendOff(fouler, false);
-    } else {
-      Audio.whistle();
-      flashToast(`${fouler.name} BOOKED 🟨`);
+      return 2;
     }
+    emit({ t: 'toast', text: `${fouler.name} BOOKED 🟨` });
+    return 1;
   }
+  return 0;
 }
 
 /** Send a player off: park them off the pitch and take them out of the game. */
@@ -97,12 +95,9 @@ function sendOff(p: Player, straightRed: boolean): void {
   p.sentOff = true;
   p.yellows = 2;
   p.velocity.set(0, 0, 0);
-  p.slide = 0;
-  p.dive = 0;
+  p.clearAction();
   p.mesh.visible = false;
   // park well off the field of play so nothing can pick them as a target
   p.position.set(0, 0, p.team.side * (CFG.halfW + 12));
-  Audio.whistle();
-  Haptics.whistle();
-  flashToast(`${straightRed ? '🟥 RED CARD' : '🟨🟥 SECOND YELLOW'} — ${p.name} OFF`);
+  emit({ t: 'toast', text: `${straightRed ? '🟥 RED CARD' : '🟨🟥 SECOND YELLOW'} — ${p.name} OFF` });
 }

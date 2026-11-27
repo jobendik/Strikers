@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Strikers '26 — a fast arcade soccer game themed around the World Championship 2026, built with Three.js + Yuka.js.",
+  "description": "Strikers '26 \u2014 a browser football game: deterministic 120 Hz simulation, physical ball, Yuka-based AI, Three.js rendering.",
   "license": "MIT",
   "scripts": {
     "dev": "vite",
@@ -11,7 +11,8 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "sim": "vite build -c simtest/vite.config.ts && node simtest/dist/harness.mjs",
-    "test": "esbuild simtest/units.ts --bundle --platform=node --format=esm --outfile=simtest/dist/units.mjs --log-level=error && node simtest/dist/units.mjs"
+    "test": "esbuild simtest/units.ts --bundle --platform=node --format=esm --outfile=simtest/dist/units.mjs --log-level=error && node simtest/dist/units.mjs",
+    "test:browser": "NODE_PATH=$(npm root -g) node simtest/browser/play.cjs"
   },
   "dependencies": {
     "three": "^0.160.0",

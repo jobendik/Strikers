@@ -24,6 +24,10 @@ export interface DiffSetting {
   passSafe: number;
   shootBias: number;
   keeper: number;
+  /** Execution-error multiplier on AI passes and shots. */
+  noise: number;
+  /** Pressing intensity / cohesion 0..1. */
+  press: number;
 }
 
 /** Resolved per-frame input (joystick + keyboard merged). */
@@ -31,6 +35,8 @@ export interface InputState {
   x: number;
   z: number;
   sprint: boolean;
+  /** Jockey / contain modifier (defending) — also shields the ball in possession. */
+  jockey: boolean;
 }
 
 /**

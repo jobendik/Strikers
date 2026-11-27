@@ -1,19 +1,35 @@
 # ⚽ Strikers '26 — World Soccer Championship
 
-A fast, mobile-first 5-a-side arcade football game for the browser, themed around
-the **World Championship 2026**. Pick your nation from a 16-team field and chase
-the trophy through a living tournament, then keep coming back for a deep, **ethical**
-progression loop (all earned in-game — no real money, no tracking). Every player
-on the pitch you don't control is driven by game AI — steering behaviors,
-perception with short-term memory, fuzzy-logic decision making, team state
-machines and **named, attribute-driven players**.
+A 5-a-side football game for the browser, themed around the **World Championship
+2026**, in the middle of a program to become a genuinely next-generation browser
+football game (see [`docs/VISION.md`](docs/VISION.md) and
+[`docs/PROGRESS.md`](docs/PROGRESS.md)).
 
-- **Rendering:** [three.js](https://threejs.org)
-- **Game AI:** [Yuka](https://mugen87.github.io/yuka/) (Vehicle steering,
-  `StateMachine`, `MemorySystem`, `FuzzyModule`, `Regulator`)
-- **Tooling:** [Vite](https://vitejs.dev) + TypeScript, deployed to GitHub Pages
-- **Zero art/audio assets** — the pitch, players, ball and every sound effect are
-  generated procedurally at runtime.
+- **Simulation:** deterministic, fixed 120 Hz, seeded — the same code runs in the
+  browser and in the headless harness (~500× real time).
+- **Ball:** a free physical body at all times — drag, 3-axis spin with Magnus
+  swerve, spin-coupled bounces, woodwork, nets. Nobody "has" the ball; a dribbler
+  keeps it by touching it.
+- **Players:** real proportions and speeds; acceleration, agility, strength and
+  touch derived from each player's ratings; wind-up strikes resolved at contact;
+  timed tackles; keepers who position, read, dive, parry, tip and smother.
+- **AI:** [Yuka](https://mugen87.github.io/yuka/) state machines, perception and
+  fuzzy logic, plus xG-based shooting, interception prediction and a covering
+  defender. Difficulty changes how well the AI thinks — never how fast it runs.
+- **Presentation:** [three.js](https://threejs.org); per-nation kits; a stadium
+  bowl with a 17 000-strong instanced crowd in both teams' colours, LED boards,
+  cloth goal nets, five lighting/weather presets, four graphics tiers; tele
+  broadcast cameras; animated multi-angle replays from recorded play.
+- **Audio:** fully procedural (no audio files): boot, woodwork, net, whistle and a
+  crowd driven by an emotion model of the match.
+- **Tooling:** Vite + TypeScript; seeded balance harness with physics self-tests
+  and keeper scenarios; scripted browser gameplay checks; an in-game dev lab (F2).
+- **Zero downloaded art/audio assets** apart from one Mixamo character rig and
+  seven clips (see [`docs/PLAYER_RENDERING.md`](docs/PLAYER_RENDERING.md) for the
+  licence note). Progression is all earned in-game — no real money, no tracking.
+
+> Status: nobody has human-playtested the rebuilt game yet. Everything claimed in
+> the docs is backed by automated runs or screenshots, and says which.
 
 ### What makes it fun
 
@@ -70,19 +86,24 @@ maps back to the source engines in [`docs/inspiration.md`](docs/inspiration.md).
 
 ## Play
 
-| Action | Touch | Keyboard |
-| --- | --- | --- |
-| Move | Left joystick | `WASD` / Arrows |
-| Shoot (hold = power, tap = place/chip, lean stick = curl) | ⚽ button | `K` |
-| Pass (hold = loft/cross) | ➤ button | `J` |
-| Through-ball | ➤ while flicking joystick forward | `J` + forward |
-| Slide tackle / header (off the ball) | ⚽ button | `K` |
-| Sprint | » button | `Shift` |
-| Knock-on burst | double-tap » | double-tap `Shift` |
-| Switch player | ⇄ button | `Space` |
-| Pause | ⏸ button | `Esc` / `P` |
-| Penalty (take) | aim joystick + ⚽ | aim + `K` |
-| Penalty (keep) | pick a corner + ⚽ | side + `K` |
+| Action | Keyboard | Gamepad | Touch |
+| --- | --- | --- | --- |
+| Move | `WASD` / arrows | left stick | joystick |
+| Sprint (double-tap = knock-on) | `Shift` | RT | » |
+| Pass · hold = lofted / cross · off the ball = tackle | `J` | A | ➤ |
+| Shoot · hold = power + height · off the ball = slide / header | `K` | B | ⚽ |
+| Finesse shot (curled) | `I` | X or RB + B | — |
+| Chip | `O` | LB + B | soft tap when the keeper is out |
+| Through-ball · hold = lobbed | `L` | Y | — |
+| Jockey | `C` / `Ctrl` | LT | — |
+| Switch player (toward the stick) | `Space` | LB / right stick | ⇄ |
+| Camera mode | `V` | Back | — |
+| Pause | `Esc` / `P` | Start | ⏸ |
+| Dev lab overlay | `F2` | — | — |
+
+The stick aims: which side of the goal a shot goes, who a pass is for, where a
+first touch takes the ball. An action pressed just before the ball arrives is
+played first-time. See [`docs/GAMEPLAY_DESIGN.md`](docs/GAMEPLAY_DESIGN.md).
 
 **Tip:** when the keeper rushes out, a *soft tap* of SHOOT dinks the ball over
 him. Hold SHOOT to wind up a screamer.
@@ -148,6 +169,11 @@ npm run dev        # start the Vite dev server (http://localhost:5173)
 npm run build      # typecheck + production build into dist/
 npm run preview    # preview the production build locally
 npm run typecheck  # tsc --noEmit only
+npm run test       # unit tests (progression, economy, saves, crowd-emotion model)
+npm run sim        # headless AI-v-AI balance run + determinism check
+npm run sim -- --physics   # ball-model and aim-solver self-tests
+npm run sim -- --gk        # keeper save-rate scenarios
+npm run test:browser       # scripted gameplay in headless Chromium (needs a dev server)
 npm run sim        # headless AI-vs-AI balance harness (see simtest/)
 npm run test       # headless unit tests for the progression/economy engines
 ```

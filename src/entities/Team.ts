@@ -1,4 +1,5 @@
-import { Regulator, Vector3 } from 'yuka';
+import { Vector3 } from 'yuka';
+import { SimRegulator } from '../core/time';
 import { CFG, FORMATION, MENTALITY } from '../config/constants';
 import { teamMeta } from '../config/players';
 import { V3, clamp, distSq } from '../core/math';
@@ -31,9 +32,9 @@ export class Team {
   spots: Vector3[] = [];
 
   /** Throttles the (relatively expensive) support-spot solver to ~4 Hz. */
-  private supportRegulator = new Regulator(4);
+  private supportRegulator = new SimRegulator(4);
   /** Throttles Buckland-style pass-request scans to keep mobile AI cheap. */
-  private passRequestRegulator = new Regulator(3.5);
+  private passRequestRegulator = new SimRegulator(3.5, 0.5);
 
   constructor(side: number, key: string, isUser: boolean) {
     this.side = side;
@@ -109,8 +110,38 @@ export class Team {
   assignMarks(): void {
     const opp = oppOf(this);
     const markers = this.outfield().filter((p) => p.role === 'POSITION');
-    for (const p of this.players) p.marking = false;
+    for (const p of this.players) {
+      p.marking = false;
+      p.cover = false;
+    }
     const ownGoal = V3(ownGoalX(this), 0, 0);
+    // Danger: the ball is within shooting range of our goal. The best-placed
+    // spare defender leaves his man and gets on the line between ball and goal
+    // (second defender: cover + block), instead of ball-watching beside a runner.
+    const dGoal = Math.hypot(ball.position.x - ownGoal.x, ball.position.z);
+    if (dGoal < 19 && match.controlTeam === opp && markers.length) {
+      const gx = ownGoal.x - ball.position.x;
+      const gz = -ball.position.z;
+      const gl = Math.hypot(gx, gz) || 1;
+      const stand = Math.min(3.2, gl * 0.45);
+      const cx = ball.position.x + (gx / gl) * stand;
+      const cz = ball.position.z + (gz / gl) * stand;
+      let best: Player | null = null;
+      let bd = Infinity;
+      for (const m of markers) {
+        const d = Math.hypot(m.position.x - cx, m.position.z - cz);
+        if (d < bd) {
+          bd = d;
+          best = m;
+        }
+      }
+      if (best) {
+        best.cover = true;
+        best.marking = true;
+        best.markTarget = V3(cx, 0, cz);
+        markers.splice(markers.indexOf(best), 1);
+      }
+    }
     const targets = opp
       .outfield()
       .filter((o) => o.position.x * this.side < 8)
@@ -134,7 +165,7 @@ export class Team {
         const dx = gx - best.position.x;
         const dz = 0 - best.position.z;
         const dl = Math.hypot(dx, dz) || 1;
-        m.markTarget = V3(best.position.x + (dx / dl) * 2.6, 0, best.position.z + (dz / dl) * 2.6);
+        m.markTarget = V3(best.position.x + (dx / dl) * 1.8, 0, best.position.z + (dz / dl) * 1.8);
       }
     }
   }

@@ -1,6 +1,7 @@
 import { CFG } from '../config/constants';
 import { Audio } from '../core/audio';
-import { Haptics } from '../core/haptics';
+import { emit } from '../core/bus';
+import { chance, seedRng } from '../core/rng';
 import { ball, freshStats, match, setPassRequest, setReceiver, teamIndex } from './state';
 import { setControl } from './control';
 import { abortShootout, startShootout } from './penalty';
@@ -9,18 +10,14 @@ import { resetReplayBuffer } from './replay';
 import { gameplayStart, gameplayStop } from '../platform/crazygames';
 import { attackHeading } from '../ai/analysis';
 import type { Player } from '../entities/Player';
-import { addShake, clearTrail } from './render';
+import { clearTrail } from './render';
 import {
-  flashToast,
-  goalCommentary,
   resetCommentary,
   setFullTimeVisible,
   setHalfTimeVisible,
   setMenuVisible,
   setPauseVisible,
   showHalfTime,
-  showGoalFx,
-  showScorerFlash,
   updateHUD,
 } from '../ui/hud';
 
@@ -53,14 +50,20 @@ export function scoreGoal(i: number): void {
   // every goal is on target; if it wasn't a struck shot (walked in / deflected) still
   // count it as one so "on target" can never exceed the shots-taken tally.
   if (!ball.shot) match.stats.shots[i]++;
-  match.stats.onTarget[i]++;
+  if (!ball.savedOnce) match.stats.onTarget[i]++;
   // credit the scorer (last toucher of the scoring team) and, if the prior pass
   // came from a team-mate, the assist — both feed the Man-of-the-Match rating.
   const scorer = ball.lastKicker && teamIndex(ball.lastKicker.team) === i ? ball.lastKicker : null;
+  let assist: string | null = null;
   if (scorer) {
     scorer.statGoals++;
-    if (ball.passer && ball.passer !== scorer && teamIndex(ball.passer.team) === i) ball.passer.statAssists++;
+    if (ball.passer && ball.passer !== scorer && teamIndex(ball.passer.team) === i) {
+      ball.passer.statAssists++;
+      assist = ball.passer.name;
+    }
   }
+  const lastShot = match.shotLog[match.shotLog.length - 1];
+  if (lastShot && lastShot.team === i) lastShot.goal = true;
   // A *big* goal (H2): a do-or-die knockout tie, a last-gasp winner in second-half
   // added time, or a lead-changing strike — these earn a punchier celebration.
   const forGoals = match.score[i];
@@ -69,28 +72,29 @@ export function scoreGoal(i: number): void {
   const leadChanger = forGoals - againstGoals === 1; // just edged in front
   const big = match.settleDraws || lastGasp || leadChanger;
 
-  updateHUD();
-  Audio.whistle();
-  Audio.goal();
-  Audio.roar(true);
-  if (big) setTimeout(() => Audio.roar(true), 260); // a second swell for the big one
-  Haptics.goal();
-  showGoalFx(i);
-  showScorerFlash(scorer ? scorer.name : `${match.teams[i].short} SCORE`, match.teams[i].color, big);
-  addShake(big ? 1.9 : 1.2); // the net ripples — punch the camera (harder for a big goal)
   match.controlPlayer = null;
   match.controlTeam = null;
+  match.restart = null;
+  match.pendingPass = null;
   setReceiver(null);
   setPassRequest(null);
+  for (const t of match.teams) for (const p of t.players) p.queued = null;
   match.state = 'celebrate';
   match.celebrateT = big ? 2.8 : 2.2;
   match.celebrateBallT = big ? CFG.celebrateBallBig : CFG.celebrateBall; // slow-mo net flight
   match.timeScale = big ? CFG.goalSlowmoBig : CFG.goalSlowmo;
   match.scoredBy = i;
   updateAwayMentality(); // the away side re-reads the game after every goal
-  flashToast(scorer ? `${scorer.name} SCORES!` : `${match.teams[i].short} SCORE!`);
-  // broadcast commentary (H1): contextual shout complementing the scorer toast
-  goalCommentary({ forGoals, againstGoals, isUser: match.teams[i].isUser, lastGasp });
+  emit({ t: 'whistle', kind: 'goal' });
+  emit({
+    t: 'goal',
+    team: i as 0 | 1,
+    big,
+    scorer: scorer ? scorer.name : null,
+    assist,
+    score: [match.score[0], match.score[1]],
+    lastGasp,
+  });
 }
 
 /** Reset all entities to their home positions for a restart. */
@@ -106,24 +110,30 @@ export function resetPositions(): void {
       p.heading = attackHeading(t.side);
       p.deact();
       p.pressure = 0;
-      p.slide = 0;
+      p.clearAction();
       p.slideCd = 0;
-      p.dive = 0;
       p.diveCd = 0;
-      p.separation.active = false;
-      p.neighbors.length = 0;
+      p.tackleCd = 0;
+      p.kickCooldown = 0;
+      p.touchCd = 0;
+      p.boost = 0;
+      p.shotSeenT = -1;
+      p.sprinting = false;
       p.mesh.rotation.x = 0;
       p.fsm.currentState = null; // force a fresh state on next tick
     }
   }
-  ball.position.set(0, CFG.ballR, 0);
-  ball.velocity.set(0, 0, 0);
-  ball.spin = 0;
+  ball.place(0, 0);
   ball.lastTouch = null;
   ball.lastKicker = null;
   ball.passer = null;
   setReceiver(null);
   setPassRequest(null);
+  match.restart = null;
+  match.pendingPass = null;
+  match.setPieceT = 0;
+  match.setPieceTaker = null;
+  match.lastPossession = null;
   match.timeScale = 1;
   match.celebrateBallT = 0;
   clearTrail();
@@ -136,7 +146,7 @@ export function kickOff(team: (typeof match.teams)[number]): void {
   // the usual taker is an attacker, but guard against a red card (Sim rules) having
   // removed them — never hand the kickoff to a sent-off (parked, invisible) player
   const taker = team.outfield().find((p) => p.roleType === 'ATT') ?? team.outfield()[0] ?? team.players[3];
-  taker.position.set(team.side * -1.4, 0, 0);
+  taker.position.set(team.side * -CFG.carryDist, 0, 0);
   taker.heading = attackHeading(team.side);
   match.controlPlayer = null;
   match.controlTeam = null;
@@ -144,9 +154,12 @@ export function kickOff(team: (typeof match.teams)[number]): void {
   match.gkHold = 0;
   setControl(taker);
   match.gkHold = 0;
+  match.setPieceT = 1.4;
+  match.setPieceTaker = taker;
   match.state = 'play';
-  Audio.whistle();
-  flashToast('KICK OFF');
+  emit({ t: 'whistle', kind: 'kickoff' });
+  emit({ t: 'setpiece', kind: 'kickoff', team: teamIndex(team), x: 0, y: 0, z: 0 });
+  emit({ t: 'toast', text: 'KICK OFF' });
 }
 
 /**
@@ -161,7 +174,7 @@ export function tickClock(dt: number): void {
       match.timeLeft = 0;
       if (match.stoppageAccrued > 0) {
         match.stoppageLeft = match.stoppageAccrued; // into added time
-        flashToast(`+${Math.ceil(match.stoppageAccrued)}s ADDED`);
+        emit({ t: 'toast', text: `+${Math.ceil(match.stoppageAccrued)}s ADDED` });
       } else endHalf();
     }
   } else if (match.stoppageLeft > 0) {
@@ -183,7 +196,8 @@ function endHalf(): void {
 function halfTime(): void {
   match.state = 'halftime';
   gameplayStop(); // a natural break — pause SDK gameplay reporting (B2)
-  Audio.whistle();
+  emit({ t: 'whistle', kind: 'half' });
+  match.restart = null;
   setReceiver(null);
   setPassRequest(null);
   match.controlPlayer = null;
@@ -226,8 +240,15 @@ function fullStatsLine(): string {
   const s = match.stats;
   return (
     `Poss ${pa}–${pb}%  ·  Shots ${s.shots[0]}–${s.shots[1]} (on target ${s.onTarget[0]}–${s.onTarget[1]})  ·  ` +
+    `xG ${s.xg[0].toFixed(1)}–${s.xg[1].toFixed(1)}  ·  Pass acc ${passPct(0)}–${passPct(1)}%  ·  ` +
     `Tackles ${s.tackles[0]}–${s.tackles[1]}  ·  Saves ${s.saves[0]}–${s.saves[1]}`
   );
+}
+
+/** Pass completion percentage for team `i`. */
+function passPct(i: number): number {
+  const n = match.stats.passes[i];
+  return n > 0 ? Math.round((100 * match.stats.passesDone[i]) / n) : 0;
 }
 
 /** Arcade player rating: a base lifted by end product and defensive work. */
@@ -259,15 +280,15 @@ function motmLine(): string {
 
 /** End the match and show the result card (or a shootout, if a knockout is level). */
 export function fullTime(): void {
+  match.restart = null;
   if (match.score[0] === match.score[1] && match.settleDraws) {
-    Audio.whistle();
+    emit({ t: 'whistle', kind: 'full' });
     startShootout(); // a drawn knockout is settled from the spot
     return;
   }
   match.state = 'fulltime';
   gameplayStop(); // match over (B2)
-  Audio.whistle();
-  setTimeout(() => Audio.whistle(), 220);
+  emit({ t: 'whistle', kind: 'full' });
   presentResult(null, null, fullStatsLine(), motmLine()); // modes owns the card (cup vs one-off)
 }
 
@@ -275,15 +296,18 @@ export function fullTime(): void {
 export function finishShootout(winner: number, penScore: [number, number]): void {
   match.state = 'fulltime';
   gameplayStop(); // match over (B2)
-  Audio.whistle();
   presentResult(winner, penScore, fullStatsLine(), motmLine());
 }
 
 /** Start a fresh match from the menu. */
-export function startMatch(): void {
+export function startMatch(seed?: number): void {
   Audio.resume();
+  // every match runs on its own seeded random stream (reproducible from the seed)
+  match.seed = seed ?? ((Date.now() ^ Math.floor(performance.now() * 1000)) >>> 0 || 1);
+  seedRng(match.seed);
   match.score = [0, 0];
   match.stats = freshStats();
+  match.shotLog = [];
   match.half = 1;
   match.timeLeft = CFG.matchSeconds;
   match.stoppageAccrued = 0;
@@ -292,6 +316,7 @@ export function startMatch(): void {
     for (const p of t.players) {
       p.stamina = 1;
       p.statGoals = p.statAssists = p.statTackles = p.statSaves = 0;
+      p.statShots = p.statPasses = p.statPassesDone = p.statXg = p.statDist = 0;
       p.yellows = 0;
       p.sentOff = false;
       p.mesh.visible = true; // restore anyone dismissed in a previous match
@@ -300,7 +325,7 @@ export function startMatch(): void {
   setFullTimeVisible(false);
   setHalfTimeVisible(false);
   resetCommentary(); // clear any caption left from the previous match (H1)
-  firstHalfKicker = Math.random() < 0.5 ? 0 : 1;
+  firstHalfKicker = chance(0.5) ? 0 : 1;
   updateAwayMentality();
   kickOff(match.teams[firstHalfKicker]);
   updateHUD();

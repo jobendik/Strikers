@@ -1,87 +1,179 @@
-import {
-  ArriveBehavior,
-  MemorySystem,
-  MovingEntity,
-  PursuitBehavior,
-  Regulator,
-  SeekBehavior,
-  SeparationBehavior,
-  StateMachine,
-  Vector3,
-  Vehicle,
-} from 'yuka';
+import { MemorySystem, StateMachine, Vector3, Vehicle } from 'yuka';
 import type { Group } from 'three';
 import { CFG } from '../config/constants';
-import { attrMul, DEFAULT_TEAM, SQUADS } from '../config/players';
+import { DEFAULT_TEAM, SQUADS } from '../config/players';
+import { deriveAthlete, type Athlete } from '../config/attributes';
 import { V3, clamp } from '../core/math';
+import { SimRegulator } from '../core/time';
+import { hashStr } from '../core/rng';
+import type { KickKind } from '../core/bus';
 import { attackHeading } from '../ai/analysis';
 import { PLAYER_STATES } from '../ai/states';
 import { initPerception } from '../ai/perception';
-import { makeModelPlayerMesh } from '../rendering/meshes';
+import { applyPlayerLook, lookSeed, makeModelPlayerMesh } from '../rendering/meshes';
 import type { FormationEntry, PlayerAttributes, PlayerRole, RoleType, SquadPlayer } from '../config/types';
 import type { Team } from './Team';
 
-/** An outfield player or goalkeeper — a Yuka Vehicle driven by steering + an FSM. */
+/** What the body is committed to right now (one at a time). */
+export type ActionKind =
+  | 'none'
+  | 'kick' // wind-up → contact → follow-through
+  | 'header'
+  | 'tackle' // standing tackle lunge
+  | 'slide' // slide tackle
+  | 'dive' // goalkeeper dive
+  | 'recover' // getting up / regaining balance (can't act)
+  | 'stumble'; // knocked off stride (slowed)
+
+/** How the AI/human wants this player to move this tick. */
+export const enum Steer {
+  None = 0,
+  Arrive = 1,
+  Seek = 2,
+  /** Run to where the ball will be (true interception, see game/predict.ts). */
+  Intercept = 3,
+}
+
+/**
+ * A strike that has been decided but not yet made. It is resolved against the
+ * ball's *actual* position at the moment of contact, so the animation, the
+ * physics and the outcome all agree — and a defender can still get a toe in
+ * during the wind-up.
+ */
+export interface KickSpec {
+  kind: KickKind;
+  /** Counts as a pass for stats / assist tracking. */
+  pass: boolean;
+  /** 'ground' rolls it to the target; 'lob' arcs it to land there; 'aim' drives it through a 3-D point. */
+  mode: 'ground' | 'lob' | 'aim';
+  tx: number;
+  ty: number;
+  tz: number;
+  /** Launch speed (m/s). For 'lob' this is ignored (solved from `apex`). */
+  speed: number;
+  /** Apex height (m) for 'lob'. */
+  apex: number;
+  /** Side-spin (rad/s): positive bends the ball to the kicker's right. */
+  curl: number;
+  /** Back-spin (rad/s, positive = back-spin / float; negative = top-spin / dip). */
+  backspin: number;
+  receiver: Player | null;
+  /** A deliberate attempt on goal. */
+  shot: boolean;
+  /** Execution error (degrees, 1 sd) applied at contact. */
+  err: number;
+  /** Was this decided by the human? */
+  human: boolean;
+}
+
+/** An outfield player or goalkeeper. Yuka supplies the FSM + memory; motion is our own model. */
 export class Player extends Vehicle {
   team: Team;
   idx: number;
   entry: FormationEntry;
   roleType: RoleType;
-  baseSpeed!: number; // resolved by applyIdentity() during construction
+  /** Top sprint speed (m/s) — kept under the old name for AI code that reads it. */
+  baseSpeed!: number;
 
-  /** Squad identity + attributes (pace, shooting, passing, tackling, composure). */
+  /** Squad identity + authored ratings. */
   override name: string;
   num: number;
   attr: PlayerAttributes;
+  /** Derived athletic profile (speeds, acceleration, agility, control, strength…). */
+  ath!: Athlete;
 
-  /** Slide-tackle timer: >0 while committed to a slide (cannot steer). */
-  slide = 0;
-  /** Cooldown before this player can slide again. */
+  /* ---- action state ---- */
+  act: ActionKind = 'none';
+  /** Seconds since the action began. */
+  actT = 0;
+  /** Total duration of the action. */
+  actDur = 0;
+  /** Time within the action at which contact happens (kick/tackle). */
+  actContact = 0;
+  /** Has the contact moment been resolved? */
+  actHit = false;
+  /** Direction the action is committed along (unit, planar). */
+  actDirX = 0;
+  actDirZ = 1;
+  /** The strike waiting for contact (kick / header). */
+  kickSpec: KickSpec | null = null;
+  /** A strike requested while the ball was not yet in reach (plays the moment it arrives). */
+  queued: KickSpec | null = null;
+  queuedT = 0;
+
+  /** Cooldowns. */
   slideCd = 0;
-
-  /** Goalkeeper dive timer: >0 while flinging himself at a shot (cannot steer). */
-  dive = 0;
-  /** Cooldown before the keeper can dive again. */
   diveCd = 0;
-  /** Point the keeper is diving toward (predicted shot crossing point). */
+  tackleCd = 0;
+  /** Point + height the keeper is diving toward. */
   diveTarget: Vector3 = V3();
+  diveY = 1;
 
-  /** Knock-on burst timer: >0 grants a brief speed explosion after a knock-on. */
+  /** Knock-on burst timer: >0 grants a brief speed lift chasing a knocked-on ball. */
   boost = 0;
 
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
   isHuman = false;
+  /** The user's player is being played by the AI because the controls have been idle (idle assist). */
+  autopilot = false;
   heading: number;
+  /** >0 for a moment after striking the ball — he can't immediately re-collect his own kick. */
   kickCooldown = 0;
   decideT = 0;
   pressure = 0;
   stamina = 1;
   marking = false;
+  /** Covering defender: get on the ball→goal line in front of the carrier and block the shot. */
+  cover = false;
   markTarget: Vector3 | null = null;
   supportTarget: Vector3 = V3();
+
+  /* ---- locomotion ---- */
+  steer: Steer = Steer.None;
+  steerTarget: Vector3 = V3();
+  /** AI wants to sprint this tick (humans use the sprint button). */
+  wantSprint = false;
+  /** Is the player sprinting right now (for stamina + animation)? */
+  sprinting = false;
+  /** Jockeying: side-on, facing `faceYaw`, slower but quick to shift. */
+  jockey = false;
+  /** If set, the body faces this yaw instead of the direction of travel. */
+  faceYaw: number | null = null;
+  /** Stride phase (cycles), advanced by distance run — drives foot-synced animation. */
+  stride = 0;
+  /** Seconds until the next dribble touch is allowed. */
+  touchCd = 0;
+  /** Sim time he last took possession (how long he has been on the ball). */
+  gotBallT = 0;
+  /** Sim time of the last ball touch by this player. */
+  lastTouchT = -10;
+  /** Reaction clock for the keeper: sim time he first registered the current shot. */
+  shotSeenT = -1;
+  /** Sim time the keeper last set himself big for a close-range block (spread stance). */
+  spreadT = -10;
+  /** This shot's reaction time (s) — varies shot to shot around the keeper's quality. */
+  shotReact = 0.2;
 
   /** Per-match contribution tally — feeds the Man-of-the-Match rating. */
   statGoals = 0;
   statAssists = 0;
   statTackles = 0;
   statSaves = 0;
+  statShots = 0;
+  statPasses = 0;
+  statPassesDone = 0;
+  statXg = 0;
+  statDist = 0;
 
   /** Disciplinary state (Sim rules only): bookings, and whether sent off. */
   yellows = 0;
   sentOff = false;
 
-  // steering behaviors
-  arrive: ArriveBehavior;
-  seek: SeekBehavior;
-  pursuit: PursuitBehavior;
-  /** Group-steering separation that keeps team-mates from clumping (Yuka). */
-  separation: SeparationBehavior;
-
   // AI brain support
   memory: MemorySystem;
-  /** Throttles expensive carrier decision-making (~7 Hz). */
-  decisionRegulator = new Regulator(7);
+  /** Throttles expensive carrier decision-making (~8 Hz, staggered per player). */
+  decisionRegulator: SimRegulator;
   fsm: StateMachine<Player>;
 
   mesh: Group;
@@ -93,37 +185,19 @@ export class Player extends Vehicle {
     this.entry = entry;
     this.roleType = entry.role;
 
-    // identity (name/number/attributes/kit) is resolved by applyIdentity() so it
-    // can be re-applied when the team is re-skinned (team selection / cup ties)
     this.name = '';
     this.num = idx + 1;
     this.attr = { pace: 70, shooting: 70, passing: 70, tackling: 70, composure: 70 };
     this.maxForce = CFG.force;
     this.mass = 1;
-    this.updateOrientation = false; // we drive heading manually for crisp facing
+    this.updateOrientation = false; // we drive heading manually
     this.heading = attackHeading(team.side);
 
     this.mesh = makeModelPlayerMesh(team.color);
     this.applyIdentity();
     this.position.copy(this.homePos());
 
-    this.arrive = new ArriveBehavior(V3(), 2, 0.4);
-    this.arrive.active = false;
-    this.seek = new SeekBehavior(V3());
-    this.seek.active = false;
-    this.pursuit = new PursuitBehavior(null, 1.3);
-    this.pursuit.active = false;
-    // Separation blends *on top of* whichever target behaviour is active, so it
-    // is added last (the SteeringManager prioritises by insertion order — the
-    // move-to-target force is satisfied first, separation nudges with what's
-    // left). Neighbours are populated each frame in movePlayers().
-    this.separation = new SeparationBehavior();
-    this.separation.weight = CFG.spreadWeight;
-    this.separation.active = false;
-    this.steering.add(this.arrive);
-    this.steering.add(this.seek);
-    this.steering.add(this.pursuit);
-    this.steering.add(this.separation);
+    this.decisionRegulator = new SimRegulator(8, (idx * 0.37 + (team.side > 0 ? 0 : 0.5)) % 1);
 
     this.memory = new MemorySystem(this);
     initPerception(this);
@@ -149,14 +223,26 @@ export class Player extends Vehicle {
     this.name = squad.name;
     this.num = squad.num;
     this.attr = squad.attr;
-    // pace scales the base running speed; keepers stay on the GK baseline.
-    const raw = this.roleType === 'GK' ? CFG.spd.gk : CFG.spd.out;
-    this.baseSpeed = this.roleType === 'GK' ? raw : raw * attrMul(this.attr.pace);
+    this.ath = deriveAthlete(this.attr, this.roleType);
+    this.baseSpeed = this.ath.sprint;
     this.maxSpeed = this.baseSpeed;
-    // outfielders wear the kit colour; keepers a distinct keeper kit per side
-    (this.mesh.userData.body as { material: { color: { set(c: string): void } } }).material.color.set(
-      this.roleType === 'GK' ? (this.team.side > 0 ? '#ffd23e' : '#19e0c0') : this.team.color,
-    );
+    // Dress the model: nation kit built around the (clash-resolved) team colour,
+    // a keeper strip that contrasts with both sides, squad number + name, and
+    // per-player skin / hair / boots variety from a stable identity hash.
+    applyPlayerLook(this.mesh, {
+      teamKey: this.team.name,
+      kitColor: this.team.color,
+      isGK: this.roleType === 'GK',
+      side: this.team.side,
+      num: this.num,
+      name: this.name,
+      seed: lookSeed(this.team.name, this.name, this.num),
+    });
+  }
+
+  /** Stable per-identity seed (looks, small behavioural quirks). */
+  identitySeed(): number {
+    return hashStr(`${this.team.name}:${this.name}:${this.num}`);
   }
 
   homePos(): Vector3 {
@@ -168,26 +254,78 @@ export class Player extends Vehicle {
     return V3(clamp(x, -CFG.halfL + 2, CFG.halfL - 2), 0, b.z);
   }
 
-  /** Deactivates every steering behavior. */
+  /* ---- steering intents (consumed by game/movement.ts) ---- */
+
+  /** Stop steering (stand still / hold). */
   deact(): void {
-    this.arrive.active = false;
-    this.seek.active = false;
-    this.pursuit.active = false;
+    this.steer = Steer.None;
+    this.wantSprint = false;
+    this.jockey = false;
+    this.faceYaw = null;
+  }
+  /** Run to a point and settle on it. */
+  goArrive(t: Vector3, sprint = false): void {
+    this.steer = Steer.Arrive;
+    this.steerTarget.copy(t);
+    this.wantSprint = sprint;
+    this.jockey = false;
+    this.faceYaw = null;
+  }
+  /** Run flat-out through a point. */
+  goSeek(t: Vector3): void {
+    this.steer = Steer.Seek;
+    this.steerTarget.copy(t);
+    this.wantSprint = true;
+    this.jockey = false;
+    this.faceYaw = null;
+  }
+  /** Run onto the ball: predictive interception of its flight. */
+  goPursue(_ball?: unknown): void {
+    this.steer = Steer.Intercept;
+    this.wantSprint = true;
+    this.jockey = false;
+    this.faceYaw = null;
+  }
+  /** Shuffle toward a point while staying side-on to `yaw` (defensive jockey). */
+  goJockey(t: Vector3, yaw: number): void {
+    this.steer = Steer.Arrive;
+    this.steerTarget.copy(t);
+    this.wantSprint = false;
+    this.jockey = true;
+    this.faceYaw = yaw;
   }
 
-  goArrive(t: Vector3): void {
-    this.deact();
-    this.arrive.active = true;
-    this.arrive.target.copy(t);
+  /* ---- actions ---- */
+
+  /** Is the body free to start something new? */
+  free(): boolean {
+    return this.act === 'none';
   }
-  goSeek(t: Vector3): void {
-    this.deact();
-    this.seek.active = true;
-    this.seek.target.copy(t);
+  /** Committed to something that stops him playing the ball normally. */
+  busy(): boolean {
+    return this.act === 'slide' || this.act === 'dive' || this.act === 'recover' || this.act === 'tackle' || this.act === 'stumble';
   }
-  goPursue(e: MovingEntity): void {
-    this.deact();
-    this.pursuit.active = true;
-    this.pursuit.evader = e;
+  startAction(kind: ActionKind, dur: number, contact = 0): void {
+    this.act = kind;
+    this.actT = 0;
+    this.actDur = dur;
+    this.actContact = contact;
+    this.actHit = false;
+  }
+  clearAction(): void {
+    this.act = 'none';
+    this.actT = 0;
+    this.actDur = 0;
+    this.actHit = false;
+    this.kickSpec = null;
+    this.queued = null;
+  }
+
+  /** Legacy views used by AI/presentation code: remaining slide / dive time. */
+  get slide(): number {
+    return this.act === 'slide' ? Math.max(0.001, this.actDur - this.actT) : 0;
+  }
+  get dive(): number {
+    return this.act === 'dive' ? Math.max(0.001, this.actDur - this.actT) : 0;
   }
 }

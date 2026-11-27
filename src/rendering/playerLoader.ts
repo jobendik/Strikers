@@ -6,6 +6,7 @@
 
 import * as THREE from 'three';
 import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
+import { buildPlayerRigTemplate, type PlayerRigTemplate } from './playerRig';
 
 // Vite resolves these to hashed URLs at build time thanks to assetsInclude: ['**/*.fbx']
 import modelUrl from '../../3dmodels/players/football_player.fbx?url';
@@ -30,47 +31,12 @@ export const MODEL_HEIGHT = 1.85;
 
 export interface PlayerModelData {
   /**
-   * Normalised template group: scale already adjusted so the character is
-   * MODEL_HEIGHT tall with feet at y = 0, and every material pre-tagged as kit
-   * (tintable) or skin/boots (not tinted). Never add this directly to the scene —
-   * use SkeletonUtils.clone() to produce an independent copy for each player.
+   * The shared rig: one merged + welded character geometry, a 65-joint template
+   * hierarchy and the inverse bind matrices. Use `instantiatePlayerRig()` (see
+   * playerRig.ts) to stamp out a player — never add the template to the scene.
    */
-  template: THREE.Group;
+  rig: PlayerRigTemplate;
   clips: Record<AnimName, THREE.AnimationClip>;
-}
-
-/** True if a material looks like bare skin (so the team colour must NOT tint it). */
-function isSkinMaterial(m: THREE.Material): boolean {
-  if (/skin|body|head|face|hand|arm|leg|flesh|eye|hair|teeth|tongue/i.test(m.name)) return true;
-  // Fall back to a base-colour sniff: skin sits in a warm mid r>g>b band.
-  const col = (m as THREE.MeshStandardMaterial).color;
-  if (col) {
-    const { r, g, b } = col;
-    if (r > 0.35 && r > b && g > b * 0.9 && r - b > 0.08 && r < 0.96) return true;
-  }
-  return false;
-}
-
-/**
- * Tag a material as kit (tintable) or skin, and give it sensible PBR response
- * under the new environment map. Mutates in place; safe to call once per unique
- * material on the template.
- */
-function prepareMaterial(m: THREE.Material, index: number): void {
-  if (!m.name) m.name = `mat${index}`;
-  const std = m as THREE.MeshStandardMaterial;
-  const skin = isSkinMaterial(m);
-  m.userData.tintable = !skin;
-  if (std.isMeshStandardMaterial) {
-    std.envMapIntensity = 0.85;
-    // Skin is fairly matte; kit fabric a touch glossier so the envMap reads.
-    if (std.roughness === undefined || std.roughness === 1) std.roughness = skin ? 0.85 : 0.7;
-    std.metalness = 0;
-    if (std.map) {
-      std.map.colorSpace = THREE.SRGBColorSpace;
-      std.map.anisotropy = 4;
-    }
-  }
 }
 
 /** Per-player animation bookkeeping stored in mesh.userData.animState. */
@@ -103,14 +69,30 @@ function loadFBX(url: string): Promise<THREE.Group> {
 }
 
 /**
- * Strip root-bone position tracks from a clip so the character doesn't drift
- * away from its game-driven position during locomotion or action animations.
+ * Remove horizontal root motion from a clip.
+ *
+ * The simulation owns where a player is; a clip must only pose him. These Mixamo
+ * clips move the body two ways: a position track on the hips, and one on the
+ * `Armature` node above the skeleton (the keeper dives travel ~2.5 m sideways on
+ * it; even the "in place" sprint wanders ~0.5 m). Hips translation is dropped
+ * entirely. On the armature track the horizontal components are pinned to their
+ * first key and only the *vertical* motion is kept — so a dive still drops to the
+ * turf and a stride still bobs, but the body can never drift off its simulated
+ * position.
  */
 function stripRootMotion(clip: THREE.AnimationClip): THREE.AnimationClip {
-  // Mixamo root bone is always named "mixamorig:Hips"
-  clip.tracks = clip.tracks.filter(
-    (t) => !(t.name.toLowerCase().includes('hips') && t.name.endsWith('.position')),
-  );
+  clip.tracks = clip.tracks.filter((t) => !(t.name.toLowerCase().includes('hips') && t.name.endsWith('.position')));
+  for (const t of clip.tracks) {
+    if (!t.name.endsWith('.position')) continue;
+    const v = t.values;
+    if (v.length < 3) continue;
+    const x0 = v[0];
+    const z0 = v[2];
+    for (let i = 0; i < v.length; i += 3) {
+      v[i] = x0;
+      v[i + 2] = z0;
+    }
+  }
   return clip;
 }
 
@@ -131,33 +113,24 @@ export async function loadPlayerModels(): Promise<void> {
       loadFBX(celebrateUrl),
     ]);
 
-  // Enable shadows and prepare every material on the base model. Players now also
-  // RECEIVE shadows (self-shadowing on the limbs/torso) — flat, doll-like shading
-  // was a big part of why the models looked cheap. The cost is small for ~22
-  // low-poly characters and the normalBias on the sun tames the resulting acne.
-  let matIndex = 0;
-  const seen = new Set<THREE.Material>();
+  // Collapse the FBX's seven skinned meshes / seven duplicate skeletons into one
+  // welded mesh on one 65-joint skeleton, scaled so the character stands
+  // MODEL_HEIGHT tall with feet at y = 0. Materials are replaced wholesale by the
+  // procedural player shader (kitMaterials.ts), so the FBX's Phong materials are
+  // discarded here.
+  const fbxMaterials = new Set<THREE.Material>();
   base.traverse((obj) => {
-    if (obj instanceof THREE.Mesh || obj instanceof THREE.SkinnedMesh) {
-      obj.castShadow = true;
-      obj.receiveShadow = true;
-      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-      for (const m of mats) {
-        if (!m || seen.has(m)) continue;
-        seen.add(m);
-        prepareMaterial(m, matIndex++);
-      }
-    }
+    const m = (obj as THREE.Mesh).material;
+    if (m) for (const one of Array.isArray(m) ? m : [m]) fbxMaterials.add(one);
   });
-
-  // Normalise scale: make the character exactly MODEL_HEIGHT tall with feet at y = 0.
-  const rawBox = new THREE.Box3().setFromObject(base);
-  const rawHeight = rawBox.max.y - rawBox.min.y;
-  if (rawHeight > 0) {
-    base.scale.multiplyScalar(MODEL_HEIGHT / rawHeight);
+  const rig = buildPlayerRigTemplate(base, MODEL_HEIGHT);
+  for (const m of fbxMaterials) {
+    // free every FBX texture except the body atlas the player shader still samples
+    for (const v of Object.values(m)) {
+      if (v && (v as THREE.Texture).isTexture && v !== rig.bodyMap) (v as THREE.Texture).dispose();
+    }
+    m.dispose();
   }
-  const scaledBox = new THREE.Box3().setFromObject(base);
-  base.position.y = -scaledBox.min.y; // lift so feet touch y = 0
 
   // Build and name the clip map; strip root motion from every clip.
   const rawClips: [AnimName, THREE.AnimationClip][] = [
@@ -176,5 +149,5 @@ export async function loadPlayerModels(): Promise<void> {
     clips[name] = stripRootMotion(clip);
   }
 
-  _data = { template: base, clips };
+  _data = { rig, clips };
 }

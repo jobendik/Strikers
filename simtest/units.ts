@@ -34,6 +34,8 @@ import { checkAchievements, achievementRows, isComplete, completedCount } from '
 import { activeEvent, EVENTS } from '../src/game/events';
 import { bumpWeeklyScore, weeklyLeaderboard, activityFeed, regionGoal } from '../src/game/rivals';
 import { migratePlayerData, defaultPlayerData } from '../src/core/playerData';
+import { createCrowdModel, EMO, type CrowdCue, type CrowdModel, type PulseLike } from '../src/audio/emotion';
+import type { SimEvent } from '../src/core/bus';
 
 let pass = 0;
 let fail = 0;
@@ -331,6 +333,308 @@ section('playerData migration');
   ok(old.collection.equipped.net === null && old.collection.equipped.title === null, 'new equip slots healed in');
   // garbage in → valid default out (never throws)
   ok(migratePlayerData(null).level === 1 && migratePlayerData('💥' as any).level === 1, 'garbage → default');
+}
+
+// ---- crowd-emotion model (audio; pure — no Web Audio) --------------------------
+section('crowd emotion');
+{
+  const P = (o: Partial<PulseLike> = {}): PulseLike => ({
+    live: true, state: 'play', ballX: 0, ballY: 0, ballZ: 0, ballSpeed: 8, possession: 0,
+    threat: [0, 0], score: [0, 0], timeLeft: 120, half: 1, stoppage: false, halfL: 30, halfW: 20, ...o,
+  });
+  const DT = 1 / 30;
+  const run = (m: CrowdModel, p: PulseLike, secs: number): CrowdCue[] => {
+    const cues: CrowdCue[] = [];
+    for (let i = 0; i < Math.round(secs / DT); i++) cues.push(...m.update(DT, p));
+    return cues;
+  };
+  const kinds = (c: CrowdCue[]): string[] => c.map((x) => x.kind);
+  const at = { x: 20, y: 0, z: 0 };
+  const shot = (team: 0 | 1, xg = 0.35): SimEvent => ({ t: 'shot', team, power: 28, xg, human: team === 0, ...at });
+  const goal = (team: 0 | 1, score: [number, number], lastGasp = false, big = false): SimEvent => ({ t: 'goal', team, big, scorer: null, assist: null, score, lastGasp });
+  /** A model settled into a match situation (kick-off + `secs` of calm play). */
+  const settled = (o: Partial<PulseLike>, secs = 60): [CrowdModel, PulseLike] => {
+    const m = createCrowdModel();
+    const p = P(o);
+    m.update(DT, P({ ...o, timeLeft: 120 })); // the model learns the half length from the first tick
+    run(m, p, secs);
+    return [m, p];
+  };
+
+  // menu: a quiet, bounded resting state
+  {
+    const m = createCrowdModel();
+    const cues = run(m, P({ live: false, state: 'menu', timeLeft: 0 }), 20);
+    near(m.state.arousal, EMO.baseMenu, 'menu arousal rests at its baseline');
+    eq(cues.length, 0, 'menu: no cues');
+    ok(m.mix().level < 0.4 && m.mix().cutoff < 700, 'menu bed is quiet and dull (distant)');
+  }
+
+  // anticipation: fast attack, quick (but slower) release; the attack is not instant either
+  {
+    const [m, p] = settled({});
+    p.threat = [0.9, 0];
+    let rise = 0;
+    while (m.state.anticipation < 0.6 && rise < 5) { m.update(DT, p); rise += DT; }
+    ok(rise > 0.05 && rise < 0.6, `anticipation attacks fast (${rise.toFixed(2)}s to 0.6)`);
+    run(m, p, 2);
+    ok(m.state.anticipation > 0.9 && m.state.side === 0, 'sustained home threat → high anticipation, side = home');
+    p.threat = [0, 0];
+    let fall = 0;
+    while (m.state.anticipation > 0.3 && fall < 5) { m.update(DT, p); fall += DT; }
+    ok(fall > rise && fall < 1.5, `release is quick but slower than the attack (${fall.toFixed(2)}s)`);
+    run(m, p, 4);
+    ok(m.state.anticipation < 0.05, 'anticipation fully released');
+  }
+
+  // held breath: the bed rises with the build-up, then DIPS when the chance is clear
+  {
+    const [m, p] = settled({});
+    const idle = m.mix().level;
+    p.threat = [0.5, 0];
+    run(m, p, 4);
+    const build = m.mix();
+    ok(build.level > idle && build.duck < 0.05, 'build-up (threat 0.5) lifts the bed, no duck');
+    p.threat = [0.95, 0];
+    run(m, p, 3);
+    const clear = m.mix();
+    ok(clear.duck > 0.5, 'clear chance → held breath (duck > 0.5)');
+    ok(clear.level < idle && clear.level < build.level, 'clear chance: bed level falls BELOW idle (not "louder with danger")');
+    ok(clear.ooh > 0.8 && clear.oohRate > build.oohRate, 'the pitched "oooh" swell carries the anticipation instead');
+    // away attack: fear, not glee — far less "oooh"
+    const [m2, p2] = settled({});
+    p2.threat = [0, 0.95];
+    run(m2, p2, 3);
+    ok(m2.state.side === 1 && m2.mix().ooh < clear.ooh * 0.5 && m2.mix().duck > 0.4, 'away chance: hush without the excited swell');
+  }
+
+  // a shot holds the breath until something resolves it
+  {
+    const [m, p] = settled({});
+    const c = m.event(shot(0), p);
+    ok(kinds(c).includes('ooh'), 'home shot → rising "ooh"');
+    run(m, p, 0.3);
+    ok(m.state.hold > 0.5 && m.state.anticipation > 0.8, 'shot in the air: breath held');
+    const s = m.event({ t: 'save', team: 1, parry: true, diving: true, speed: 26, ...at }, p);
+    ok(kinds(s).includes('gasp') && kinds(s).includes('groan') && !kinds(s).includes('roar'), 'away keeper saves → gasp + groan');
+    const groan = s.find((x) => x.kind === 'groan')!;
+    ok(groan.delay > 0.1, 'the groan follows the gasp');
+    run(m, p, 1.5);
+    ok(m.state.hold < 0.1, 'breath released after the save');
+    // unresolved shot: lets go by itself with a sigh
+    const [m3, p3] = settled({});
+    m3.event(shot(0), p3);
+    const later = run(m3, p3, 2.5);
+    ok(kinds(later).includes('sigh') && m3.state.hold < 0.1, 'unresolved shot times out with a sigh');
+    // home keeper saves → cheer + applause
+    const [m4, p4] = settled({});
+    m4.event(shot(1), p4);
+    const hs = m4.event({ t: 'save', team: 0, parry: false, diving: true, speed: 26, ...at }, p4);
+    ok(kinds(hs).includes('cheer') && kinds(hs).includes('applause') && !kinds(hs).includes('groan'), 'home keeper saves → cheer + applause');
+  }
+
+  // goals: context decides the roar
+  {
+    const roarOf = (o: Partial<PulseLike>, e: SimEvent): CrowdCue | undefined => {
+      const [m, p] = settled(o);
+      return m.event(e, p).find((x) => x.kind === 'roar');
+    };
+    const opener = roarOf({ half: 1, timeLeft: 100 }, goal(0, [1, 0]))!;
+    const routine = roarOf({ half: 2, timeLeft: 30, score: [3, 0] }, goal(0, [4, 0]))!;
+    const lateEq = roarOf({ half: 2, timeLeft: 5, score: [0, 1] }, goal(0, [1, 1]))!;
+    const lastGasp = roarOf({ half: 2, timeLeft: 2, score: [1, 1], stoppage: true }, goal(0, [2, 1], true, true))!;
+    const consolation = roarOf({ half: 2, timeLeft: 20, score: [0, 3] }, goal(0, [1, 3]))!;
+    ok(!!opener && !!routine && !!lateEq && !!lastGasp && !!consolation, 'every home goal roars');
+    ok(routine.intensity < opener.intensity && opener.intensity < lateEq.intensity, `4–0 < opener < late equaliser (${routine.intensity.toFixed(2)} < ${opener.intensity.toFixed(2)} < ${lateEq.intensity.toFixed(2)})`);
+    ok(consolation.intensity < opener.intensity, 'a consolation at 0–3 is muted');
+    eq(lastGasp.intensity, 1, 'last-gasp winner is maximal');
+    ok(lateEq.variant === 1 && lastGasp.variant === 1 && opener.variant === 0 && routine.variant === 0, 'only late deciders are delirious');
+    ok(lastGasp.dur > opener.dur + 3 && routine.dur < opener.dur, 'bigger goals roar for longer');
+
+    // home goal aftermath
+    const [m, p] = settled({ half: 2, timeLeft: 5, score: [0, 1] }, 90);
+    ok(m.state.tension > 0.6 && m.state.valence < 0, 'before: 0–1 down late = tense and unhappy');
+    p.score = [1, 1];
+    p.state = 'celebrate';
+    m.event(goal(0, [1, 1]), p);
+    run(m, p, 2);
+    ok(m.state.arousal > 0.8 && m.state.valence > 0.4, 'late equaliser: delirium (arousal > 0.8, valence flips positive)');
+    run(m, p, 2);
+    eq(m.state.mood, 'delirious', 'mood becomes delirious');
+
+    // away goal: groan + away end, then stunned quiet
+    const [a, pa] = settled({ half: 2, timeLeft: 60 });
+    const before = a.mix().level;
+    pa.score = [0, 1];
+    pa.state = 'celebrate';
+    const ac = a.event(goal(1, [0, 1]), pa);
+    ok(!kinds(ac).includes('roar') && kinds(ac).includes('groan') && kinds(ac).includes('gasp'), 'away goal: the home end groans, no roar');
+    const ar = ac.find((x) => x.kind === 'awayRoar');
+    ok(!!ar && ar.away, 'away goal: the away end cheers');
+    run(a, pa, 3);
+    ok(a.state.stun > 0.5 && a.mix().level < before * 0.75, 'conceding stuns the house (bed well below its pre-goal level)');
+    ok(a.state.valence < -0.4, 'valence plunges');
+    pa.state = 'play';
+    run(a, pa, 25);
+    ok(a.state.stun < 0.05, 'the stun wears off');
+  }
+
+  // score + clock context
+  {
+    const [level] = settled({ half: 2, timeLeft: 6, score: [0, 0] }, 120);
+    const [down2] = settled({ half: 2, timeLeft: 6, score: [0, 2] }, 120);
+    const [up2] = settled({ half: 2, timeLeft: 6, score: [2, 0] }, 120);
+    const [early] = settled({ half: 1, timeLeft: 110, score: [0, 0] }, 60);
+    ok(level.state.tension > 0.8 && early.state.tension < 0.3, 'tension: late + level is tense, early is not');
+    eq(level.state.mood, 'nervous', 'late and level → nervous');
+    ok(down2.state.arousal < level.state.arousal - 0.1, '0–2 down late is flatter than 0–0 late');
+    ok(down2.state.valence < -0.4 && down2.state.flat > 0.4 && down2.state.mood === 'flat', '0–2 down late: negative, flat');
+    ok(down2.mix().cutoff < level.mix().cutoff && down2.mix().away > level.mix().away, 'flat house is duller; the away end is heard more');
+    ok(up2.state.valence > 0.4 && up2.state.mood === 'confident', '2–0 up late: confident');
+  }
+
+  // chants: start when calm + willing, die on danger, never flutter
+  {
+    const [m, p] = settled({ half: 2, timeLeft: 80, score: [2, 0] }, 40);
+    let guard = 0;
+    while (!m.state.chanting && guard++ < 3000) m.update(DT, p);
+    ok(m.state.chanting && !m.state.chantAway, 'calm + confident → a home chant starts');
+    ok(m.state.chantTemplate >= 0 && m.state.chantTemplate < EMO.chantTemplates, 'valid template');
+    p.threat = [0, 0.9];
+    const stop = run(m, p, 1.2);
+    ok(kinds(stop).includes('chantStop') && !m.state.chanting, 'danger stops the chant inside ~1 s');
+    // no chant on the menu
+    const idle = createCrowdModel();
+    ok(!kinds(run(idle, P({ live: false, state: 'menu' }), 60)).includes('chantStart'), 'no chants on the menu');
+    // hysteresis: a threat hovering on the thresholds must not make decisions flap
+    const [h, ph] = settled({ half: 2, timeLeft: 80, score: [1, 0] }, 30);
+    let starts = 0;
+    let stops = 0;
+    let moodFlips = 0;
+    let sideFlips = 0;
+    let mood = h.state.mood;
+    let side = h.state.side;
+    for (let i = 0; i < 60 * 30; i++) {
+      const w = 0.04 * Math.sin(i * DT * 19); // fast jitter around the thresholds
+      ph.threat = [0.52 + w, 0.5 - w];
+      for (const q of h.update(DT, ph)) {
+        if (q.kind === 'chantStart') starts++;
+        if (q.kind === 'chantStop') stops++;
+      }
+      if (h.state.mood !== mood) { moodFlips++; mood = h.state.mood; }
+      if (h.state.side !== side) { sideFlips++; side = h.state.side; }
+    }
+    ok(starts + stops <= 6, `chant decisions do not flap (${starts} starts / ${stops} stops in 60 s)`);
+    ok(moodFlips <= 2, `mood does not flutter (${moodFlips} changes in 60 s)`);
+    ok(sideFlips <= 2, `attacking side has hysteresis (${sideFlips} flips)`);
+  }
+
+  // density: real matches emit a turnover every ~3 s and ~100 first touches — the crowd must not react to each
+  {
+    const [m, p] = settled({});
+    const cues: CrowdCue[] = [];
+    for (let i = 0; i < 75; i++) {
+      cues.push(...m.event({ t: 'turnover', team: (i % 2) as 0 | 1 }, p));
+      cues.push(...m.event({ t: 'firstTouch', team: 0, quality: 0.2, human: false, ...at }, p));
+      cues.push(...m.event({ t: 'collide', force: 5, ...at }, p));
+      cues.push(...m.event({ t: 'kick', kind: 'pass', power: 14, team: (i % 2) as 0 | 1, human: false, ...at }, p));
+      cues.push(...run(m, p, 3));
+    }
+    const oneShots = cues.filter((x) => x.kind !== 'chantStart' && x.kind !== 'chantStop');
+    eq(oneShots.length, 0, 'routine midfield play (turnovers, touches, bumps, passes) draws no crowd one-shots');
+    // …and even a burst of dramatic events is rate-limited
+    const [b, pb] = settled({});
+    const burst: CrowdCue[] = [];
+    for (let i = 0; i < 20; i++) {
+      burst.push(...b.event({ t: 'nearmiss', team: 0, ...at }, pb));
+      burst.push(...run(b, pb, 0.1));
+    }
+    const gasps = burst.filter((x) => x.kind === 'gasp').length;
+    ok(gasps >= 1 && gasps <= 3, `20 near misses in 2 s → ${gasps} gasps (rate-limited)`);
+  }
+
+  // fouls, state changes
+  {
+    const [m, p] = settled({});
+    ok(kinds(m.event({ t: 'foul', team: 1, card: 0, player: 'x' }, p)).includes('boo'), 'foul by the away side → boos');
+    const [m2, p2] = settled({});
+    const j = kinds(m2.event({ t: 'foul', team: 0, card: 1, player: 'x' }, p2));
+    ok(j.includes('jeer') && j.includes('boo'), 'home player booked → whistles and boos at the referee');
+    const [m3, p3] = settled({ half: 1, timeLeft: 1 });
+    p3.state = 'halftime';
+    ok(kinds(run(m3, p3, 0.2)).includes('applause'), 'half-time → applause');
+    const [w, pw] = settled({ half: 2, timeLeft: 1, score: [2, 1] });
+    pw.state = 'fulltime';
+    pw.live = false;
+    const wc = kinds(run(w, pw, 0.2));
+    ok(wc.includes('roar') && wc.includes('applause'), 'full time, won → cheer + ovation');
+    const [l, pl] = settled({ half: 2, timeLeft: 1, score: [0, 1] });
+    pl.state = 'fulltime';
+    pl.live = false;
+    const lc = run(l, pl, 0.2);
+    ok(!kinds(lc).includes('roar') && lc.some((x) => x.kind === 'awayRoar' && x.away), 'full time, lost → no home roar; the away end celebrates');
+    run(l, pl, 20);
+    run(w, pw, 20);
+    ok(l.state.arousal < 0.2 && w.state.arousal > l.state.arousal + 0.15, 'a defeat deflates the ground, a win keeps it buzzing');
+    const k = createCrowdModel();
+    run(k, P({ live: false, state: 'menu' }), 1);
+    ok(kinds(run(k, P(), 0.1)).includes('cheer'), 'kick-off → cheer');
+  }
+
+  // determinism + bounded under fuzz
+  {
+    let seed = 12345;
+    const rnd = (): number => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const script: Array<{ e?: SimEvent; p: PulseLike }> = [];
+    const states = ['play', 'play', 'play', 'celebrate', 'halftime', 'shootout', 'fulltime', 'menu'];
+    let cur = P();
+    for (let i = 0; i < 4000; i++) {
+      cur = { ...cur, threat: [rnd(), rnd()], ballSpeed: rnd() * 40, ballX: (rnd() - 0.5) * 60, timeLeft: Math.max(0, cur.timeLeft - DT), stoppage: rnd() < 0.05 };
+      if (rnd() < 0.01) cur = { ...cur, state: states[Math.floor(rnd() * states.length)], live: rnd() < 0.8, half: rnd() < 0.5 ? 1 : 2, timeLeft: rnd() * 120, score: [Math.floor(rnd() * 5), Math.floor(rnd() * 5)] };
+      let e: SimEvent | undefined;
+      const r = rnd();
+      const team = (rnd() < 0.5 ? 0 : 1) as 0 | 1;
+      if (r < 0.03) e = shot(team, rnd());
+      else if (r < 0.04) e = goal(team, [Math.floor(rnd() * 6), Math.floor(rnd() * 6)], rnd() < 0.3, rnd() < 0.3);
+      else if (r < 0.06) e = { t: 'save', team, parry: rnd() < 0.5, diving: rnd() < 0.5, speed: rnd() * 40, ...at };
+      else if (r < 0.07) e = { t: 'nearmiss', team, ...at };
+      else if (r < 0.08) e = { t: 'post', speed: rnd() * 40, bar: rnd() < 0.5, ...at };
+      else if (r < 0.1) e = { t: 'foul', team, card: Math.floor(rnd() * 3) as 0 | 1 | 2, player: 'x' };
+      else if (r < 0.14) e = { t: 'tackle', team, slide: rnd() < 0.5, human: false, ...at };
+      else if (r < 0.2) e = { t: 'turnover', team };
+      else if (r < 0.22) e = { t: 'setpiece', kind: 'corner', team, ...at };
+      else if (r < 0.24) e = { t: 'block', team, speed: 20, ...at };
+      else if (r < 0.26) e = { t: 'offside', team, player: 'x' };
+      else if (r < 0.4) e = { t: 'kick', kind: rnd() < 0.5 ? 'pass' : 'clear', power: 15, team, human: false, ...at };
+      script.push({ e, p: cur });
+    }
+    let bad = 0;
+    const play = (): string => {
+      const m = createCrowdModel();
+      const log: unknown[] = [];
+      for (const st of script) {
+        const cues = [...(st.e ? m.event(st.e, st.p) : []), ...m.update(DT, st.p)];
+        const s = m.state;
+        const mx = m.mix();
+        const nums = [s.arousal, s.valence, s.anticipation, s.tension, s.hold, s.stun, s.flat, s.late, s.progress, ...Object.values(mx), ...cues.flatMap((c) => [c.intensity, c.delay, c.dur, c.variant])];
+        if (nums.some((n) => !Number.isFinite(n))) bad++;
+        if (s.arousal < 0 || s.arousal > 1 || s.valence < -1 || s.valence > 1 || s.anticipation < 0 || s.anticipation > 1 || s.tension < 0 || s.tension > 1 || s.hold < 0 || s.hold > 1 || s.stun < 0 || s.stun > 1) bad++;
+        if (mx.level < 0 || mx.level > 2 || mx.cutoff < 300 || mx.cutoff > 8000 || mx.murmur < 0 || mx.shout < 0 || mx.ooh < 0 || mx.ooh > 1) bad++;
+        if (cues.some((c) => c.intensity < 0 || c.intensity > 1 || c.delay < 0 || c.dur <= 0)) bad++;
+        log.push([s.arousal, s.valence, s.mood, s.chanting, cues.map((c) => c.kind)]);
+      }
+      return JSON.stringify(log);
+    };
+    const a = play();
+    const b = play();
+    eq(bad, 0, 'fuzz (4000 steps, random states + events): state, mix and cues stay finite and in range');
+    ok(a === b, 'deterministic: same inputs → identical outputs (no wall clock, no Math.random)');
+    const g = createCrowdModel();
+    g.update(NaN, P());
+    g.update(-5, P());
+    g.update(1e9, P());
+    ok(Number.isFinite(g.state.arousal) && Number.isFinite(g.state.valence), 'NaN / negative / huge dt are tolerated');
+  }
 }
 
 // ---- report -----------------------------------------------------------------
