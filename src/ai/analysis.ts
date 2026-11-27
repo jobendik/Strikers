@@ -67,13 +67,19 @@ export function isPassSafeFromOpp(
   const fz = dz / L;
   const rx = fz;
   const rz = -fx; // forward + lateral axes
-  const ox = opp.position.x - start.x;
-  const oz = opp.position.z - start.z;
+  let ox = opp.position.x - start.x;
+  let oz = opp.position.z - start.z;
+  const d2so = ox * ox + oz * oz;
+  // a man closing the passer down keeps coming while the ball is struck: judge the
+  // lane against where his run takes him in the next moment, not where he is now
+  if (d2so < 30) {
+    ox += opp.velocity.x * 0.22;
+    oz += opp.velocity.z * 0.22;
+  }
   const lz = ox * fx + oz * fz;
   const lx = ox * rx + oz * rz;
   if (lz < 0) return true; // opponent is behind the ball
   const d2st = distSq(start, target);
-  const d2so = distSq(start, opp.position);
   if (d2st < d2so) {
     // the opponent is beyond the target: safe only if the receiver clearly gets there first
     if (receiver) return Math.sqrt(distSq(target, opp.position)) > Math.sqrt(distSq(target, receiver.position)) + 2.4;

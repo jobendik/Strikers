@@ -30,6 +30,8 @@ export interface SimOptions {
   seed?: number;
   /** Keep the event bus live during the run (default: muted). */
   events?: boolean;
+  /** Called after every tick (diagnostics). */
+  onTick?: () => void;
 }
 
 /** Outcome + balance/correctness metrics for one simulated match. */
@@ -115,6 +117,7 @@ export function simulateMatch(homeKey: string, awayKey: string, opts: SimOptions
       match.teams[1].mentality = 1;
     }
     stepSimulation({ human: false });
+    opts.onTick?.();
     guard++;
 
     if (match.state === 'play') {

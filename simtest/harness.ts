@@ -200,6 +200,28 @@ function diag(n: number): void {
       gkMissInfo = `closest: miss by ${miss.toFixed(2)} m (along ${along.toFixed(2)}) act=${g.act}@${g.actT.toFixed(2)} gk(${g.position.x.toFixed(1)},${g.position.z.toFixed(1)}) ball(${ball.position.x.toFixed(1)},${ball.position.y.toFixed(2)},${ball.position.z.toFixed(1)})`;
     }
   };
+  // pass outcomes by kind / length / pressure
+  const passT: Record<string, { n: number; ok: number; cut: number; cutNear: number; cutFar: number }> = {};
+  let cur: { key: string; x: number; z: number; tx: number; tz: number } | null = null;
+  (globalThis as unknown as { __passDbg: unknown }).__passDbg = (ev: string, a: { position: { x: number; z: number }; team: unknown; pressure: number }, b: { kind?: string; tx?: number; tz?: number; position?: { x: number; z: number }; team?: unknown }) => {
+    if (ev === 'kick') {
+      const d = Math.hypot((b.tx ?? 0) - ball.position.x, (b.tz ?? 0) - ball.position.z);
+      const key = `${b.kind} ${d < 8 ? 'short' : d < 16 ? 'mid' : 'long'}${a.pressure > 0.5 ? ' pressed' : ''}`;
+      cur = { key, x: ball.position.x, z: ball.position.z, tx: b.tx ?? 0, tz: b.tz ?? 0 };
+      (passT[key] ??= { n: 0, ok: 0, cut: 0, cutNear: 0, cutFar: 0 }).n++;
+    } else if (cur && b.position) {
+      const r = passT[cur.key];
+      if (b.team === a.team) r.ok++;
+      else {
+        r.cut++;
+        const fromStart = Math.hypot(b.position.x - cur.x, b.position.z - cur.z);
+        const toEnd = Math.hypot(b.position.x - cur.tx, b.position.z - cur.tz);
+        if (fromStart < 4) r.cutNear++;
+        else if (toEnd < 3.5) r.cutFar++;
+      }
+      cur = null;
+    }
+  };
   const nick = { n: 0, heldLt03: 0, heldLt1: 0, sprint: 0, kicking: 0, stumble: 0, cdSum: 0, slow: 0 };
   (globalThis as unknown as { __nickDbg: unknown }).__nickDbg = (c: { gotBallT: number; sprinting: boolean; act: string; velocity: { x: number; z: number }; queued: unknown }, cd: number) => {
     nick.n++;
@@ -215,10 +237,36 @@ function diag(n: number): void {
   const rs: SimResult[] = [];
   const di = process.argv.indexOf('--diff');
   const dDiff = di > 0 ? Number(process.argv[di + 1]) : 2;
-  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: dDiff, seed: 900 + i, events: true }));
+  // where the side in possession has the ball (thirds of the pitch, toward the goal it attacks)
+  const zone = [0, 0, 0, 0, 0, 0];
+  let zoneN = 0;
+  const lossZone = [0, 0, 0, 0, 0, 0];
+  let lastOwner: unknown = null;
+  let lastOwnerX = 0;
+  const onTick = (): void => {
+    if (match.state !== 'play' || match.restart) return;
+    const t = match.controlTeam;
+    if (t) {
+      const ax = (ball.position.x * t.side + CFG.halfL) / (2 * CFG.halfL);
+      if (simClock.tick % 12 === 0) {
+        zone[Math.min(5, Math.floor(ax * 6))]++;
+        zoneN++;
+      }
+      if (lastOwner && lastOwner !== t) lossZone[Math.min(5, Math.max(0, Math.floor(lastOwnerX * 6)))]++;
+      lastOwner = t;
+      lastOwnerX = ax;
+    }
+  };
+  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: dDiff, seed: 900 + i, events: true, onTick }));
+  console.log('ball position while in possession (own goal → their goal, sixths):', zone.map((v) => `${((100 * v) / zoneN).toFixed(0)}%`).join(' '), ' | possession lost in:', lossZone.map((v) => (v / n).toFixed(1)).join(' '));
   offG();
   offO();
   offK();
+  console.log('passes (kind length [pressed]): n/match  completed%  intercepted% (at source / at the receiver)');
+  for (const [k, r] of Object.entries(passT).sort((x, y) => y[1].n - x[1].n)) {
+    if (r.n / n < 1) continue;
+    console.log(`   ${k.padEnd(24)} ${(r.n / n).toFixed(1).padStart(5)}  ok ${((100 * r.ok) / r.n).toFixed(0).padStart(3)}%  cut ${((100 * r.cut) / r.n).toFixed(0).padStart(3)}% (${((100 * r.cutNear) / r.n).toFixed(0)}% / ${((100 * r.cutFar) / r.n).toFixed(0)}%)  other ${((100 * (r.n - r.ok - r.cut)) / r.n).toFixed(0)}%`);
+  }
   console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));
   console.log('shots by distance (0-5,5-10,…,25+ m):', shotBins.join(' '), ' goals:', goalBins.join(' '));
   for (let b = 0; b < 6; b++) {

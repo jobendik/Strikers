@@ -411,6 +411,7 @@ export function strike(p: Player, spec: KickSpec): void {
     p.statPasses++;
     match.stats.passes[ti]++;
     match.pendingPass = p;
+    (globalThis as { __passDbg?: (ev: string, a: Player, b: Player | KickSpec) => void }).__passDbg?.('kick', p, spec);
   }
   ball.shot = spec.shot;
   if (spec.shot) {
@@ -733,6 +734,7 @@ function resolvePendingPass(by: Player): void {
   const passer = match.pendingPass;
   if (!passer) return;
   match.pendingPass = null;
+  (globalThis as { __passDbg?: (ev: string, a: Player, b: Player | KickSpec) => void }).__passDbg?.('end', passer, by);
   const ti = teamIndex(passer.team);
   if (by.team === passer.team && by !== passer) {
     passer.statPassesDone++;
@@ -967,13 +969,20 @@ export function resolveControl(dt: number): void {
   const by = ball.position.y - CFG.ballR;
   if (by > CFG.chestHeight) return; // only heads up there
 
+  // A ball that has only just been struck cannot be *reacted* to: for the first
+  // tenth of a second an opponent only stops it if it actually hits him; his full
+  // reach (a leg stuck out) comes in over the next fifth. This is what lets a pass
+  // be slipped past a man who is closing down, and a shot beat a defender a yard away.
+  const since = sim.elapsed - ball.lastKickT;
+  const fresh = !c && since < 0.32 ? clamp((since - 0.1) / 0.22, 0, 1) : 1;
   let near: Player | null = null;
   let nd = Infinity;
   for (const t of match.teams)
     for (const p of t.players) {
       if (p === c || p.sentOff || p.busy() || p.kickCooldown > 0 || p.act === 'kick' || p.act === 'header' || p.queued) continue;
       if (protect && p !== protect) continue;
-      const reach = CFG.controlR + (match.receivingPlayer === p ? 0.15 : 0);
+      let reach = CFG.controlR + (match.receivingPlayer === p ? 0.15 : 0);
+      if (fresh < 1 && p.team !== ball.lastTouch) reach = 0.42 + (reach - 0.42) * fresh;
       const d = planarToBall(p);
       if (d < reach && d < nd) {
         nd = d;

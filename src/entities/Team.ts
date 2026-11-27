@@ -157,6 +157,18 @@ export class Team {
    *   out of possession counterPress (just lost it — hunt for a few seconds) · pressHigh ·
    *                     midBlock · lowBlock
    */
+  /**
+   * How direct the side is with the ball right now, 0..1: a counter goes straight
+   * for goal; otherwise the longer a spell of possession lasts without getting
+   * anywhere, the more the side forces the issue (forward passes, running at
+   * defenders, shooting on sight) rather than passing round the block forever.
+   */
+  directness(): number {
+    const age = sim.elapsed - this.wonT;
+    const base = this.tactic === 'counter' ? 0.9 : this.tactic === 'attack' ? 0.35 : 0.15;
+    return clamp(base + clamp((age - 4) / 8, 0, 0.6) + (this.mentality === 2 ? 0.25 : this.mentality === 0 ? -0.1 : 0), 0, 1);
+  }
+
   updateTactic(): void {
     const opp = oppOf(this);
     const side = this.side;

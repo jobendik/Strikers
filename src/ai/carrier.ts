@@ -87,6 +87,15 @@ export function aiCarry(p: Player, _dt: number): void {
   const held = sim.elapsed - p.gotBallT;
   // closed down: someone within ~1.5 m — or within ~2.5 m once he has had a moment on it
   const pressured = press > 0.6 || (press > 0.32 && held > 0.45);
+  // about to be closed down: the nearest man will be on him within a beat
+  let closing = false;
+  if (o && !pressured) {
+    const ox = p.position.x - o.position.x;
+    const oz = p.position.z - o.position.z;
+    const od = Math.hypot(ox, oz) || 1;
+    const rate = ((o.velocity.x - p.velocity.x) * ox + (o.velocity.z - p.velocity.z) * oz) / od;
+    closing = od < 6 && rate > 1.5 && (od - 1.4) / rate < 0.7;
+  }
   const speedNow = Math.hypot(p.velocity.x, p.velocity.z);
   const boxedIn = held > 0.8 && speedNow < 1.8 && !open;
 
@@ -106,7 +115,7 @@ export function aiCarry(p: Player, _dt: number): void {
     const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot);
     const xg = estimateXg(team, ball.position.x, ball.position.z, press) * (0.45 + 0.75 * openness);
     // threshold falls with composure and urgency, rises when protecting a lead
-    let need = 0.115 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve;
+    let need = 0.115 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve - 0.035 * team.directness();
     // fuzzy approval (close + central + unmarked) lowers it; a hopeless angle raises it
     need -= (desire.shoot - 50) / 380;
     // a better pass on (someone calling in a better spot) makes him pickier
@@ -172,7 +181,9 @@ export function aiCarry(p: Player, _dt: number): void {
     // with time on the ball he takes a touch and looks up before moving it on — unless
     // the pass on is a clear chance (a runner in behind, a man free in the box)
     const killer = _opt.utility > keep + bar + 0.25;
-    const release = boxedIn || underPressure || (held > (killer ? 0.3 : 0.9) && better && chance(killer ? 0.6 : 0.3)) || held > 5;
+    // the good passer moves it *before* the challenge arrives, while the lane is open
+    const early = closing && held > 0.25 && _opt.utility > keep - 0.05 && chance(0.25 + 0.5 * A.passing);
+    const release = boxedIn || underPressure || early || (held > (killer ? 0.3 : 0.9) && better && chance(killer ? 0.6 : 0.3)) || held > 5;
     if (release) {
       _tgt.set(_opt.x, 0, _opt.z);
       addNoise(_tgt, A.passing);

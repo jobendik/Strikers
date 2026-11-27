@@ -44,11 +44,14 @@ function score(passer: Player, m: Player, x: number, z: number, dist: number, sp
   let u = 2.4 * threatAt(team, x, z) + 0.5 * clamp(margin, -0.6, 1) - 0.2;
   u -= 0.012 * dist;
   u -= 0.02 * back;
+  // ground gained is worth something in itself — more the more direct the side is being
+  const gain = clamp((x - passer.position.x) * team.side, -6, 18);
+  u += (0.008 + 0.022 * team.directness()) * gain;
   if (dist < 5) u -= 0.4; // a five-yard ball changes nothing
   if (m === match.callingPlayer) u += 0.25; // he has shown for it
   if (m.roleType === 'GK') u -= 0.7;
   // a ball into space is the riskier pass: it has to be weighted, read and won
-  if (space) u += 0.1 * clamp(margin, 0, 1) - 0.18;
+  if (space) u += 0.1 * clamp(margin, 0, 1) - 0.1;
   return u;
 }
 
