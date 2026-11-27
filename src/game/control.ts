@@ -173,7 +173,7 @@ export function makeKick(
   // side-footed finish (the same for the user's charged shots and the AI's)
   if (isShot && kind !== 'chip') {
     const pf = clamp((speed / CFG.shootPow - 0.72) / 0.28, 0, 1.2);
-    err *= 1 + 1.1 * pf * pf;
+    err *= 1 + 0.8 * pf * pf;
   }
   err *= human ? 0.85 : D().noise;
   return {
