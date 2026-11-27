@@ -61,7 +61,35 @@ goals 5 / 33 / 5 / 2 / 2.
   checked frame by frame (set → full stretch → parry → get up).
 - Phone landscape (844×390, touch): boots on the `standard` tier, touch pad shown.
 
+### Balance pass 2 (2026-11-27) — 16 × (2×120 s) per scenario, seeded
+| Scenario | Goals | Shots | On target | Conversion | Pass acc. | Saves |
+| --- | --- | --- | --- | --- | --- | --- |
+| EASY USA v BRA | 0.7–1.1 | 4.3–5.7 | 34 % | 18 % | 91 % | 1.9 |
+| PRO USA v BRA | 0.8–0.9 | 3.6–5.4 | 34 % | 19 % | 90 % | 1.7 |
+| LEGEND USA v BRA | 0.9–0.9 | 3.6–3.7 | 40 % | 25 % | 86 % | 2.1 |
+| ULTIMATE USA v BRA | 0.8–1.4 | 4.3–6.2 | 37 % | 21 % | 85 % | 2.3 |
+| WORLD CLASS USA v BRA | 0.9–1.2 | 4.6–5.6 | 33 % | 20 % | 82 % | 1.5 |
+| PRO BRA v BRA (mirror) | 1.1–1.1 | 3.9–4.9 | 40 % | 25 % | 89 % | 1.8 |
+| PRO ARG v FRA | 0.9–1.0 | 4.1–5.1 | 32 % | 21 % | 88 % | 1.3 |
+| PRO NOR v SEN | 1.0–1.5 | 4.6–4.4 | 40 % | 28 % | 88 % | 1.9 |
+| LEGEND GER v ENG | 0.8–0.8 | 3.3–3.1 | 44 % | 26 % | 87 % | 1.6 |
+
+What the new diagnostics showed before the fixes (WORLD CLASS, 8 matches): 35 shots
+from inside 5 m with the nearest defender 7 m away and the keeper 1 m from the ball —
+almost all taken 0.1–0.3 s after the *keeper's own* pass or clearance from his feet;
+61 headers a match, 57 of them straight after another header; 75 % of passes played
+with a defender inside 1.8 m, a quarter of those cut out within 4 m of the passer.
+After: headers ≈ 15 a match, pressed mid-range passes complete 85–89 %.
+
+AI observation (one seeded sequence, five stills): the keeper holds the ball, the
+nearest forward backs off to the edge of the box, the throw reaches a team-mate.
+
 ### Open observations
+- **Now too few chances rather than too many:** 6–10 shots and ≈ 2 goals per 4-minute
+  match; the side in possession has the ball in the final third only ≈ 14 % of the
+  time. The next lever is attacking play (runs in behind, combination play, taking
+  players on), not finishing or keeping.
+- _Superseded by balance pass 2 — the three points below describe the state before it:_
 - Conversion is still above target at the higher difficulties (44–49 %) and most
   shots still come from 5–10 m; `--gk` still shows a cliff between "unsaveable"
   (precise 11 m corner) and "almost always saved" (16 m+).

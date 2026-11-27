@@ -42,6 +42,15 @@ the bar, quadratic). Stick lateral = which side of the goal; idle = away from th
 keeper. Finesse: 78 % pace, strong curl away from the keeper, lower error.
 Chip: lob landing a metre short of the line. Airborne ball = volley (harder).
 
+**Power costs accuracy.** Up to ≈ 72 % of full pace a shot is as accurate as the
+player's skill allows; beyond that the spread grows quadratically, to roughly double
+at full power (`control.makeKick`). A placed finish close in, power from range — the
+same rule for the user's charge and for the AI.
+
+**Reaction time on interceptions.** For the first 0.1 s after any strike an opponent
+only stops the ball if it actually hits him (0.42 m); his full reach returns over the
+next 0.22 s. A pass can be slipped past a man who is closing down — for both sides.
+
 ## Not built yet (see MASTER_PLAN)
 
 Remapping UI and dead-zone setting UI, skill moves, shielding as an explicit

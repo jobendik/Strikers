@@ -1,11 +1,13 @@
 # Progress — exact current state
 
-_Last updated: session 1 (2026-11-26)._
+_Last updated: session 1, continued (2026-11-27)._
 
 ## Where things are
 
-Branch `claude/zealous-ritchie-lvr8qi`, draft PR jobendik/Strikers#21. Everything
-below is merged there and passes all gates.
+jobendik/Strikers#21 (everything up to the idle assist) was **merged to `main`** on
+2026-11-27. Work since then — settings, pitch control, tactical states, balance pass 2,
+passing realism — is on branch `claude/zealous-ritchie-lvr8qi` (with `main` merged in)
+in a follow-up PR. Everything below passes all gates.
 
 - Simulation core v2 (fixed step, seeded, physical ball, touch possession, strikes,
   tackles, keepers, locomotion), AI adapted to it.
@@ -21,6 +23,10 @@ below is merged there and passes all gates.
   utility decision; team tactical states (build-up / attack / counter / counter-press /
   high press / mid block / low block) with a line of engagement, compact block and
   lane-denial marking — see `FOOTBALL_AI.md`.
+- Balance pass 2: keeper distribution from the hands, landed headers, power-vs-accuracy
+  shooting, reaction time on interceptions, realistic dive timing, team directness.
+  Scoring fell from 5–8 goals to ≈ 2 per 4-minute match with 82–91 % pass completion
+  at every tier — see `PLAYTEST_REPORT.md`.
 
 The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
 under `.claude/worktrees/` can be deleted.
@@ -36,17 +42,19 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
    Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
-2. **Balance (PLAY-03 / GK-01):** ≈ 4.5 goals / 4 min and 30–34 % conversion at PRO,
-   but ≈ 8 goals at Ultimate / World Class (sharper finishing for both sides); ~60 % of shots come from 5–10 m; `--gk` shows a cliff between an
-   unsaveable precise 11 m corner and near-certain saves from 16 m+. Next levers:
-   more shots from range (AI shot selection), defenders blocking more, keeper
-   reaction variance. Passing is too quick (≈ 120 passes / 4 min) — make carriers
-   take players on and hold the ball. Use `--diag` and `--gk` after each change.
+2. **Attacking play (PLAY-03 / AI-02 / AI-04):** finishing, keeping and passing are
+   now believable, but chances are scarce — 6–10 shots and ≈ 2 goals per 4 minutes, the
+   ball in the final third only ≈ 14 % of possession. Work on *creating* chances:
+   runs in behind and across the line, wall passes / third-man, overlaps, carriers
+   running at a defender when the cover is thin, crosses to near/far post. Do not
+   buy goals by weakening keepers or sharpening finishing. Tools:
+   `npm run sim -- 8 120 --diag --diff 1` (shot context by distance, pass table,
+   possession zones), `--close` (traces point-blank chances), `--gk`.
 3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
    (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
-4. **Milestone 3 — continue:** watch the new defending and tactical states *in motion*
-   (nobody has — only statistics); use pitch control for the dribble direction and
+4. **Milestone 3 — continue:** watch the defending and tactical states as continuous
+   play (only stills and statistics so far); use pitch control for the dribble direction and
    for defensive cover; give in-possession states real differences (patient build-up
    vs direct); structured runs (overlap, third man, near/far post); per-nation
    tactical identities. Draw pass lanes + defensive assignments in the lab.
@@ -60,7 +68,12 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 ## Known issues
 
 - No human playtest; no real-GPU or real-phone measurements; nobody has heard the audio.
-- Finishing still too clinical at the top difficulties; passing too quick (see above).
+- Too few chances: ≈ 2 goals and 6–10 shots per 4-minute AI-v-AI match; on-target share
+  (32–44 %) and shot count are below the targets in `QUALITY_STANDARD.md`.
+- The keeper's throw has no animation (the ball simply leaves his hands); a user-controlled
+  player is not made to give the keeper room (only the throw's lane check protects it).
+- The scripted 11 m corner shot in `--gk` is never saved (that scenario has no wind-up
+  for the keeper to anticipate) — in matches 10–15 m shots are saved 36–42 %.
 - Idle assist (`match.assistIdle`): after 1.6 s with the controls untouched the AI plays
   the user's man until input resumes — on by default, no settings toggle yet.
 - One shared face / no hair geometry on players; crowd cards look flat in close

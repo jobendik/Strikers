@@ -26,7 +26,7 @@ Milestones are not silos; each must leave a playable, better game.
 | MOVE-01 | Players have weight but respond | Acceleration/brake/grip/turn-rate body model shared by human and AI | PART | A: runs, distances plausible (≈1.2 km / 4 min). H: responsiveness untested by a human |
 | MOVE-02 | Players feel different | Derived athletic profile from ratings drives speed/accel/agility/control/strength | PART | A: values differ per player; no test that shows a winger out-turning a centre-half yet |
 | MOVE-03 | Contact matters | Strength-weighted body contact, stumbles | PART | A: `collide` events ≈ 50/match. No shielding action |
-| GK-01 | Keepers make believable saves and mistakes | Reaction, reading error, finite dive, catch/parry/tip/spill/smother | PART | A: `--gk` table, goal tracers (fixed over-rushing, near-post shade, slow hands). Still a cliff between "no chance" (precise 11 m corner) and "almost always saved" (16 m+); conversion 33 % at PRO, 44–49 % at the top tiers |
+| GK-01 | Keepers make believable saves and mistakes | Reaction, reading error, finite dive, catch/parry/tip/spill/smother | PART | A: `--gk` table — low corner from 16 m is now saved 38 / 63 / 85 % at EASY / LEGEND / WORLD CLASS (was 76 / 97 / 98 %), 22 m 95–100 %; a set keeper stops 30–48 % of a 6 m finish (was 95–100 %). Distribution is from the hands (throw / punt) with opponents kept 10 m off. The scripted 11 m corner is still never saved (no wind-up to anticipate in that scenario). H: untested |
 | DEF-01 | Winning the ball is a skill | Geometric tackles/slides, fouls for man-first | PART | A: tackles ≈ 14–20/match, fouls ≈ 1/match. H: timing feel untested |
 | CTRL-01 | Gamepad is first-class | Standard-mapping pad plays everything, dead zone handled | PART | A: browser run with a *mocked* standard pad (move, sprint, pass, shoot, shoot-out). No physical controller tested; no remap/dead-zone UI |
 | CTRL-02 | First-time play | Buffered kick requests resolve as the ball arrives | PART | A: AI first-time finishes occur; human path exercised only by script |
@@ -44,7 +44,7 @@ Milestones are not silos; each must leave a playable, better game.
 | ANIM-04 | Leg IK to the ball, upper-body layers | TODO | |
 | PLAY-01 | Shielding, skill moves, player-triggered runs | TODO | |
 | PLAY-02 | Proper set pieces (throw-ins, corners, free kicks with walls) | TODO | currently quick restarts |
-| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | PRO now ≈ 4.5 goals / 4 min, 13–15 shots, 46–51 % on target, 30–34 % conversion, 76–77 % pass accuracy (baseline ≈ 11.5 goals, 96 %). Top tiers score ≈ 8 |
+| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | A (16 seeds/tier, 2×2 min): 1.6–2.5 goals, 6–10 shots, 32–44 % on target, 18–28 % conversion, 82–91 % pass completion at **every** tier; goals ≈ 1.3× xG (baseline ≈ 11.5 goals, 96 % on target; before balance pass 2: 5–8 goals, half of them gifts from keeper distribution). Shot volume and on-target share are now *below* target — the attack rarely gets into the final third (≈ 14 % of possession) |
 | PLAY-04 | Practice arena | TODO | |
 
 ## M3 — Football intelligence
@@ -53,9 +53,9 @@ Milestones are not silos; each must leave a playable, better game.
 | --- | --- | --- | --- |
 | AI-01 | A shared spatial picture: who controls which grass | DONE | A: `pitchControl.ts`, deterministic (harness hash check); O: lab overlay |
 | AI-02 | Team-mates run into space the team can win, not to fixed spots | PART | A: support from pitch control; pass completion +4–5 pts. No overlaps / third-man / near-far-post patterns yet |
-| AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts`; ≈ 145 passes / 4 min at 76–77 % completion. Still quick; not human-reviewed for "looks like football" |
-| AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold; conversion still above target at top tiers |
-| AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | PART | A: line of engagement (press vs contain), second presser, ball-oriented compact block, lane-denial marking, cover defender. No offside line, no pressing traps; not visually reviewed in motion |
+| AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts` with ground gained and team directness; carriers release before a closing defender arrives; ≈ 135 passes / 4 min at 82–91 % completion (`--diag` pass table by kind / length / pressure). Not human-reviewed for "looks like football" |
+| AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold, lowered by team directness; placement close in, power from range; conversion 18–28 % at every tier. Only 6–10 shots a match |
+| AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | PART | A: line of engagement (press vs contain), second presser, ball-oriented compact block, lane-denial marking, cover defender. No offside line, no pressing traps; O: four stills of one sequence reviewed with the lab overlay (compact low block, sensible control field) — not watched as continuous play |
 | AI-06 | Team tactical states (build-up, press, mid/low block, transitions, counter) | PART | A: seven states with measured time shares (harness `--diag`), shown in the lab. Rule-based; in-possession states change little yet beyond the counter |
 | AI-07 | Tactical identities per nation; opponent adaptation | TODO | only score-reactive mentality |
 | AI-08 | Football Intelligence Lab | PART | O: control field, intents, interception points, live keep/pass utilities. Missing: pass lanes, defensive assignments, decision history |

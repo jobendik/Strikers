@@ -32,6 +32,23 @@
 - Team tactical states with a line of engagement, second presser, compact
   ball-oriented block, lane-denial marking and counter-attacks.
 - Dev lab: pitch-control field, live decision utilities, team tactic.
+- Team directness: a spell of possession that goes nowhere turns more direct
+  (forward passes, shooting); carriers move the ball before a closing defender arrives.
+
+### Balance pass 2 (found with new `--diag` tables)
+- Keeper distributes from his hands (throw to an open team-mate, else a punt);
+  opponents give him ten metres. Previously he put it at his feet and a forward a
+  metre away scored — about half of all goals.
+- Headers are headed down to land (no more 60-header rallies); unpressured players
+  bring the ball down; headers at goal only from close in.
+- Shot power costs accuracy for user and AI; AI places close finishes.
+- A freshly struck ball cannot be reacted to for a tenth of a second (only body
+  contact stops it) — passes can be slipped past a closing defender.
+- Keeper dive takes a realistic time to full stretch; spread stance is not a wall;
+  fingertip saves deflect more; high balls are taken standing.
+- Shot/pass execution noise compressed across difficulty tiers; dead knobs removed.
+- Harness: `--diag --diff N`, per-distance shot context (marking, keeper position,
+  outcome), pass outcomes by kind/length/pressure, possession zones, `--close`.
 
 ### Settings
 - Camera rig, match conditions, assistance level, crowd/effects volume.

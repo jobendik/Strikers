@@ -91,12 +91,30 @@ Mirror matches are balanced over 30 seeded games (2.20–2.13 goals, 9–9–12)
 
 ## Difficulty
 
-`DIFF`: reaction lag, execution-noise multiplier, keeper quality, pressing
-cohesion, work-rate. **No speed boosts, no altered duel odds.**
+`DIFF`: tackle-timing lag, execution-noise multiplier (1.6 → 0.95, deliberately a
+narrow band), keeper quality, pressing cohesion, work-rate. **No speed boosts, no
+altered duel odds.** Top tiers press high only with the ball pinned in the final third.
+
+## Directness and releasing the ball
+
+`Team.directness()` (0..1): 0.9 on a counter, 0.35 in attack, 0.15 in build-up, plus
+up to 0.6 as a spell of possession passes 4 → 12 s without a shot or turnover. It
+adds value to ground gained in the pass utility and lowers the shot threshold, so a
+side stops passing round a set block. A carrier who sees a defender closing (on him
+within 0.7 s) moves the ball before the challenge if a pass is not worse than keeping
+it. Pass-lane safety projects a closing defender's run forward.
+
+## Keeper distribution and headers
+
+With the ball in his hands the keeper throws to a team-mate with 4.5 m of room and
+no body in the first metres of the lane or under the landing point (the throw lands
+short and reaches feet on the bounce), else punts; opposing AI players drop 10 m off
+while he holds it. Headers: at goal inside 9.5 m; unpressured the ball is brought
+down; otherwise nodded to a team-mate or cleared — always headed *down* to land.
 
 ## Measured behaviour (AI v AI, 10 matches/scenario, 2×120 s, seeded)
 
-See `PROGRESS.md` for the current table. Mirror matches are balanced (≈50 %
+See `PLAYTEST_REPORT.md` for the current table. Mirror matches are balanced (≈50 %
 possession; no home/away bias beyond noise).
 
 ## Gaps (Milestone 3)
