@@ -75,7 +75,13 @@ class PositionState extends State<Player> {
       return;
     }
     if (!p.team.inAttack && p.marking && p.markTarget) {
-      h = V3(lerp(h.x, p.markTarget.x, 0.6), 0, lerp(h.z, p.markTarget.z, 0.6));
+      const w = p.markTight;
+      h = V3(lerp(h.x, p.markTarget.x, w), 0, lerp(h.z, p.markTarget.z, w));
+      if (w > 0.85) {
+        // a man to pick up in front of our goal: stay with him, whatever the shape says
+        p.goArrive(h, Math.hypot(h.x - p.position.x, h.z - p.position.z) > 2.5);
+        return;
+      }
     } else if (!p.team.inAttack) {
       // slide laterally toward where the ball is perceived to be
       h.z = lerp(h.z, clamp(perceivedBallPos(p).z, -CFG.halfW + 3, CFG.halfW - 3), 0.25);
@@ -181,7 +187,7 @@ class SupportState extends State<Player> {
     if (canHead(p) && aiHeader(p)) return;
     const far = Math.hypot(p.supportTarget.x - p.position.x, p.supportTarget.z - p.position.z) > 5;
     // on the counter everyone breaks at full pace; otherwise only the man showing for it sprints
-    p.goArrive(p.supportTarget, far && (p === match.callingPlayer || p.team.tactic === 'counter'));
+    p.goArrive(p.supportTarget, far && (p === match.callingPlayer || p.team.tactic === 'counter' || sim.elapsed < p.burstT));
   }
 }
 

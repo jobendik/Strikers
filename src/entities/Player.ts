@@ -127,6 +127,8 @@ export class Player extends Vehicle {
   /** Covering defender: get on the ball→goal line in front of the carrier and block the shot. */
   cover = false;
   markTarget: Vector3 | null = null;
+  /** How tightly he sticks to his man, 0.6 (zonal, loose) .. 1 (touch-tight in front of goal). */
+  markTight = 0.6;
   supportTarget: Vector3 = V3();
 
   /* ---- locomotion ---- */
@@ -150,6 +152,8 @@ export class Player extends Vehicle {
   lastTouchT = -10;
   /** Reaction clock for the keeper: sim time he first registered the current shot. */
   shotSeenT = -1;
+  /** Sprint on his support run until this sim time (pass-and-move, box runs). */
+  burstT = -9;
   /** Keeper: when a shot last got past his outstretched limbs (so he isn't re-tested every tick). */
   beatenT = -9;
   /** Sim time the keeper last set himself big for a close-range block (spread stance). */

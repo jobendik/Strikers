@@ -143,6 +143,20 @@ function diag(n: number): void {
     }
     const b = Math.min(5, Math.floor(lastShotD / 5));
     shotBins[b]++;
+    {
+      // how was this chance made? the shooting side's last real kick before it
+      const mine = lastKickTeam === (p.team.side > 0 ? 0 : 1);
+      const ago = simClock.elapsed - lastKickT;
+      const held = simClock.elapsed - (p as unknown as { gotBallT: number }).gotBallT;
+      const firstTime = match.controlPlayer !== (p as unknown);
+      let how: string;
+      if (sp.kind === 'header') how = mine && ago < 3 ? `header from ${lastKickKind}` : 'header (loose)';
+      else if (!mine && ago < 2.5) how = 'rebound / loose ball';
+      else if (mine && ago < 4) how = `${lastKickKind}${firstTime ? ' → first-time' : held > 2.2 ? ' → carry' : ' → touch + shot'}`;
+      else how = 'solo carry';
+      shotHow[how] = (shotHow[how] ?? 0) + 1;
+      shotHowTotal++;
+    }
     if (b === 0 && process.argv.includes('--close')) {
       const q = p as unknown as { gotBallT: number; name: string; roleType: string };
       const defT = match.teams[p.team.side > 0 ? 1 : 0];
@@ -204,6 +218,8 @@ function diag(n: number): void {
       lastKickTeam = e.team;
     }
   });
+  const shotHow: Record<string, number> = {};
+  let shotHowTotal = 0;
   let gkMiss = 99;
   let gkMissInfo = '';
   (globalThis as unknown as { __gkDbg: unknown }).__gkDbg = (g: { act: string; actT: number; position: { x: number; z: number } }, miss: number, along: number) => {
@@ -319,6 +335,7 @@ function diag(n: number): void {
     if (r.n / n < 1) continue;
     console.log(`   ${k.padEnd(24)} ${(r.n / n).toFixed(1).padStart(5)}  ok ${((100 * r.ok) / r.n).toFixed(0).padStart(3)}%  cut ${((100 * r.cut) / r.n).toFixed(0).padStart(3)}% (${((100 * r.cutNear) / r.n).toFixed(0)}% / ${((100 * r.cutFar) / r.n).toFixed(0)}%)  other ${((100 * (r.n - r.ok - r.cut)) / r.n).toFixed(0)}%`);
   }
+  console.log('chances made by:', Object.entries(shotHow).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / shotHowTotal).toFixed(0)}%`).join('  '));
   console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));
   console.log('shots by distance (0-5,5-10,…,25+ m):', shotBins.join(' '), ' goals:', goalBins.join(' '));
   for (let b = 0; b < 6; b++) {

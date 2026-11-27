@@ -104,6 +104,17 @@ side stops passing round a set block. A carrier who sees a defender closing (on 
 within 0.7 s) moves the ball before the challenge if a pass is not worse than keeping
 it. Pass-lane safety projects a closing defender's run forward.
 
+## Possession while the ball is in flight, pass and move, marking
+
+`Team.inAttack` stays true while a pass of ours is on its way to one of our players
+(the receiver stands in as the carrier for support runs). The passer (`ball.passer`,
+for 2.6 s) runs ≈ 11 m on past his marker — never the last man, not in build-up, held
+on the second-last defender under sim rules — and is worth +0.15 as a return ball.
+Defending, attackers are picked up most-dangerous-first by the nearest free defender,
+who aims 0.35 s ahead of the run; `Player.markTight` rises from 0.6 (zonal blend with
+his formation spot) to 1.0 inside ≈ 15 m of goal, where he ignores the block's shape
+and sprints to stay with his man.
+
 ## Keeper distribution and headers
 
 With the ball in his hands the keeper throws to a team-mate with 4.5 m of room and

@@ -49,6 +49,10 @@
 - Shot/pass execution noise compressed across difficulty tiers; dead knobs removed.
 - AI shooters aim inside the post by the strike's expected spread (on target 35 % → 47 %,
   more saves, fewer shots sprayed wide).
+- A side keeps its attacking shape while its own pass is in flight (it used to switch
+  to defensive roles for every pass — about a third of the time in possession).
+- Pass and move: the passer runs on past his marker and is the favoured return ball.
+- Marking: most dangerous attacker first, leading his run, touch-tight in front of goal.
 - `npm run sim` balance guard: fails if goals/min, shots/min, on-target share,
   conversion or pass completion leave wide bands around the targets; `--diag` also
   reports possession spells (how far they get, how they end).

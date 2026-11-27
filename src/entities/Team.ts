@@ -222,7 +222,7 @@ export class Team {
     // spare defender leaves his man and gets on the line between ball and goal
     // (second defender: cover + block), instead of ball-watching beside a runner.
     const dGoal = Math.hypot(ball.position.x - ownGoal.x, ball.position.z);
-    if (dGoal < 19 && match.controlTeam === opp && markers.length) {
+    if (dGoal < 19 && (match.controlTeam === opp || opp.inAttack) && markers.length) {
       const gx = ownGoal.x - ball.position.x;
       const gz = -ball.position.z;
       const gl = Math.hypot(gx, gz) || 1;
@@ -245,42 +245,47 @@ export class Team {
         markers.splice(markers.indexOf(best), 1);
       }
     }
+    // Most dangerous attacker first (nearest our goal), each picked up by the nearest
+    // free defender — so the runner arriving in the box is never the one left over.
     const targets = opp
       .outfield()
       .filter((o) => o.position.x * this.side < 8)
       .sort((a, b) => distSq(a.position, ownGoal) - distSq(b.position, ownGoal));
-    const used = new Set<Player>();
-    for (const m of markers) {
-      let best: Player | null = null;
+    const free = markers.slice();
+    for (const o of targets) {
+      if (!free.length) break;
+      // where he will be in a moment: a marker who aims at where the runner *is* trails him
+      const ox = o.position.x + o.velocity.x * 0.35;
+      const oz = o.position.z + o.velocity.z * 0.35;
+      let m: Player | null = null;
       let bd = Infinity;
-      for (const o of targets) {
-        if (used.has(o)) continue;
-        const d = distSq(o.position, m.position);
+      for (const c of free) {
+        const d = (c.position.x - ox) ** 2 + (c.position.z - oz) ** 2;
         if (d < bd) {
           bd = d;
-          best = o;
+          m = c;
         }
       }
-      if (best) {
-        used.add(best);
-        m.marking = true;
-        const gx = ownGoalX(this);
-        const dx = gx - best.position.x;
-        const dz = 0 - best.position.z;
-        const dl = Math.hypot(dx, dz) || 1;
-        // Near our goal he stays goal-side and touch-tight. Further out he steps
-        // toward the ball's side of his man (in the passing lane) — denying the
-        // pass is better than letting it be played and then tackling.
-        const distGoal = dl;
-        const lane = clamp((distGoal - 13) / 12, 0, 0.6) * (this.tactic === 'lowBlock' ? 0.4 : 1);
-        const bxr = ball.position.x - best.position.x;
-        const bzr = ball.position.z - best.position.z;
-        const bl = Math.hypot(bxr, bzr) || 1;
-        const off = this.tactic === 'lowBlock' ? 2.2 : 1.8;
-        const tx = best.position.x + (dx / dl) * off * (1 - lane) + (bxr / bl) * 2.2 * lane;
-        const tz = best.position.z + (dz / dl) * off * (1 - lane) + (bzr / bl) * 2.2 * lane;
-        m.markTarget = V3(tx, 0, tz);
-      }
+      if (!m) break;
+      free.splice(free.indexOf(m), 1);
+      m.marking = true;
+      const gx = ownGoalX(this);
+      const dx = gx - ox;
+      const dz = 0 - oz;
+      const dl = Math.hypot(dx, dz) || 1;
+      // Near our goal he stays goal-side and touch-tight. Further out he steps
+      // toward the ball's side of his man (in the passing lane) — denying the
+      // pass is better than letting it be played and then tackling.
+      const lane = clamp((dl - 13) / 12, 0, 0.6) * (this.tactic === 'lowBlock' ? 0.4 : 1);
+      const bxr = ball.position.x - ox;
+      const bzr = ball.position.z - oz;
+      const bl = Math.hypot(bxr, bzr) || 1;
+      const tight = clamp(1 - (dl - 15) / 30, 0.6, 1);
+      const off = (this.tactic === 'lowBlock' ? 2.2 : 1.8) - 0.7 * (tight - 0.6) / 0.4;
+      const tx = ox + (dx / dl) * off * (1 - lane) + (bxr / bl) * 2.2 * lane;
+      const tz = oz + (dz / dl) * off * (1 - lane) + (bzr / bl) * 2.2 * lane;
+      m.markTarget = V3(tx, 0, tz);
+      m.markTight = tight;
     }
   }
 
@@ -288,21 +293,53 @@ export class Team {
     // refresh perception for all players before any decision-making
     for (const p of this.players) if (!p.sentOff) updatePerception(p);
 
-    this.inAttack = match.controlTeam === this;
+    // A pass of ours on its way to one of our players is still our attack: the side
+    // keeps its attacking shape and its runs instead of dropping into defensive
+    // positions for the half-second the ball is between two feet.
+    const rcv0 = match.receivingPlayer;
+    const ourPass = match.controlTeam === null && !!match.pendingPass && match.pendingPass.team === this && !!rcv0 && rcv0.team === this && !rcv0.sentOff;
+    this.inAttack = match.controlTeam === this || ourPass;
     this.updateTactic();
     const of = this.outfield();
     const side = this.side;
     for (const p of this.players) p.role = p.roleType === 'GK' ? 'GK' : 'POSITION';
 
-    if (this.inAttack && match.controlPlayer && match.controlPlayer.team === this) {
-      const carrier = match.controlPlayer;
-      if (this.passRequestRegulator.ready()) updatePassRequest(carrier);
-      if (carrier.roleType !== 'GK') carrier.role = 'CARRIER';
+    const holder = match.controlPlayer && match.controlPlayer.team === this ? match.controlPlayer : null;
+    const carrier = holder ?? (ourPass ? rcv0 : null);
+    if (this.inAttack && carrier) {
+      if (holder && this.passRequestRegulator.ready()) updatePassRequest(holder);
+      if (holder && holder.roleType !== 'GK') holder.role = 'CARRIER';
       const others = of.filter((p) => p !== carrier).sort((a, b) => b.position.x * side - a.position.x * side);
       // the two most advanced make runs; a third stays as the safe option behind the ball
       const runners = others.slice(0, 2);
       for (const r of runners) r.role = 'SUPPORT';
       this.assignSupport(carrier, runners);
+
+      // Pass and move: the man who has just played it does not stand and admire it —
+      // he goes past his marker for the return (the wall pass / one-two).
+      const giver = ball.passer;
+      const sincePass = sim.elapsed - ball.lastKickT;
+      if (giver && giver.team === this && giver !== carrier && giver.roleType !== 'GK' && !giver.sentOff && sincePass < 2.6 && this.tactic !== 'buildUp') {
+        const gxAdv = giver.position.x * side;
+        // not the last man, and only where a run forward leads somewhere
+        const deeper = of.filter((q) => q !== giver && q.position.x * side < gxAdv - 2).length;
+        if (deeper >= 1 && gxAdv > -12 && gxAdv < CFG.halfL - 9) {
+          let tx = giver.position.x + side * 11;
+          if (match.simRules) {
+            // hold the run on the shoulder of the second-last defender
+            const xs = oppOf(this).players.filter((o) => !o.sentOff).map((o) => o.position.x * side).sort((a, b) => b - a);
+            const line = Math.max(xs[1] ?? 0, ball.position.x * side, 0);
+            tx = side * Math.min(tx * side, line + 1.5);
+          }
+          tx = clamp(tx, -CFG.halfL + 4, CFG.halfL - 4);
+          // bend the run toward goal, but stay out of the carrier's channel
+          let tz = giver.position.z * 0.7;
+          if (Math.abs(tz - carrier.position.z) < 4) tz = carrier.position.z + Math.sign(giver.position.z - carrier.position.z || 1) * 5;
+          giver.role = 'SUPPORT';
+          giver.supportTarget.set(tx, 0, clamp(tz, -CFG.halfW + 2, CFG.halfW - 2));
+          giver.burstT = sim.elapsed + 0.3;
+        }
+      }
 
       // A teammate who has actively requested the pass makes the visible run
       // into their advertised target instead of passively holding a generic spot.

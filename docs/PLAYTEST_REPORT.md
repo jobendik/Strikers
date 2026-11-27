@@ -84,6 +84,24 @@ After: headers ≈ 15 a match, pressed mid-range passes complete 85–89 %.
 AI observation (one seeded sequence, five stills): the keeper holds the ball, the
 nearest forward backs off to the edge of the box, the throw reaches a team-mate.
 
+### Attacking variety (2026-11-27, PRO, 12 × (2×120 s), `--diag`)
+| How the chance was made | before | after |
+| --- | --- | --- |
+| Loose ball / rebound | 34 % | 29 % |
+| Pass, a touch, shot | 20 % | 13 % |
+| Solo carry | 15 % | 18 % |
+| Through ball (any finish) | 9 % | 15 % |
+| Header from a cross | 2 % | 10 % |
+| First-time finish | 0 % | 8 % |
+| Crosses per match | 2.6 | 8.7 |
+
+Cause found on the way: with the ball between two of its own players a side was not
+"in attack", so for every pass its off-ball players dropped into defensive positions
+and one of them chased the pass. After fixing that and adding pass-and-move runs,
+shots rose to 3.4 a minute (target ≤ 2.7) with 60 % of close-range shooters unmarked;
+tighter marking of runners brought it back to 2.32 shots and 0.60 goals a minute over
+90 matches. None of this has been watched as continuous play.
+
 ### Open observations
 - **Correction:** an earlier version of this report said chances were now too scarce.
   That compared 2×2-minute runs with targets written for the game's real 2×3 minutes.

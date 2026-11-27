@@ -1,6 +1,7 @@
 import { CFG } from '../config/constants';
 import { clamp } from '../core/math';
 import { timeBall } from '../entities/Ball';
+import { sim } from '../core/time';
 import { ball, match } from '../game/state';
 import { pressureOn } from '../game/control';
 import { isInside, isPassSafe, passWeight } from './analysis';
@@ -52,6 +53,8 @@ function score(passer: Player, m: Player, x: number, z: number, dist: number, sp
   if (m.roleType === 'GK') u -= 0.7;
   // a ball into space is the riskier pass: it has to be weighted, read and won
   if (space) u += 0.1 * clamp(margin, 0, 1) - 0.1;
+  // the one-two: the man who gave it and went is the obvious return ball
+  if (m === ball.passer && sim.elapsed - ball.lastKickT < 3 && gain > 2) u += 0.15;
   return u;
 }
 

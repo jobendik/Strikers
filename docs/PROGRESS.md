@@ -27,6 +27,10 @@ in a follow-up PR. Everything below passes all gates.
   shooting, reaction time on interceptions, realistic dive timing, team directness.
   Scoring fell from 5–8 goals per 4 minutes to ≈ 2 (≈ 3.3 per real 6-minute match) with
   83–91 % pass completion at every tier — see `PLAYTEST_REPORT.md`.
+- Attacking variety: a side keeps its attacking shape while its own pass is in flight
+  (it used to drop into defensive positions for every pass), the passer runs on for the
+  return ball, and defenders pick up the most dangerous runner first and stay touch-tight
+  in front of goal. Crosses 2.6 → 8.7 a match, first-time finishes 0 → 8 % of chances.
 - AI shooters aim inside the post by how far the strike can stray (on-target share
   35 % → 47 %, keepers now make ≈ 3.5 saves a match); `npm run sim` has a balance guard.
 
@@ -44,15 +48,14 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
    Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
-2. **Attacking variety (AI-02):** the balance numbers now meet `QUALITY_STANDARD.md` at
-   the game's real match length (2×3 min: 2.5–4.4 goals, 10–16 shots, ≈ 45–55 % on
-   target, 24–34 % conversion, 83–91 % pass completion at every tier) and `npm run sim`
-   fails if they drift far (balance guard). What is missing is *how* chances are made:
-   60 % of shots still come from 5–15 m after a carry or a single pass. Add runs in
-   behind and across the line, wall passes / third-man, overlaps, crosses to near/far
-   post — and check each with `npm run sim -- 8 120 --diag --diff 1` (shot context,
-   pass table, possession spells, zones), `--close`, `--gk`. Do not buy goals by
-   weakening keepers or sharpening finishing.
+2. **Watch it, then keep building patterns (AI-02 / AI-05):** pass-and-move runs, the
+   return ball and tight marking of runners are in and measured (see
+   `PLAYTEST_REPORT.md`), but nobody has *watched* a one-two or a marked run — capture
+   a few sequences with the lab overlay before building more. Still missing: overlaps
+   from deep, near/far-post split on crosses, a held offside line, pressing traps.
+   29 % of chances still come from loose balls and rebounds. Tools:
+   `npm run sim -- 8 120 --diag --diff 1` (now also "chances made by", possession
+   spells), `--close`, `--gk`. `npm run sim` fails if the balance drifts.
 3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
    (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
