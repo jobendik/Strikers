@@ -14,6 +14,7 @@ import { setBusMuted } from '../core/bus';
 import { createGameState, match, ball } from './state';
 import { startMatch, startSecondHalf } from './flow';
 import { stepSimulation } from './step';
+import { pcVersion } from '../ai/pitchControl';
 
 const finite = (x: number): boolean => Number.isFinite(x);
 
@@ -64,6 +65,10 @@ export interface SimResult {
   fouls: number;
   /** Mean distance covered per outfield player (m). */
   distance: number;
+  /** How many times the pitch-control grid was refreshed during the match. */
+  pcUpdates: number;
+  /** Seconds each team tactic was active, summed over both sides. */
+  tactics: Record<string, number>;
   /** A cheap hash of the final state — equal for equal seeds (determinism check). */
   hash: number;
   ticks: number;
@@ -96,8 +101,10 @@ export function simulateMatch(homeKey: string, awayKey: string, opts: SimOptions
   let goalKicks = 0;
   let fouls = 0;
   let lastRestart: unknown = null;
+  const tactics: Record<string, number> = {};
 
   if (!opts.events) setBusMuted(true);
+  const pc0 = pcVersion;
   startMatch(opts.seed ?? 1);
   let guard = 0;
   const MAXT = SIM_HZ * 60 * 14; // 14 simulated minutes hard cap
@@ -111,6 +118,7 @@ export function simulateMatch(homeKey: string, awayKey: string, opts: SimOptions
     guard++;
 
     if (match.state === 'play') {
+      for (const t of match.teams) tactics[t.tactic] = (tactics[t.tactic] ?? 0) + 1 / SIM_HZ;
       const bp = ball.position;
       const bv = ball.velocity;
       if (!finite(bp.x) || !finite(bp.y) || !finite(bp.z) || !finite(bv.x) || !finite(bv.y) || !finite(bv.z)) nan = true;
@@ -169,6 +177,8 @@ export function simulateMatch(homeKey: string, awayKey: string, opts: SimOptions
     goalKicks,
     fouls,
     distance: n ? dist / n : 0,
+    tactics,
+    pcUpdates: pcVersion - pc0,
     hash,
     ticks: guard,
   };

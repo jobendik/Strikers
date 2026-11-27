@@ -44,7 +44,7 @@ Milestones are not silos; each must leave a playable, better game.
 | ANIM-04 | Leg IK to the ball, upper-body layers | TODO | |
 | PLAY-01 | Shielding, skill moves, player-triggered runs | TODO | |
 | PLAY-02 | Proper set pieces (throw-ins, corners, free kicks with walls) | TODO | currently quick restarts |
-| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | PRO now ≈ 3.6 goals / 4 min, 51 % on target, 33 % conversion, 76 % pass accuracy (baseline ≈ 11.5 goals, 96 %) |
+| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | PRO now ≈ 4.5 goals / 4 min, 13–15 shots, 46–51 % on target, 30–34 % conversion, 76–77 % pass accuracy (baseline ≈ 11.5 goals, 96 %). Top tiers score ≈ 8 |
 | PLAY-04 | Practice arena | TODO | |
 
 ## M3 — Football intelligence
@@ -53,10 +53,10 @@ Milestones are not silos; each must leave a playable, better game.
 | --- | --- | --- | --- |
 | AI-01 | A shared spatial picture: who controls which grass | DONE | A: `pitchControl.ts`, deterministic (harness hash check); O: lab overlay |
 | AI-02 | Team-mates run into space the team can win, not to fixed spots | PART | A: support from pitch control; pass completion +4–5 pts. No overlaps / third-man / near-far-post patterns yet |
-| AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts`; passes ≈ 130/4 min (was ≈ 120 pinball → now with intent, 78 % complete). Not human-reviewed for "looks like football" |
+| AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts`; ≈ 145 passes / 4 min at 76–77 % completion. Still quick; not human-reviewed for "looks like football" |
 | AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold; conversion still above target at top tiers |
-| AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | TODO | only chaser + cover defender + nearest-man marking |
-| AI-06 | Team tactical states (build-up, press, mid/low block, transitions, counter) | TODO | |
+| AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | PART | A: line of engagement (press vs contain), second presser, ball-oriented compact block, lane-denial marking, cover defender. No offside line, no pressing traps; not visually reviewed in motion |
+| AI-06 | Team tactical states (build-up, press, mid/low block, transitions, counter) | PART | A: seven states with measured time shares (harness `--diag`), shown in the lab. Rule-based; in-possession states change little yet beyond the counter |
 | AI-07 | Tactical identities per nation; opponent adaptation | TODO | only score-reactive mentality |
 | AI-08 | Football Intelligence Lab | PART | O: control field, intents, interception points, live keep/pass utilities. Missing: pass lanes, defensive assignments, decision history |
 

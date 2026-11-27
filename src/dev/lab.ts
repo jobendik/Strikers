@@ -251,7 +251,7 @@ export function updateLab(): void {
     `state ${match.state}${match.restart ? ` · dead ball → ${match.restart.kind}` : ''}   timeScale ${match.timeScale.toFixed(2)}\n` +
     `ball  v ${pulse.ballSpeed.toFixed(1)} m/s  y ${ball.position.y.toFixed(2)}  ω(${ball.w.x.toFixed(0)},${ball.w.y.toFixed(0)},${ball.w.z.toFixed(0)})${ball.shot ? '  SHOT' : ''}\n` +
     `on ball ${c ? `${c.team.short} ${c.name}` : '—'}   threat ${pulse.threat[0].toFixed(2)} / ${pulse.threat[1].toFixed(2)}\n` +
-    `${match.teams[0].short} ${roles(0)}\n${match.teams[1].short} ${roles(1)}\n` +
+    `${match.teams[0].short} ${match.teams[0].tactic.padEnd(12)} ${roles(0)}\n${match.teams[1].short} ${match.teams[1].tactic.padEnd(12)} ${roles(1)}\n` +
     decisionLine() +
     (u ? `you  ${u.name}  v ${u.getSpeed().toFixed(1)}  sta ${(u.stamina * 100).toFixed(0)}%  act ${u.act}${u.queued ? ' +queued ' + u.queued.kind : ''}\n` : '') +
     `xG ${s.xg[0].toFixed(2)}–${s.xg[1].toFixed(2)}  shots ${s.shots[0]}–${s.shots[1]}  pass ${s.passesDone[0]}/${s.passes[0]}–${s.passesDone[1]}/${s.passes[1]}\n` +

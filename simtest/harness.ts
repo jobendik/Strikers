@@ -71,6 +71,10 @@ function report(label: string, rs: SimResult[]): void {
   check(label, !rs.some((r) => r.guardHit), 'match failed to finish');
   check(label, Math.max(...rs.map((r) => r.maxOOB)) < 1.2, `ball ${Math.max(...rs.map((r) => r.maxOOB)).toFixed(2)} m out of play`);
   check(label, onT <= shots, 'on-target exceeds shots');
+  // shared AI state must be live in *every* match of a run (a module-level regulator once
+  // froze the pitch-control grid after the first match — this guards against that class of bug)
+  const minPc = Math.min(...rs.map((r) => r.pcUpdates / (r.ticks / 120)));
+  check(label, minPc > 5, `pitch control refreshed only ${minPc.toFixed(1)}×/s in some match`);
 }
 
 /** `--diag`: play a few matches with the event bus live and print what actually happens. */
@@ -148,6 +152,10 @@ function diag(n: number): void {
   console.log('toasts  ', per(toasts));
   console.log(`shots    n=${(shotPow.length / n).toFixed(1)} avgPower=${avg(shotPow)} avgXg=${avg(shotXg)}`);
   console.log(`1stTouch n=${(ftq.length / n).toFixed(1)} avgQuality=${avg(ftq)} poor(<0.4)=${(ftq.filter((q) => q < 0.4).length / n).toFixed(1)}`);
+  const tt: Record<string, number> = {};
+  let tot = 0;
+  for (const r of rs) for (const [k, v] of Object.entries(r.tactics)) { tt[k] = (tt[k] ?? 0) + v; tot += v; }
+  console.log('tactics ', Object.entries(tt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / tot).toFixed(0)}%`).join('  '));
   report('diag', rs);
 }
 
@@ -387,7 +395,10 @@ const scenarios: [string, string, string, number, boolean][] = [
 ];
 const t0 = Date.now();
 let ticks = 0;
+const onlyIdx = process.argv.indexOf('--only');
+const only = onlyIdx > 0 ? process.argv[onlyIdx + 1] : '';
 scenarios.forEach(([label, h, a, d, fz], si) => {
+  if (only && !label.includes(only)) return;
   const rs: SimResult[] = [];
   for (let i = 0; i < N; i++) {
     const r = simulateMatch(h, a, { diff: d, freeze: fz, seed: si * 1000 + i + 1 });

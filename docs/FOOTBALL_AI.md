@@ -31,8 +31,36 @@ It is read by:
 - **The dev lab** — `G` toggles the control field; the panel shows the carrier's
   live keep value and best pass utility.
 
-Measured effect (PRO, 8 × 2×120 s, same seeds): pass completion 72–76 % → 76–81 %,
-shots per match ≈ 9 → 11–13, goals unchanged in range.
+Measured (PRO, seeded, after the harness fix below): pass completion 76–77 %,
+13–15 shots and ≈ 4.5 goals per 4 minutes, 46–51 % of shots on target.
+
+> **Harness lesson:** the first measurements of this model were wrong — the grid's
+> module-level regulator was not reset between headless matches, so after the first
+> match of a run the grid was frozen. `SimRegulator` now survives clock resets and
+> the harness asserts the grid refreshes > 5×/s in every match.
+
+## Team tactical state (`Team.updateTactic`)
+
+Each side is always in one collective state, chosen from possession, where the
+ball is, how long since it changed hands, the mentality (user-set, or
+score-reactive for the AI) and the difficulty's pressing quality:
+
+| In possession | Out of possession |
+| --- | --- |
+| `buildUp` — ball in our third | `counterPress` — just lost it: hunt for 1.6–3 s with two men |
+| `attack` — settled in their half | `pressHigh` — attacking mentality / top difficulty: engage everywhere |
+| `counter` — just won it and ≤ 2 of their outfielders are goal-side of the ball: runners break at full pace, runs weighted toward getting in behind | `midBlock` — engage from just inside their half; beyond that the first defender only *contains* |
+| | `lowBlock` — ball deep in our half or defensive mentality: engage late, sit goal-side |
+
+What the state changes: the **line of engagement** (press vs contain, with
+hysteresis), whether a **second presser** goes, how far goal-side of the ball the
+**block** sits and how hard it squeezes toward the ball (compactness in both
+axes), and **marking**: touch-tight and goal-side near our box, stepping into the
+passing lane further out.
+
+Measured share of time (LEGEND, 8 matches): build-up 21 %, mid block 20 %,
+attack 19 %, counter-press 17 %, low block 12 %, counter 10 %, high press 1 %.
+Mirror matches are balanced over 30 seeded games (2.20–2.13 goals, 9–9–12).
 
 ## Current structure
 
@@ -73,8 +101,7 @@ possession; no home/away bias beyond noise).
 
 ## Gaps (Milestone 3)
 
-Pitch control exists but is not yet used for *defending* (cover shadows, pressing triggers, line height) or for the dribble direction; no team tactical state machine
-(build-up / press / block / transition); no overlaps, third-man runs or
+Pitch control is not yet used for defending decisions or for the dribble direction; the tactical states are rule-based (no opponent modelling, no pressing traps); no overlaps, third-man runs or
 near/far-post box movement; marking is nearest-attacker; no opponent modelling;
 no tactical identities per nation; set pieces are unstructured; the lab overlay shows
 control, intents and the carrier's decision but not pass-candidate lanes or defensive assignments.

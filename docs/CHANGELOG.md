@@ -26,6 +26,16 @@
 - Gamepad support; finesse, chip, through-ball, lobbed through, jockey,
   directional switching; buffered first-time actions; desktop key hints.
 
+### Football intelligence
+- Pitch-control model (arrival times, control field, threat field) driving off-ball
+  support runs and a pass-vs-keep utility decision; carriers take defenders on.
+- Team tactical states with a line of engagement, second presser, compact
+  ball-oriented block, lane-denial marking and counter-attacks.
+- Dev lab: pitch-control field, live decision utilities, team tactic.
+
+### Settings
+- Camera rig, match conditions, assistance level, crowd/effects volume.
+
 ### Assists
 - Assisted receiving, auto standing tackle, idle assist (AI plays the user's man
   while the controls are untouched).

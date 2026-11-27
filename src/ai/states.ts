@@ -55,6 +55,21 @@ class PositionState extends State<Player> {
       // slide laterally toward where the ball is perceived to be
       h.z = lerp(h.z, clamp(perceivedBallPos(p).z, -CFG.halfW + 3, CFG.halfW - 3), 0.25);
     }
+    if (!p.team.inAttack && !p.cover) {
+      // compactness: the block moves with the ball. Drop when it is played in
+      // behind our position, squeeze up when we are hunting it.
+      const side = p.team.side;
+      const t = p.team.tactic;
+      const bx = perceivedBallPos(p).x;
+      const depth = t === 'lowBlock' ? 11 : t === 'midBlock' ? 8 : 5; // how far goal-side of the ball the unit sits
+      const lineX = bx - side * depth;
+      const k = t === 'pressHigh' || t === 'counterPress' ? 0.55 : 0.4;
+      const own = ownGoalX(p.team);
+      let x = lerp(h.x, lineX, k);
+      // never deeper than the edge of our six-yard area, never beyond the ball
+      x = side > 0 ? clamp(x, own + 5, Math.max(own + 5, bx - 1)) : clamp(x, Math.min(own - 5, bx + 1), own - 5);
+      h.x = x;
+    }
     p.goArrive(h);
   }
 }
@@ -72,6 +87,17 @@ class ChaseState extends State<Player> {
     if (c && c.team !== p.team && !(c.roleType === 'GK' && match.gkHold > 0) && match.setPieceT <= 0) {
       const reach = planarToBall(p);
       const side = p.team.side;
+      if (!p.team.engage && reach > 2.2) {
+        // the block is set and the ball is beyond the line of engagement: don't
+        // chase it — hold the carrier up from a distance, between him and our goal
+        const ownX = ownGoalX(p.team);
+        const gx0 = ownX - ball.position.x;
+        const gz0 = -ball.position.z * 0.5;
+        const gl0 = Math.hypot(gx0, gz0) || 1;
+        const hold = 6.5;
+        p.goJockey(V3(ball.position.x + (gx0 / gl0) * hold, 0, ball.position.z + (gz0 / gl0) * hold), Math.atan2(ball.position.x - p.position.x, ball.position.z - p.position.z));
+        return;
+      }
       // is he goal-side of the carrier (between ball and our goal)?
       const own = ownGoalX(p.team);
       const goalSide = Math.abs(p.position.x - own) < Math.abs(c.position.x - own) + 0.4;
@@ -135,7 +161,8 @@ class SupportState extends State<Player> {
       return;
     }
     const far = Math.hypot(p.supportTarget.x - p.position.x, p.supportTarget.z - p.position.z) > 5;
-    p.goArrive(p.supportTarget, far && p === match.callingPlayer);
+    // on the counter everyone breaks at full pace; otherwise only the man showing for it sprints
+    p.goArrive(p.supportTarget, far && (p === match.callingPlayer || p.team.tactic === 'counter'));
   }
 }
 

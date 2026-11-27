@@ -30,11 +30,13 @@ export interface Trajectory {
 const traj: Trajectory = { n: 0, x: new Float32Array(TRAJ_N), y: new Float32Array(TRAJ_N), z: new Float32Array(TRAJ_N) };
 const S: BallState = makeBallState();
 let cachedTick = -1;
+let cachedEpoch = -1;
 
 /** The predicted free flight of the ball from now (sample i is `i·TRAJ_DT` seconds ahead). */
 export function ballTrajectory(): Trajectory {
-  if (cachedTick === sim.tick) return traj;
+  if (cachedTick === sim.tick && cachedEpoch === sim.epoch) return traj;
   cachedTick = sim.tick;
+  cachedEpoch = sim.epoch;
   S.px = ball.position.x;
   S.py = ball.position.y;
   S.pz = ball.position.z;

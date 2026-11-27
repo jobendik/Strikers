@@ -182,5 +182,5 @@ export function aiCarry(p: Player, _dt: number): void {
   }
 
   // 4) cornered deep in our own half under pressure -> clear it
-  if (isOppWithin(p, 1.8) && p.position.x * side < -8) clearBall(p);
+  if (isOppWithin(p, 1.6) && p.position.x * side < -15 && held > 0.5) clearBall(p);
 }

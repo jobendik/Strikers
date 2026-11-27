@@ -19,6 +19,8 @@ export const sim = {
   elapsed: 0,
   /** Tick counter since the match state was created. */
   tick: 0,
+  /** Bumped every time the clock is reset (a new headless match) — invalidates per-tick caches. */
+  epoch: 0,
 };
 
 /** Advance the simulation clock by one fixed tick. */
@@ -33,6 +35,7 @@ export function resetSimClock(): void {
   sim.dt = SIM_DT;
   sim.elapsed = 0;
   sim.tick = 0;
+  sim.epoch++;
 }
 
 /**
@@ -51,6 +54,9 @@ export class SimRegulator {
 
   /** True at most `hz` times per simulated second. */
   ready(): boolean {
+    // the clock was reset under us (a module-level regulator across headless matches):
+    // without this it would stay silent until the new clock caught up with the old one
+    if (this.next - sim.elapsed > this.period + 1e-6) this.next = sim.elapsed;
     if (sim.elapsed + 1e-9 < this.next) return false;
     this.next = sim.elapsed + this.period;
     return true;

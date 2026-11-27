@@ -17,13 +17,15 @@ below is merged there and passes all gates.
 - Procedural audio engine + crowd-emotion model — `AUDIO_DESIGN.md`.
 - Dev lab overlay (F2; `G` = pitch control), `window.__strikers`, harness modes, browser checks.
 - Settings: camera rig, conditions, assistance level, crowd/effects volume.
-- Milestone 3 started: pitch-control grid driving support runs and a pass-vs-keep
-  utility decision (`ai/pitchControl.ts`, `ai/passing.ts`) — see `FOOTBALL_AI.md`.
+- Milestone 3 under way: pitch-control grid driving support runs and a pass-vs-keep
+  utility decision; team tactical states (build-up / attack / counter / counter-press /
+  high press / mid block / low block) with a line of engagement, compact block and
+  lane-denial marking — see `FOOTBALL_AI.md`.
 
 The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
 under `.claude/worktrees/` can be deleted.
 
-All gates pass at the end of session 1: typecheck, build, 214 unit tests, `npm run sim`
+All gates pass (latest run): typecheck, build, 214 unit tests, `npm run sim`
 (+ `--physics`, all green), `npm run test:browser` (13 checks).
 
 Integration already done: crowd colours + scoreboard names per fixture, a random
@@ -34,8 +36,8 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
    Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
-2. **Balance (PLAY-03 / GK-01):** conversion is 33 % at PRO but 44–49 % at
-   Legend+; ~60 % of shots come from 5–10 m; `--gk` shows a cliff between an
+2. **Balance (PLAY-03 / GK-01):** ≈ 4.5 goals / 4 min and 30–34 % conversion at PRO,
+   but ≈ 8 goals at Ultimate / World Class (sharper finishing for both sides); ~60 % of shots come from 5–10 m; `--gk` shows a cliff between an
    unsaveable precise 11 m corner and near-certain saves from 16 m+. Next levers:
    more shots from range (AI shot selection), defenders blocking more, keeper
    reaction variance. Passing is too quick (≈ 120 passes / 4 min) — make carriers
@@ -43,10 +45,11 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
    (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
-4. **Milestone 3 — continue:** pitch control now drives support and passing. Next:
-   use it for defending (AI-05: cover shadows, press triggers, compactness, line
-   height), for the dribble direction, and build the team tactical state machine
-   (AI-06). Draw pass lanes + defensive assignments in the lab.
+4. **Milestone 3 — continue:** watch the new defending and tactical states *in motion*
+   (nobody has — only statistics); use pitch control for the dribble direction and
+   for defensive cover; give in-possession states real differences (patient build-up
+   vs direct); structured runs (overlap, third man, near/far post); per-nation
+   tactical identities. Draw pass lanes + defensive assignments in the lab.
 5. **Animation:** source licensed walk/jog/strafe/slide/header/keeper-set clips;
    upper-body layer; leg IK to the ball; a proper shooting clip.
 6. **Milestone 5 prerequisite:** make pitch/team size per-match config (remove
