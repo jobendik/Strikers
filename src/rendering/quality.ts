@@ -42,8 +42,6 @@ export interface QualityProfile {
   postFx: boolean;
   /** MSAA samples on the HDR target when postFx is on. */
   msaa: number;
-  /** Bloom resolution scale (fraction of the frame). */
-  bloomScale: number;
   /** Cube-map face size the sky is captured at before PMREM filtering. */
   envMapSize: number;
   /** Maximum texture edge for procedurally generated textures. */
@@ -53,8 +51,6 @@ export interface QualityProfile {
   rainCount: number;
   /** Sky shader cloud octaves. */
   skyOctaves: number;
-  /** Goal-net cloth solver iterations. */
-  netIterations: number;
 }
 
 const PROFILES: Record<QualityTier, QualityProfile> = {
@@ -74,13 +70,11 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     grassBlades: 0,
     postFx: false,
     msaa: 0,
-    bloomScale: 0.5,
     envMapSize: 64,
     maxTexture: 1024,
     anisotropy: 4,
     rainCount: 1400,
     skyOctaves: 2,
-    netIterations: 2,
   },
   standard: {
     tier: 'standard',
@@ -98,13 +92,11 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     grassBlades: 0,
     postFx: false,
     msaa: 0,
-    bloomScale: 0.5,
     envMapSize: 128,
     maxTexture: 2048,
     anisotropy: 8,
     rainCount: 3500,
     skyOctaves: 3,
-    netIterations: 3,
   },
   high: {
     tier: 'high',
@@ -122,13 +114,11 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     grassBlades: 0,
     postFx: true,
     msaa: 4,
-    bloomScale: 0.5,
     envMapSize: 256,
     maxTexture: 2048,
     anisotropy: 16,
     rainCount: 7000,
     skyOctaves: 4,
-    netIterations: 4,
   },
   ultra: {
     tier: 'ultra',
@@ -146,13 +136,11 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     grassBlades: 60000,
     postFx: true,
     msaa: 4,
-    bloomScale: 0.5,
     envMapSize: 256,
     maxTexture: 2048,
     anisotropy: 16,
     rainCount: 12000,
     skyOctaves: 5,
-    netIterations: 5,
   },
 };
 

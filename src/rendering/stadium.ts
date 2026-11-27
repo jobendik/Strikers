@@ -147,6 +147,9 @@ export function buildStadium(): void {
   add(rain.mesh);
 
   world.add(stadiumRoot);
+  // dev / QA hook (see scene.ts)
+  const gfx = (window as unknown as { __gfx?: Record<string, unknown> }).__gfx;
+  if (gfx) gfx.stadium = { updateStadium, netImpulse, setCrowdColors, setScoreboardTeams, root: stadiumRoot };
 
   applyPreset(getEnvPreset());
   applyQuality(q);
@@ -202,6 +205,6 @@ export function updateStadium(dt: number): void {
   const live = pulse.live || pulse.state === 'play' || pulse.state === 'celebrate' || pulse.state === 'shootout';
   crowd?.update(dt, pulse.threat[0], pulse.threat[1], live ? 0.2 : 0.1);
   leds?.update(dt, pulse.score[0], pulse.score[1]);
-  goals?.update(dt, getQuality().netIterations, pulse.ballX, pulse.ballY, pulse.ballZ, live);
+  goals?.update(dt, pulse.ballX, pulse.ballY, pulse.ballZ, live);
   rain?.update(camera);
 }
