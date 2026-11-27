@@ -21,27 +21,52 @@ import type { PlayerRole } from '../config/types';
 
 const _aim = V3();
 
-/** AI header: on goal when it's a chance, otherwise up and away. */
-function aiHeader(p: Player): void {
+/**
+ * AI header. On goal when it is a real chance (close in); a ball played to him
+ * that he has time to bring down is left to drop; in their half he nods it on to
+ * a team-mate; defending he heads it up and away. Returns false if he lets it go.
+ */
+function aiHeader(p: Player): boolean {
   const team = p.team;
+  const side = team.side;
   const gx = goalX(team);
   const distGoal = Math.hypot(gx - ball.position.x, ball.position.z);
-  if (p.position.x * team.side > 6 && distGoal < 13) {
+  if (p.position.x * side > 6 && distGoal < 9.5) {
     const tz = clamp(ball.position.z * 0.4, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
-    headBall(p, V3(gx - ball.position.x, 0, tz - ball.position.z), 15, true);
-  } else {
-    headBall(p, V3(team.side, 0, Math.sign(ball.position.z || 1) * 0.6), 13, false);
+    return headBall(p, V3(gx - ball.position.x, 0, tz - ball.position.z), 15, true);
   }
+  let oppNear = Infinity;
+  const opp = match.teams[0] === team ? match.teams[1] : match.teams[0];
+  for (const o of opp.players) {
+    if (o.sentOff) continue;
+    oppNear = Math.min(oppNear, Math.hypot(o.position.x - p.position.x, o.position.z - p.position.z));
+  }
+  // nobody on him and it is dropping: bring it down instead of heading it back into
+  // the air (except in front of his own goal, where it just has to go)
+  const ownBox = Math.abs(p.position.x - ownGoalX(team)) < CFG.boxDepth + 2;
+  if (oppNear > 2.6 && ball.velocity.y < 1.5 && !ownBox) return false;
+  if (p.position.x * side > -4) {
+    // nod it on to the nearest team-mate ahead of / level with him
+    let mate: Player | null = null;
+    let best = 14;
+    for (const m of team.outfield()) {
+      if (m === p || m.sentOff) continue;
+      const d = Math.hypot(m.position.x - p.position.x, m.position.z - p.position.z);
+      if (d > 3 && d < best && (m.position.x - p.position.x) * side > -4) {
+        best = d;
+        mate = m;
+      }
+    }
+    if (mate) return headBall(p, V3(mate.position.x - ball.position.x, 0, mate.position.z - ball.position.z), 0, false, Math.max(4, best - 1));
+  }
+  return headBall(p, V3(side, 0, Math.sign(ball.position.z || 1) * 0.6), 13, false);
 }
 
 /** Hold/return to formation position; shuffle or mark when defending. */
 class PositionState extends State<Player> {
   override execute(p: Player): void {
     if (p.isHuman && !p.autopilot) return;
-    if (canHead(p)) {
-      aiHeader(p);
-      return;
-    }
+    if (canHead(p) && aiHeader(p)) return;
     let h = p.homePos();
     if (!p.team.inAttack && p.cover && p.markTarget) {
       // second defender: get in the way of the shot, square to the ball
@@ -78,10 +103,7 @@ class PositionState extends State<Player> {
 class ChaseState extends State<Player> {
   override execute(p: Player): void {
     if (p.isHuman && !p.autopilot) return;
-    if (canHead(p)) {
-      aiHeader(p);
-      return;
-    }
+    if (canHead(p) && aiHeader(p)) return;
     const D = DIFF[CFG.diff];
     const c = match.controlPlayer;
     if (c && c.team !== p.team && !(c.roleType === 'GK' && match.gkHold > 0) && match.setPieceT <= 0) {
@@ -156,10 +178,7 @@ class CarryState extends State<Player> {
 class SupportState extends State<Player> {
   override execute(p: Player): void {
     if (p.isHuman && !p.autopilot) return;
-    if (canHead(p)) {
-      aiHeader(p);
-      return;
-    }
+    if (canHead(p) && aiHeader(p)) return;
     const far = Math.hypot(p.supportTarget.x - p.position.x, p.supportTarget.z - p.position.z) > 5;
     // on the counter everyone breaks at full pace; otherwise only the man showing for it sprints
     p.goArrive(p.supportTarget, far && (p === match.callingPlayer || p.team.tactic === 'counter'));
@@ -174,10 +193,7 @@ class SupportState extends State<Player> {
 class ReceiveState extends State<Player> {
   override execute(p: Player): void {
     if (p.isHuman && !p.autopilot) return;
-    if (canHead(p)) {
-      aiHeader(p);
-      return;
-    }
+    if (canHead(p) && aiHeader(p)) return;
     // first-time finish: the ball is arriving, he is in front of goal and composed enough
     if (!p.queued && p.act === 'none' && match.controlPlayer === null) {
       const d = planarToBall(p);

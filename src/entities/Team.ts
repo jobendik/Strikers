@@ -181,9 +181,11 @@ export class Team {
 
     // out of possession
     const justLost = sim.elapsed - this.lostT < 1.6 + 1.4 * press;
-    const high = this.mentality === 2 || press > 0.85;
+    // an all-out mentality presses anywhere beyond our own third; a well-drilled side
+    // (top difficulties) does it only once the ball is pinned in the opponents' third
+    const high = this.mentality === 2 ? bx > -6 : press > 0.85 && bx > 8;
     if (justLost && press > 0.45 && bx > -14 && this.mentality > 0) this.tactic = 'counterPress';
-    else if (high && bx > -6) this.tactic = 'pressHigh';
+    else if (high) this.tactic = 'pressHigh';
     else if (bx < -11 || this.mentality === 0) this.tactic = 'lowBlock';
     else this.tactic = 'midBlock';
 

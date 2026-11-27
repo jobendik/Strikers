@@ -91,6 +91,7 @@ function diag(n: number): void {
     if (e.t === 'shot') {
       shotPow.push(e.power);
       shotXg.push(e.xg);
+      xgBins[lastBin] += e.xg;
     }
     if (e.t === 'firstTouch') ftq.push(e.quality);
     if (e.t === 'toast') toasts[e.text] = (toasts[e.text] ?? 0) + 1;
@@ -102,10 +103,22 @@ function diag(n: number): void {
   let printed = 0;
   const shotBins = [0, 0, 0, 0, 0, 0];
   const goalBins = [0, 0, 0, 0, 0, 0];
+  const xgBins = [0, 0, 0, 0, 0, 0];
+  const ctx = [0, 1, 2, 3, 4, 5].map(() => ({ near: 0, cone: 0, gkOut: 0, gkD: 0, head: 0, err: 0, free: 0 }));
+  const outcomeBins = [0, 1, 2, 3, 4, 5].map(() => ({ save: 0, block: 0, post: 0 }));
+  let lastShotTick = -1;
+  let lastBin = 0;
+  const offO = onAny((e: SimEvent) => {
+    if (simClock.tick - lastShotTick > 240 || lastShotTick < 0) return;
+    if (e.t === 'save') { outcomeBins[lastBin].save++; lastShotTick = -1; }
+    else if (e.t === 'block') { outcomeBins[lastBin].block++; lastShotTick = -1; }
+    else if (e.t === 'post') { outcomeBins[lastBin].post++; lastShotTick = -1; }
+    else if (e.t === 'goal') lastShotTick = -1;
+  });
   const offG = onAny((e: SimEvent) => {
     if (e.t === 'goal') {
       goalBins[Math.min(5, Math.floor(lastShotD / 5))]++;
-      if (lastShotD > 9 && lastShotD < 16 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)}`);
+      if (lastShotD > 9 && lastShotD < 16 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)} || ${gkMissInfo}`);
     }
   });
   (globalThis as unknown as { __shotDbg: unknown }).__shotDbg = (p: { name: string; position: { x: number; z: number }; team: { side: number } }, sp: { kind: string; tx: number; ty: number; tz: number; speed: number; err: number; curl: number }) => {
@@ -118,9 +131,74 @@ function diag(n: number): void {
     }
     const b = Math.min(5, Math.floor(lastShotD / 5));
     shotBins[b]++;
+    if (b === 0 && process.argv.includes('--close')) {
+      const q = p as unknown as { gotBallT: number; name: string; roleType: string };
+      const defT = match.teams[p.team.side > 0 ? 1 : 0];
+      const pos = defT.players.map((d) => `${d.roleType[0]}(${(d.position.x * p.team.side).toFixed(0)},${d.position.z.toFixed(0)})`).join(' ');
+      console.log(`   CLOSE ${sp.kind} t=${simClock.elapsed.toFixed(1)} ${q.roleType} held ${(simClock.elapsed - q.gotBallT).toFixed(2)}s at (${(ball.position.x * p.team.side).toFixed(1)},${ball.position.z.toFixed(1)}) lastKick=${lastKickKind} ${(simClock.elapsed - lastKickT).toFixed(1)}s ago from (${(lastKickX * p.team.side).toFixed(0)},${lastKickZ.toFixed(0)}) sameTeam=${lastKickTeam === (p.team.side > 0 ? 0 : 1)} defTactic=${(defT as unknown as { tactic: string }).tactic} def: ${pos}`);
+    }
+    lastBin = b;
+    lastShotTick = simClock.tick;
+    gkMiss = 99;
+    gkMissInfo = '';
+    {
+      const def = match.teams[p.team.side > 0 ? 1 : 0];
+      const gk = def.gk;
+      const gxx = p.team.side * CFG.halfL;
+      let near = 99;
+      let cone = 0;
+      for (const q of def.players) {
+        if (q === gk) continue;
+        const dq = Math.hypot(q.position.x - ball.position.x, q.position.z - ball.position.z);
+        near = Math.min(near, dq);
+        // inside the triangle ball → posts?
+        const ax = gxx - ball.position.x;
+        const fx = (q.position.x - ball.position.x) / (ax || 1);
+        if (fx > 0.05 && fx < 1) {
+          const zl = ball.position.z + (-CFG.goalHalf - ball.position.z) * fx;
+          const zr = ball.position.z + (CFG.goalHalf - ball.position.z) * fx;
+          if (q.position.z > zl - 0.4 && q.position.z < zr + 0.4) cone++;
+        }
+      }
+      const c = ctx[b];
+      c.near += Math.min(near, 10);
+      c.cone += cone;
+      c.gkOut += Math.abs(gxx - gk.position.x);
+      c.gkD += Math.hypot(gk.position.x - ball.position.x, gk.position.z - ball.position.z);
+      c.head += sp.kind === 'header' || sp.kind === 'volley' ? 1 : 0;
+      c.err += sp.err;
+      c.free += near > 2.5 ? 1 : 0;
+    }
     if (shown++ > 0) return;
     const hit = flyTo(sp.tx);
     console.log(`   shot ${sp.kind} by ${p.name} from (${ball.position.x.toFixed(1)},${ball.position.z.toFixed(1)},y${ball.position.y.toFixed(2)}) aim (y${sp.ty.toFixed(2)}, z${sp.tz.toFixed(2)}) v=${sp.speed.toFixed(1)} err=${sp.err.toFixed(2)}° curl=${sp.curl.toFixed(0)} → crosses y=${hit.y.toFixed(2)} z=${hit.z.toFixed(2)} t=${hit.t.toFixed(2)}`);
+  };
+  let lastKickKind = '';
+  let lastKickT = 0;
+  let lastKickX = 0;
+  let lastKickZ = 0;
+  let lastKickTeam = -1;
+  const headPrev: Record<string, number> = {};
+  const offK = onAny((e: SimEvent) => {
+    if (e.t === 'kick' && e.kind === 'header') {
+      const k = `${lastKickKind}${simClock.elapsed - lastKickT < 1.5 ? '' : '(old)'} y=${ball.position.y.toFixed(0)}`;
+      headPrev[k] = (headPrev[k] ?? 0) + 1;
+    }
+    if (e.t === 'kick' && e.kind !== 'touch' && e.kind !== 'shot' && e.kind !== 'finesse' && e.kind !== 'chip') {
+      lastKickKind = e.kind;
+      lastKickT = simClock.elapsed;
+      lastKickX = ball.position.x;
+      lastKickZ = ball.position.z;
+      lastKickTeam = e.team;
+    }
+  });
+  let gkMiss = 99;
+  let gkMissInfo = '';
+  (globalThis as unknown as { __gkDbg: unknown }).__gkDbg = (g: { act: string; actT: number; position: { x: number; z: number } }, miss: number, along: number) => {
+    if (miss < gkMiss) {
+      gkMiss = miss;
+      gkMissInfo = `closest: miss by ${miss.toFixed(2)} m (along ${along.toFixed(2)}) act=${g.act}@${g.actT.toFixed(2)} gk(${g.position.x.toFixed(1)},${g.position.z.toFixed(1)}) ball(${ball.position.x.toFixed(1)},${ball.position.y.toFixed(2)},${ball.position.z.toFixed(1)})`;
+    }
   };
   const nick = { n: 0, heldLt03: 0, heldLt1: 0, sprint: 0, kicking: 0, stumble: 0, cdSum: 0, slow: 0 };
   (globalThis as unknown as { __nickDbg: unknown }).__nickDbg = (c: { gotBallT: number; sprinting: boolean; act: string; velocity: { x: number; z: number }; queued: unknown }, cd: number) => {
@@ -135,9 +213,21 @@ function diag(n: number): void {
     nick.cdSum += cd;
   };
   const rs: SimResult[] = [];
-  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: 2, seed: 900 + i, events: true }));
+  const di = process.argv.indexOf('--diff');
+  const dDiff = di > 0 ? Number(process.argv[di + 1]) : 2;
+  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: dDiff, seed: 900 + i, events: true }));
   offG();
+  offO();
+  offK();
+  console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));
   console.log('shots by distance (0-5,5-10,…,25+ m):', shotBins.join(' '), ' goals:', goalBins.join(' '));
+  for (let b = 0; b < 6; b++) {
+    const k = shotBins[b];
+    if (!k) continue;
+    const c = ctx[b];
+    const o = outcomeBins[b];
+    console.log(`   ${String(b * 5).padStart(2)}-${String(b * 5 + 5).padEnd(2)} m  n=${String(k).padStart(3)} goals ${((100 * goalBins[b]) / k).toFixed(0).padStart(3)}%  xG ${((100 * xgBins[b]) / k).toFixed(0).padStart(3)}%  saved ${((100 * o.save) / k).toFixed(0).padStart(3)}%  blocked ${((100 * o.block) / k).toFixed(0).padStart(3)}%  post ${((100 * o.post) / k).toFixed(0).padStart(2)}% | nearest def ${(c.near / k).toFixed(1)} m, unmarked ${((100 * c.free) / k).toFixed(0)}%, defenders in cone ${(c.cone / k).toFixed(2)}, gk off line ${(c.gkOut / k).toFixed(1)} m / ${(c.gkD / k).toFixed(1)} m from ball, headers ${((100 * c.head) / k).toFixed(0)}%, err ${(c.err / k).toFixed(1)}°`);
+  }
   console.log('nicks   ', JSON.stringify(nick), 'avg cd', (nick.cdSum / (nick.n || 1)).toFixed(2));
   off();
   const per = (o: Record<string, number>): string =>
@@ -146,7 +236,7 @@ function diag(n: number): void {
       .map(([k, v]) => `${k}:${(v / n).toFixed(1)}`)
       .join('  ');
   const avg = (a: number[]): string => (a.length ? (a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : '-');
-  console.log(`# diag: ${n} matches ARG v FRA (LEGEND), per-match averages`);
+  console.log(`# diag: ${n} matches ARG v FRA (difficulty ${dDiff}), per-match averages`);
   console.log('events  ', per(counts));
   console.log('kicks   ', per(kinds));
   console.log('toasts  ', per(toasts));
@@ -362,7 +452,7 @@ function physicsTests(): void {
 }
 
 // ---- run ----
-const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const args = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !['--only', '--diff'].includes(all[i - 1] ?? ''));
 const N = Number(args[0] ?? 6);
 const SECS = Number(args[1] ?? 120);
 CFG.matchSeconds = SECS;

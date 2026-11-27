@@ -150,6 +150,8 @@ export class Player extends Vehicle {
   lastTouchT = -10;
   /** Reaction clock for the keeper: sim time he first registered the current shot. */
   shotSeenT = -1;
+  /** Keeper: when a shot last got past his outstretched limbs (so he isn't re-tested every tick). */
+  beatenT = -9;
   /** Sim time the keeper last set himself big for a close-range block (spread stance). */
   spreadT = -10;
   /** This shot's reaction time (s) — varies shot to shot around the keeper's quality. */

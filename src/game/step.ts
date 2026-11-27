@@ -45,6 +45,31 @@ function userAssists(): void {
   if (facing > 0.25) startTackle(u);
 }
 
+/**
+ * The keeper has it in his hands: the other side may not crowd him. Their AI
+ * players drop off to ten metres (toward their own half) until he releases it.
+ */
+function giveKeeperRoom(): void {
+  const gk = match.controlPlayer;
+  if (!gk || gk.roleType !== 'GK' || match.gkHold <= 0) return;
+  const opp = match.teams[0] === gk.team ? match.teams[1] : match.teams[0];
+  const ROOM = 10;
+  for (const p of opp.players) {
+    if (p.sentOff || p.roleType === 'GK' || (p.isHuman && !p.autopilot) || p.act !== 'none') continue;
+    const dx = p.position.x - gk.position.x;
+    const dz = p.position.z - gk.position.z;
+    const d = Math.hypot(dx, dz);
+    if (d >= ROOM) continue;
+    // back away upfield (toward his own half), keeping his width
+    const ux = gk.team.side * 0.85;
+    const uz = d > 0.01 ? (dz / d) * 0.55 : 0;
+    const ul = Math.hypot(ux, uz);
+    _t.set(gk.position.x + (ux / ul) * (ROOM + 1), 0, clamp(gk.position.z + (uz / ul) * (ROOM + 1), -CFG.halfW + 2, CFG.halfW - 2));
+    p.goArrive(_t);
+    p.faceYaw = Math.atan2(-dx, -dz);
+  }
+}
+
 /** Goal celebration choreography: the scorer wheels away, team-mates chase him, the rest trudge back. */
 function celebrateMoves(): void {
   const scorers = match.teams[match.scoredBy];
@@ -139,6 +164,7 @@ export function stepSimulation(opts: StepOptions): void {
     }
     match.teams[0].update(dt);
     match.teams[1].update(dt);
+    giveKeeperRoom();
     movePlayers(dt);
     updateDribble(dt);
     resolveTackles(dt);

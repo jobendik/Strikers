@@ -106,7 +106,7 @@ export function aiCarry(p: Player, _dt: number): void {
     const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot);
     const xg = estimateXg(team, ball.position.x, ball.position.z, press) * (0.45 + 0.75 * openness);
     // threshold falls with composure and urgency, rises when protecting a lead
-    let need = 0.14 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve;
+    let need = 0.115 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve;
     // fuzzy approval (close + central + unmarked) lowers it; a hopeless angle raises it
     need -= (desire.shoot - 50) / 380;
     // a better pass on (someone calling in a better spot) makes him pickier
@@ -116,7 +116,8 @@ export function aiCarry(p: Player, _dt: number): void {
     }
     const pot = chance(CFG.potShot * (1 + urgency * 3) * (1 - conserve * 0.9)) && distToGoal < 24;
     if (xg > need || (pot && openness > 0.25)) {
-      const power = CFG.shootPow * (0.82 + 0.2 * A.shooting) * (distToGoal < 9 ? 0.86 : 1);
+      // placement close in, power from range (power costs accuracy — see control.makeKick)
+      const power = CFG.shootPow * clamp(0.6 + 0.013 * distToGoal + 0.12 * A.shooting, 0.68, 1);
       // a clinical finisher bends it away from the keeper, around him into the corner
       const curlSign = Math.sign(_shot.z - opp.gk.position.z || 1) * side;
       const finesse = distToGoal < 17 && A.shooting > 0.8 && openness < 0.8 && chance(0.4);
@@ -168,7 +169,10 @@ export function aiCarry(p: Player, _dt: number): void {
     const onTop = press > 0.74; // defender within a metre
     const underPressure =
       pressured && (_opt.utility > keep + 0.12 || (ownHalf && chance(0.5)) || (onTop && chance(0.45)) || chance(0.22 * (1.25 - dribbler)));
-    const release = boxedIn || underPressure || (held > 0.6 && better && chance(0.4)) || held > 5;
+    // with time on the ball he takes a touch and looks up before moving it on — unless
+    // the pass on is a clear chance (a runner in behind, a man free in the box)
+    const killer = _opt.utility > keep + bar + 0.25;
+    const release = boxedIn || underPressure || (held > (killer ? 0.3 : 0.9) && better && chance(killer ? 0.6 : 0.3)) || held > 5;
     if (release) {
       _tgt.set(_opt.x, 0, _opt.z);
       addNoise(_tgt, A.passing);

@@ -249,7 +249,7 @@ export function movePlayers(dt: number): void {
         const sp = d > 0.05 ? Math.min(CFG.gkDiveSpeed * (k < 0.75 ? 1 : 0.35), d / dt) : 0;
         setWant(d > 0 ? (dx / d) * sp : 0, d > 0 ? (dz / d) * sp : 0);
         wantYaw = p.heading; // the body stays square to the shot while he flies
-        accelOverride = 70;
+        accelOverride = 30; // the push-off takes a moment: ~0.11 s to full dive speed
       } else if (p.act === 'recover') {
         setWant(0, 0);
         wantYaw = p.heading;

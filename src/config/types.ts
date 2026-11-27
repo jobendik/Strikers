@@ -24,8 +24,6 @@ export interface DiffSetting {
   label: string;
   aiSpd: number;
   react: number;
-  passSafe: number;
-  shootBias: number;
   keeper: number;
   /** Execution-error multiplier on AI passes and shots. */
   noise: number;
