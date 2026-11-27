@@ -3,7 +3,7 @@ import { V3, clamp, distSq, headingVec } from '../core/math';
 import { chance, rngRange } from '../core/rng';
 import { sim } from '../core/time';
 import { ball, match, oppOf, teamIndex } from '../game/state';
-import { clearBall, estimateXg, kick, lobKick, pressureOn, shootAt } from '../game/control';
+import { clearBall, estimateXg, kick, lobKick, makeKick, pressureOn, shootAt } from '../game/control';
 import { evaluateCarrier } from './fuzzy';
 
 import {
@@ -112,7 +112,11 @@ export function aiCarry(p: Player, _dt: number): void {
 
   // 1) SHOOT — value of the chance vs. the nerve to take it
   if (faceGoal > -0.1 && distToGoal < CFG.shootRange) {
-    const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot);
+    // placement close in, power from range (power costs accuracy — see control.makeKick)
+    const power = CFG.shootPow * clamp(0.6 + 0.013 * distToGoal + 0.12 * A.shooting, 0.68, 1);
+    // he knows roughly how true he can hit it from here, and aims inside the post accordingly
+    const errDeg = makeKick(p, 'shot', 'aim', gx, 0.3, 0, power).err;
+    const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot, errDeg);
     const xg = estimateXg(team, ball.position.x, ball.position.z, press) * (0.45 + 0.75 * openness);
     // threshold falls with composure and urgency, rises when protecting a lead
     let need = 0.115 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve - 0.035 * team.directness();
@@ -125,8 +129,6 @@ export function aiCarry(p: Player, _dt: number): void {
     }
     const pot = chance(CFG.potShot * (1 + urgency * 3) * (1 - conserve * 0.9)) && distToGoal < 24;
     if (xg > need || (pot && openness > 0.25)) {
-      // placement close in, power from range (power costs accuracy — see control.makeKick)
-      const power = CFG.shootPow * clamp(0.6 + 0.013 * distToGoal + 0.12 * A.shooting, 0.68, 1);
       // a clinical finisher bends it away from the keeper, around him into the corner
       const curlSign = Math.sign(_shot.z - opp.gk.position.z || 1) * side;
       const finesse = distToGoal < 17 && A.shooting > 0.8 && openness < 0.8 && chance(0.4);

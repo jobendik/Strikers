@@ -25,8 +25,10 @@ in a follow-up PR. Everything below passes all gates.
   lane-denial marking — see `FOOTBALL_AI.md`.
 - Balance pass 2: keeper distribution from the hands, landed headers, power-vs-accuracy
   shooting, reaction time on interceptions, realistic dive timing, team directness.
-  Scoring fell from 5–8 goals to ≈ 2 per 4-minute match with 82–91 % pass completion
-  at every tier — see `PLAYTEST_REPORT.md`.
+  Scoring fell from 5–8 goals per 4 minutes to ≈ 2 (≈ 3.3 per real 6-minute match) with
+  83–91 % pass completion at every tier — see `PLAYTEST_REPORT.md`.
+- AI shooters aim inside the post by how far the strike can stray (on-target share
+  35 % → 47 %, keepers now make ≈ 3.5 saves a match); `npm run sim` has a balance guard.
 
 The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
 under `.claude/worktrees/` can be deleted.
@@ -42,14 +44,15 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
    Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
-2. **Attacking play (PLAY-03 / AI-02 / AI-04):** finishing, keeping and passing are
-   now believable, but chances are scarce — 6–10 shots and ≈ 2 goals per 4 minutes, the
-   ball in the final third only ≈ 14 % of possession. Work on *creating* chances:
-   runs in behind and across the line, wall passes / third-man, overlaps, carriers
-   running at a defender when the cover is thin, crosses to near/far post. Do not
-   buy goals by weakening keepers or sharpening finishing. Tools:
-   `npm run sim -- 8 120 --diag --diff 1` (shot context by distance, pass table,
-   possession zones), `--close` (traces point-blank chances), `--gk`.
+2. **Attacking variety (AI-02):** the balance numbers now meet `QUALITY_STANDARD.md` at
+   the game's real match length (2×3 min: 2.5–4.4 goals, 10–16 shots, ≈ 45–55 % on
+   target, 24–34 % conversion, 83–91 % pass completion at every tier) and `npm run sim`
+   fails if they drift far (balance guard). What is missing is *how* chances are made:
+   60 % of shots still come from 5–15 m after a carry or a single pass. Add runs in
+   behind and across the line, wall passes / third-man, overlaps, crosses to near/far
+   post — and check each with `npm run sim -- 8 120 --diag --diff 1` (shot context,
+   pass table, possession spells, zones), `--close`, `--gk`. Do not buy goals by
+   weakening keepers or sharpening finishing.
 3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
    (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
@@ -68,8 +71,9 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 ## Known issues
 
 - No human playtest; no real-GPU or real-phone measurements; nobody has heard the audio.
-- Too few chances: ≈ 2 goals and 6–10 shots per 4-minute AI-v-AI match; on-target share
-  (32–44 %) and shot count are below the targets in `QUALITY_STANDARD.md`.
+- An earlier note here said the AI made too few chances. That compared 2×2-minute
+  harness runs with targets written for 2×3 minutes; at the real length the volume is
+  on target. Chance *variety* is the real gap (see next action 2).
 - The keeper's throw has no animation (the ball simply leaves his hands); a user-controlled
   player is not made to give the keeper room (only the throw's lane check protects it).
 - The scripted 11 m corner shot in `--gk` is never saved (that scenario has no wind-up

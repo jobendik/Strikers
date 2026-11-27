@@ -288,16 +288,20 @@ export function clampShot(t: Vector3, team: Team): void {
  * 0..1 "openness" score (how much of the goal the keeper leaves uncovered there).
  * `composure` decides how fine the shooter dares to cut it toward the post/bar.
  */
-export function pickShotTarget(origin: Vector3, team: Team, oppTeam: Team, composure: number, out: Vector3): number {
+export function pickShotTarget(origin: Vector3, team: Team, oppTeam: Team, composure: number, out: Vector3, errDeg = 0): number {
   const gx = goalX(team);
   const gk = oppTeam.gk;
   const G = CFG.goalHalf;
-  const margin = 1.15 - 0.5 * composure; // metres inside the post he aims
+  // metres inside the post he aims: as fine as he dares — but a shooter who knows
+  // how much this strike can stray (`errDeg`, 1σ) leaves himself that much frame
+  const dGoal = Math.hypot(gx - origin.x, origin.z);
+  const spread = dGoal * Math.tan((errDeg * Math.PI) / 180);
+  const margin = clamp(Math.max(1.15 - 0.5 * composure, 0.3 + 0.8 * spread), 0.5, G - 1.1);
   // where the keeper's body would be on the shot line when the ball passes him
   let best = -1;
   for (let i = 0; i < 6; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    const z = side * (G - margin - (i >= 4 ? 1.1 : 0));
+    const z = side * Math.max(0.6, G - margin - (i >= 4 ? 1.1 : 0));
     const y = i >= 2 && i < 4 ? CFG.crossbarH - 0.8 - 0.3 * (1 - composure) : 0.35;
     // keeper's lateral offset from the shot line, measured at the keeper's depth
     const tK = clamp((gk.position.x - origin.x) / (gx - origin.x || 1e-6), 0, 1);

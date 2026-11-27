@@ -85,10 +85,29 @@ AI observation (one seeded sequence, five stills): the keeper holds the ball, th
 nearest forward backs off to the edge of the box, the throw reaches a team-mate.
 
 ### Open observations
-- **Now too few chances rather than too many:** 6–10 shots and ≈ 2 goals per 4-minute
-  match; the side in possession has the ball in the final third only ≈ 14 % of the
-  time. The next lever is attacking play (runs in behind, combination play, taking
-  players on), not finishing or keeping.
+- **Correction:** an earlier version of this report said chances were now too scarce.
+  That compared 2×2-minute runs with targets written for the game's real 2×3 minutes.
+  At the real length (10 seeds per scenario, after AI shooters were taught to aim inside
+  the post by their expected spread):
+
+  | Scenario (2×180 s) | Goals | Shots | On target | Conversion | Pass acc. | Saves |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | EASY USA v BRA | 1.2–2.3 | 5.2–6.6 | 47 % | 30 % | 91 % | 3.5 |
+  | PRO USA v BRA | 1.2–1.9 | 4.8–7.1 | 46 % | 26 % | 88 % | 3.6 |
+  | LEGEND USA v BRA | 1.2–1.3 | 4.3–5.3 | 55 % | 26 % | 86 % | 3.5 |
+  | ULTIMATE USA v BRA | 1.7–2.7 | 6.2–9.2 | 45 % | 29 % | 85 % | 4.2 |
+  | WORLD CLASS USA v BRA | 1.0–2.3 | 7.4–6.2 | 41 % | 24 % | 83 % | 3.4 |
+  | PRO BRA v BRA (mirror) | 2.3–2.8 | 7.4–7.6 | 52 % | 34 % | 89 % | 4.4 |
+  | PRO ARG v FRA | 2.0–2.1 | 6.6–9.1 | 46 % | 26 % | 89 % | 4.5 |
+  | PRO NOR v SEN | 1.5–1.4 | 4.9–6.5 | 48 % | 25 % | 88 % | 3.7 |
+  | LEGEND GER v ENG | 1.2–1.3 | 4.9–5.5 | 36 % | 24 % | 86 % | 2.1 |
+
+  These meet the targets in `QUALITY_STANDARD.md` (2–4 goals, 10–16 shots, 45–55 % on
+  target, 25–30 % conversion) apart from two scenarios' on-target share, the mirror's
+  5.1 goals and pass completion a few points above the 78–85 % band.
+- Possession spells (PRO, 8 matches): ≈ 42 a match, 48 % reach the final third, 43 % of
+  those end in a shot — but a final-third spell lasts only ≈ 3.3 s. Attacks are quick
+  strikes; there is little sustained pressure or combination play.
 - _Superseded by balance pass 2 — the three points below describe the state before it:_
 - Conversion is still above target at the higher difficulties (44–49 %) and most
   shots still come from 5–10 m; `--gk` still shows a cliff between "unsaveable"

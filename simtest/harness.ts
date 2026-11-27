@@ -35,7 +35,19 @@ function check(label: string, ok: boolean, detail: string): void {
   }
 }
 
+/** Totals over every reported scenario — the balance guard at the end reads them. */
+const agg = { matches: 0, minutes: 0, goals: 0, shots: 0, onT: 0, passes: 0, comp: 0 };
+
 function report(label: string, rs: SimResult[]): void {
+  for (const r of rs) {
+    agg.matches++;
+    agg.minutes += r.ticks / 120 / 60;
+    agg.goals += r.score[0] + r.score[1];
+    agg.shots += r.shots[0] + r.shots[1];
+    agg.onT += r.onTarget[0] + r.onTarget[1];
+    agg.passes += r.passes[0] + r.passes[1];
+    agg.comp += r.completed;
+  }
   const comp = mean(rs, (r) => r.completed);
   const intc = mean(rs, (r) => r.intercepted);
   const passes = mean(rs, (r) => r.passes[0] + r.passes[1]);
@@ -243,9 +255,46 @@ function diag(n: number): void {
   const lossZone = [0, 0, 0, 0, 0, 0];
   let lastOwner: unknown = null;
   let lastOwnerX = 0;
+  // possession spells: how far each one gets and how it ends
+  const spell = { team: null as unknown, maxAx: 0, t0: 0, shot: false, entered: 0, lastAx: 0, lastCarrier: '' };
+  const spells = { n: 0, mid: 0, final: 0, box: 0, shotFromFinal: 0, shots: 0, durFinal: 0, endFinal: {} as Record<string, number> };
+  let shotsSeen = 0;
+  const closeSpell = (why: string): void => {
+    if (!spell.team) return;
+    if (shotsSeen > 0) spell.shot = true;
+    spells.n++;
+    if (spell.maxAx > 0.5) spells.mid++;
+    if (spell.maxAx > 2 / 3) {
+      spells.final++;
+      spells.durFinal += simClock.elapsed - spell.entered;
+      if (spell.shot) spells.shotFromFinal++;
+      const k = spell.shot ? 'shot' : why;
+      spells.endFinal[k] = (spells.endFinal[k] ?? 0) + 1;
+    }
+    if (spell.maxAx > 1 - CFG.boxDepth / (2 * CFG.halfL)) spells.box++;
+    if (spell.shot) spells.shots++;
+    spell.team = null;
+  };
+  let lastToast = '';
+  const offSp = onAny((e: SimEvent) => {
+    if (e.t === 'shot') shotsSeen++;
+    if (e.t === 'toast') lastToast = e.text;
+  });
   const onTick = (): void => {
-    if (match.state !== 'play' || match.restart) return;
+    if (match.state !== 'play') { closeSpell('whistle'); return; }
+    if (match.restart) { closeSpell('out of play / foul'); return; }
     const t = match.controlTeam;
+    if (t) {
+      const axs = (ball.position.x * t.side + CFG.halfL) / (2 * CFG.halfL);
+      if (spell.team !== t) {
+        closeSpell(lastToast === 'TACKLE' || lastToast === 'SLIDE TACKLE' || lastToast === 'BALL WON' || lastToast === 'DISPOSSESSED' ? 'tackled' : lastToast === 'INTERCEPTED' ? 'pass cut out' : spell.lastCarrier === '' ? 'loose ball lost' : 'pass cut out / loose');
+        spell.team = t; spell.maxAx = axs; spell.t0 = simClock.elapsed; spell.shot = false; spell.entered = axs > 2 / 3 ? simClock.elapsed : 0; shotsSeen = 0; lastToast = '';
+      }
+      if (axs > 2 / 3 && spell.maxAx <= 2 / 3) spell.entered = simClock.elapsed;
+      spell.maxAx = Math.max(spell.maxAx, axs);
+      if (shotsSeen > 0) spell.shot = true;
+      spell.lastCarrier = match.controlPlayer ? 'c' : '';
+    }
     if (t) {
       const ax = (ball.position.x * t.side + CFG.halfL) / (2 * CFG.halfL);
       if (simClock.tick % 12 === 0) {
@@ -259,6 +308,9 @@ function diag(n: number): void {
   };
   for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: dDiff, seed: 900 + i, events: true, onTick }));
   console.log('ball position while in possession (own goal → their goal, sixths):', zone.map((v) => `${((100 * v) / zoneN).toFixed(0)}%`).join(' '), ' | possession lost in:', lossZone.map((v) => (v / n).toFixed(1)).join(' '));
+  offSp();
+  console.log(`possession spells/match ${(spells.n / n).toFixed(0)}: reach their half ${((100 * spells.mid) / spells.n).toFixed(0)}%, final third ${((100 * spells.final) / spells.n).toFixed(0)}% (${(spells.final / n).toFixed(1)}/match, ${(spells.durFinal / Math.max(1, spells.final)).toFixed(1)} s each), box ${((100 * spells.box) / spells.n).toFixed(0)}% (${(spells.box / n).toFixed(1)}/match); final-third entries ending in a shot ${((100 * spells.shotFromFinal) / Math.max(1, spells.final)).toFixed(0)}%`);
+  console.log('   final-third entries end:', Object.entries(spells.endFinal).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / spells.final).toFixed(0)}%`).join('  '));
   offG();
   offO();
   offK();
@@ -547,6 +599,23 @@ scenarios.forEach(([label, h, a, d, fz], si) => {
 });
 const secs = (Date.now() - t0) / 1000;
 console.log(`\n# ${ticks} ticks in ${secs.toFixed(1)}s = ${(ticks / 120 / secs).toFixed(0)}× real time`);
+
+// ---- balance guard: wide bands around the targets in docs/QUALITY_STANDARD.md, over all
+// scenarios together. Not a tuning tool (use --diag) — it exists so that a regression the
+// size of "the keeper gives the ball away" or "nobody can complete a pass" fails the run.
+if (!only && agg.matches >= 30) {
+  const gpm = agg.goals / agg.minutes;
+  const conv = agg.goals / (agg.shots || 1);
+  const onT = agg.onT / (agg.shots || 1);
+  const pacc = agg.comp / (agg.passes || 1);
+  const spm = agg.shots / agg.minutes;
+  console.log(`# balance over ${agg.matches} matches: ${gpm.toFixed(2)} goals/min, ${spm.toFixed(2)} shots/min, ${(100 * onT).toFixed(0)}% on target, ${(100 * conv).toFixed(0)}% conversion, ${(100 * pacc).toFixed(0)}% pass completion`);
+  check('balance: goals per minute', gpm > 0.3 && gpm < 0.95, `${gpm.toFixed(2)} (want 0.3–0.95; target ≈ 0.33–0.67)`);
+  check('balance: shots per minute', spm > 1.3 && spm < 3.6, `${spm.toFixed(2)} (want 1.3–3.6; target ≈ 1.7–2.7)`);
+  check('balance: on target', onT > 0.36 && onT < 0.62, `${(100 * onT).toFixed(0)}% (want 36–62 %)`);
+  check('balance: conversion', conv > 0.16 && conv < 0.38, `${(100 * conv).toFixed(0)}% (want 16–38 %)`);
+  check('balance: pass completion', pacc > 0.76 && pacc < 0.94, `${(100 * pacc).toFixed(0)}% (want 76–94 %)`);
+}
 
 // ---- determinism: same seed ⇒ identical match ----
 const a = simulateMatch('SPAIN', 'ITALY', { diff: 2, seed: 4242 });

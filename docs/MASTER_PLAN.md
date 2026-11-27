@@ -44,7 +44,7 @@ Milestones are not silos; each must leave a playable, better game.
 | ANIM-04 | Leg IK to the ball, upper-body layers | TODO | |
 | PLAY-01 | Shielding, skill moves, player-triggered runs | TODO | |
 | PLAY-02 | Proper set pieces (throw-ins, corners, free kicks with walls) | TODO | currently quick restarts |
-| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | A (16 seeds/tier, 2×2 min): 1.6–2.5 goals, 6–10 shots, 32–44 % on target, 18–28 % conversion, 82–91 % pass completion at **every** tier; goals ≈ 1.3× xG (baseline ≈ 11.5 goals, 96 % on target; before balance pass 2: 5–8 goals, half of them gifts from keeper distribution). Shot volume and on-target share are now *below* target — the attack rarely gets into the final third (≈ 14 % of possession) |
+| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | DONE (automated only) | A (10 seeds × 9 scenarios at the real 2×3 min): 2.5–4.4 goals (one mirror scenario 5.1), 9.6–15.7 shots, 36–55 % on target (7 of 9 scenarios 45–55 %), 24–34 % conversion, 83–91 % pass completion, the same at every tier; `npm run sim` now fails outside wide bands (balance guard: 0.56 goals/min, 1.96 shots/min, 47 % on target, 28 % conversion, 87 % passes over 54 matches). Baseline ≈ 11.5 goals / 4 min, 96 % on target. H: whether it *feels* balanced against a person is untested |
 | PLAY-04 | Practice arena | TODO | |
 
 ## M3 — Football intelligence
@@ -54,7 +54,7 @@ Milestones are not silos; each must leave a playable, better game.
 | AI-01 | A shared spatial picture: who controls which grass | DONE | A: `pitchControl.ts`, deterministic (harness hash check); O: lab overlay |
 | AI-02 | Team-mates run into space the team can win, not to fixed spots | PART | A: support from pitch control; pass completion +4–5 pts. No overlaps / third-man / near-far-post patterns yet |
 | AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts` with ground gained and team directness; carriers release before a closing defender arrives; ≈ 135 passes / 4 min at 82–91 % completion (`--diag` pass table by kind / length / pressure). Not human-reviewed for "looks like football" |
-| AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold, lowered by team directness; placement close in, power from range; conversion 18–28 % at every tier. Only 6–10 shots a match |
+| AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold, lowered by team directness; placement close in, power from range; aim point set inside the post by the strike's expected spread; conversion 24–34 %, 45–55 % on target. 60 % of shots still from 5–15 m after a carry or one pass — little variety |
 | AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | PART | A: line of engagement (press vs contain), second presser, ball-oriented compact block, lane-denial marking, cover defender. No offside line, no pressing traps; O: four stills of one sequence reviewed with the lab overlay (compact low block, sensible control field) — not watched as continuous play |
 | AI-06 | Team tactical states (build-up, press, mid/low block, transitions, counter) | PART | A: seven states with measured time shares (harness `--diag`), shown in the lab. Rule-based; in-possession states change little yet beyond the counter |
 | AI-07 | Tactical identities per nation; opponent adaptation | TODO | only score-reactive mentality |

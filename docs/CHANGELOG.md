@@ -47,6 +47,11 @@
 - Keeper dive takes a realistic time to full stretch; spread stance is not a wall;
   fingertip saves deflect more; high balls are taken standing.
 - Shot/pass execution noise compressed across difficulty tiers; dead knobs removed.
+- AI shooters aim inside the post by the strike's expected spread (on target 35 % → 47 %,
+  more saves, fewer shots sprayed wide).
+- `npm run sim` balance guard: fails if goals/min, shots/min, on-target share,
+  conversion or pass completion leave wide bands around the targets; `--diag` also
+  reports possession spells (how far they get, how they end).
 - Harness: `--diag --diff N`, per-distance shot context (marking, keeper position,
   outcome), pass outcomes by kind/length/pressure, possession zones, `--close`.
 
