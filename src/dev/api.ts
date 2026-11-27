@@ -1,7 +1,7 @@
 import { CFG } from '../config/constants';
 import * as bus from '../core/bus';
 import { sim, SIM_DT, SIM_HZ } from '../core/time';
-import { rngSeed } from '../core/rng';
+import { rngSeed, seedRng } from '../core/rng';
 import { ball, match } from '../game/state';
 import { loopCtl, stepTicks } from '../game/loop';
 import { ballTrajectory } from '../game/predict';
@@ -36,6 +36,8 @@ export function installDevApi(): void {
     get seed() {
       return rngSeed();
     },
+    /** Re-seed the simulation RNG (makes a scripted test reproducible). */
+    reseed: (n: number) => seedRng(n),
     loop: loopCtl,
     replay: replayCtl,
     /** Advance exactly `n` simulation ticks now (use with loop.manual = true for frame-rate-free tests). */

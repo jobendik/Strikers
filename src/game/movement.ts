@@ -195,6 +195,8 @@ function bindToBall(p: Player): void {
   const bz = ball.position.z - p.position.z;
   const d = Math.hypot(bx, bz);
   if (d <= CFG.controlR * 0.95) return; // at his feet — free to go anywhere
+  // cutting back against the ball's run: within a stretched leg he can already turn
+  if (d <= 1.5 && ball.velocity.x * wx + ball.velocity.z * wz < 0) return;
   const want = Math.hypot(wx, wz);
   // chase his own touch (at least at a run), leading it slightly
   const tx = bx + ball.velocity.x * 0.12;

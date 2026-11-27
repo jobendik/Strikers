@@ -32,8 +32,7 @@ const DOUBLE_TAP_MS = 280; // window for a double-tap sprint → knock-on burst
 let lastSprintTap = 0;
 
 /** Register a sprint tap; a quick second tap fires the knock-on burst. */
-function sprintTap(): void {
-  const now = performance.now();
+function sprintTap(now = performance.now()): void {
   if (now - lastSprintTap < DOUBLE_TAP_MS) userKnockOn();
   lastSprintTap = now;
 }
@@ -56,38 +55,44 @@ function modsNow(extra: ShotMods = {}): ShotMods {
   };
 }
 
-function shootDown(mods: ShotMods = {}): void {
+/*
+ * Hold durations are measured from the *event* timestamps (when the hardware
+ * reported the press/release), not from when the handler happened to run — on a
+ * slow frame the two differ by the whole frame time, and a quick tap would be
+ * read as a hold (a lofted pass instead of a ground pass).
+ */
+function shootDown(mods: ShotMods = {}, t = performance.now()): void {
   if (shooting) return;
   shooting = true;
   shootMods = mods;
-  shootDownAt = performance.now();
+  shootDownAt = t;
   Haptics.tap();
 }
-function shootUp(): void {
+function shootUp(t = performance.now()): void {
   if (!shooting) return;
-  const charge = clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1);
+  const charge = clamp((t - shootDownAt) / MAX_CHARGE_MS, 0, 1);
   shooting = false;
   if (match.state === 'shootout') penaltyAction(charge);
   else userShoot(charge, modsNow(shootMods));
 }
-function passDown(): void {
+function passDown(t = performance.now()): void {
   passing = true;
-  passDownAt = performance.now();
+  passDownAt = t;
 }
-function passUp(): void {
+function passUp(t = performance.now()): void {
   if (!passing) return;
-  const lob = performance.now() - passDownAt >= LOB_HOLD_MS;
+  const lob = t - passDownAt >= LOB_HOLD_MS;
   passing = false;
   userPass(lob);
   Haptics.tap();
 }
-function throughDown(): void {
+function throughDown(t = performance.now()): void {
   throughing = true;
-  throughDownAt = performance.now();
+  throughDownAt = t;
 }
-function throughUp(): void {
+function throughUp(t = performance.now()): void {
   if (!throughing) return;
-  const lob = performance.now() - throughDownAt >= LOB_HOLD_MS;
+  const lob = t - throughDownAt >= LOB_HOLD_MS;
   throughing = false;
   userThrough(lob);
   Haptics.tap();
@@ -146,11 +151,11 @@ function pollGamepad(): void {
     if (!now && prevBtn[i] && up) up();
     prevBtn[i] = now;
   };
-  edge(0, passDown, passUp); // A / Cross
-  edge(1, () => shootDown(), shootUp); // B / Circle
-  edge(2, () => shootDown({ finesse: true }), shootUp); // X / Square — finesse shot
-  edge(3, throughDown, throughUp); // Y / Triangle
-  edge(7, sprintTap); // RT
+  edge(0, () => passDown(), () => passUp()); // A / Cross
+  edge(1, () => shootDown(), () => shootUp()); // B / Circle
+  edge(2, () => shootDown({ finesse: true }), () => shootUp()); // X / Square — finesse shot
+  edge(3, () => throughDown(), () => throughUp()); // Y / Triangle
+  edge(7, () => sprintTap()); // RT
   edge(4, () => {
     // LB: switch when defending (a chip modifier when held with shoot on the ball)
     switchPlayer();
@@ -176,11 +181,11 @@ export function gamepadConnected(): boolean {
 /** Attach all touch, mouse and keyboard listeners. Call once at boot. */
 export function initInput(): void {
   initJoystick();
-  bindButton('bShoot', (down) => (down ? shootDown() : shootUp()));
-  bindButton('bPass', (down) => (down ? passDown() : passUp()));
-  bindButton('bSprint', (down) => {
+  bindButton('bShoot', (down, t) => (down ? shootDown({}, t) : shootUp(t)));
+  bindButton('bPass', (down, t) => (down ? passDown(t) : passUp(t)));
+  bindButton('bSprint', (down, t) => {
     sprintBtn = down;
-    if (down) sprintTap();
+    if (down) sprintTap(t);
   });
   bindButton('bSwitch', (down) => {
     if (down) {
@@ -208,19 +213,19 @@ export function initInput(): void {
     if (repeat) return; // ignore auto-repeat for edge-triggered actions
     switch (e.code) {
       case 'KeyJ':
-        passDown();
+        passDown(e.timeStamp);
         break;
       case 'KeyK':
-        shootDown();
+        shootDown({}, e.timeStamp);
         break;
       case 'KeyI':
-        shootDown({ finesse: true });
+        shootDown({ finesse: true }, e.timeStamp);
         break;
       case 'KeyO':
-        shootDown({ chip: true });
+        shootDown({ chip: true }, e.timeStamp);
         break;
       case 'KeyL':
-        throughDown();
+        throughDown(e.timeStamp);
         break;
       case 'Space':
         e.preventDefault();
@@ -233,7 +238,7 @@ export function initInput(): void {
         break;
       case 'ShiftLeft':
       case 'ShiftRight':
-        sprintTap();
+        sprintTap(e.timeStamp);
         break;
       case 'KeyV':
         flashToast(`CAMERA: ${cycleCameraMode().toUpperCase()}`);
@@ -245,9 +250,9 @@ export function initInput(): void {
   });
   addEventListener('keyup', (e) => {
     keys[e.code] = false;
-    if (e.code === 'KeyJ') passUp();
-    if (e.code === 'KeyK' || e.code === 'KeyI' || e.code === 'KeyO') shootUp();
-    if (e.code === 'KeyL') throughUp();
+    if (e.code === 'KeyJ') passUp(e.timeStamp);
+    if (e.code === 'KeyK' || e.code === 'KeyI' || e.code === 'KeyO') shootUp(e.timeStamp);
+    if (e.code === 'KeyL') throughUp(e.timeStamp);
   });
   // a lost focus must not leave keys stuck down
   addEventListener('blur', () => {
@@ -366,22 +371,22 @@ function initJoystick(): void {
   });
 }
 
-function bindButton(id: string, fn: (down: boolean) => void): void {
+function bindButton(id: string, fn: (down: boolean, t: number) => void): void {
   const elBtn = document.getElementById(id)!;
   elBtn.addEventListener('touchstart', (e) => {
     e.preventDefault();
-    fn(true);
+    fn(true, e.timeStamp);
   }, { passive: false });
   elBtn.addEventListener('touchend', (e) => {
     e.preventDefault();
-    fn(false);
+    fn(false, e.timeStamp);
   }, { passive: false });
   elBtn.addEventListener('mousedown', (e) => {
     e.preventDefault();
-    fn(true);
+    fn(true, e.timeStamp);
   });
   elBtn.addEventListener('mouseup', (e) => {
     e.preventDefault();
-    fn(false);
+    fn(false, e.timeStamp);
   });
 }

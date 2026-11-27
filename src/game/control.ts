@@ -462,6 +462,9 @@ export function clearBall(p: Player): boolean {
 
 /* ------------------------------------------------------------------ dribbling */
 
+/** How far a carrier can stretch to drag the ball back when cutting against its run. */
+export const CUT_REACH = 1.55;
+
 /** The carrier keeps the ball by touching it. Call once per tick after movement. */
 export function updateDribble(_dt: number): void {
   const p = match.controlPlayer;
@@ -471,12 +474,14 @@ export function updateDribble(_dt: number): void {
   const bx = ball.position.x - p.position.x;
   const bz = ball.position.z - p.position.z;
   const d = Math.hypot(bx, bz);
-  if (d > CFG.controlR || p.touchCd > 0) return;
-
   const A = p.ath;
   const sw = dribbleWant.speed;
   const dxn = dribbleWant.x;
   const dzn = dribbleWant.z;
+  // Cutting back against the ball's run he can stretch a leg out to stop it — a
+  // longer reach than a normal touch, which is what keeps a turn at pace sharp.
+  const cutting = sw > 0.4 && ball.velocity.x * dxn + ball.velocity.z * dzn < -0.5;
+  if (d > (cutting ? CUT_REACH : CFG.controlR) || p.touchCd > 0) return;
 
   if (sw < 0.4) {
     // standing on it: sole of the boot, the ball stops with him
