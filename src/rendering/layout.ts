@@ -14,7 +14,7 @@ import { CFG } from '../config/constants';
  * dynamic (y 9.5, z 34, fov 38) — looking down at the ball. On that side nothing
  * may rise above y = 0.45·(z − halfW) between the touchline and z = 36. So the
  * +Z stand is: a 26.6° lower tier starting at z = halfW + 8 (seated head line
- * ≈ 0.50·(z − 28) + 2.4, standing fans stay under the limit), then an open
+ * ≈ 0.50·(z − 28) + 2.3), then an open
  * broadcast deck at y ≈ 8 from z = 42 to 48 that the cameras fly over, with the
  * glazed boxes and a short upper tier behind them. The roof clears y = 27.
  */
@@ -113,7 +113,7 @@ export interface Section {
   corner: boolean;
   /** true for every section that carries the upper tier. */
   upper: boolean;
-  /** true for the single-tier +Z stand. */
+  /** true for the camera-side (+Z) main stand. */
   wall: boolean;
   /** Perimeter length at outward distance d. */
   length(d: number): number;
