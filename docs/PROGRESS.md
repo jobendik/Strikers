@@ -51,7 +51,11 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 2. **Watch it, then keep building patterns (AI-02 / AI-05):** pass-and-move runs, the
    return ball and tight marking of runners are in and measured (see
    `PLAYTEST_REPORT.md`), but nobody has *watched* a one-two or a marked run — capture
-   a few sequences with the lab overlay before building more. Still missing: overlaps
+   a few sequences with the lab overlay before building more. (One attempt failed: to
+   film a moment you must find it in one run and replay to just before it, and
+   re-running `startMatch(seed)` in the page — even after `resetSimClock()` — diverges
+   once frames render between ticks. The dev API needs a real "restart with seed" that
+   reproduces a match exactly; the headless harness already does.) Still missing: overlaps
    from deep, near/far-post split on crosses, a held offside line, pressing traps.
    29 % of chances still come from loose balls and rebounds. Tools:
    `npm run sim -- 8 120 --diag --diff 1` (now also "chances made by", possession
