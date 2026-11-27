@@ -1,6 +1,7 @@
 import { TEAMS, teamMeta } from '../config/players';
 import { match } from './state';
 import { setCrowdColors, setScoreboardTeams } from '../rendering/stadium';
+import { setEnvironmentPreset } from '../rendering/scene';
 import { returnToMenu, startMatch } from './flow';
 import { refreshTeamTags } from '../ui/hud';
 import { showResultScreen, type ResultScreenData, type ResultStat, type ResultChip, type ResultBar } from '../ui/resultScreen';
@@ -91,6 +92,10 @@ function configureTeams(homeKey: string, awayKey: string): void {
   // dress the stadium for the fixture: supporters in both sets of colours, names on the big screen
   setCrowdColors(match.teams[0].color, match.teams[1].color);
   setScoreboardTeams(match.teams[0].short, match.teams[1].short);
+  // conditions for the day: mostly floodlit evenings and bright afternoons, the odd
+  // golden hour, grey day or downpour (purely visual — weather does not change the physics)
+  const roll = Math.random();
+  setEnvironmentPreset(roll < 0.36 ? 'night' : roll < 0.66 ? 'afternoon' : roll < 0.82 ? 'golden' : roll < 0.93 ? 'overcast' : 'rain');
 }
 
 /**

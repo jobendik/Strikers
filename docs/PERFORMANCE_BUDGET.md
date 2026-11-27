@@ -30,7 +30,8 @@ work still leaves two orders of magnitude of headroom.
 | --- | --- | --- | --- |
 | Baseline players + old stadium | 53 | 134k | 7 skinned meshes × 10 players |
 | New player rig + old stadium | 35 | 186k | one welded mesh on one 65-joint skeleton per player |
-| New stadium | see `RENDERING_DESIGN.md` | | |
+| New stadium, environment only (lite / standard / high / ultra) | 14 / 16 / 29 / 31 | 38k / 50k / 59k / 60k | 17 085 crowd impostors in one draw call; high/ultra include ~13 post passes |
+| Full match scene, `high`, broadcast camera | 53–56 | 430–480k | 10 players at ~20k tris each + shadow pass — players dominate; no player LOD yet |
 
 ## Rules
 

@@ -60,9 +60,9 @@ except the cover defender and xG-based shot selection (PART).
 | ID | Requirement | Status | Notes |
 | --- | --- | --- | --- |
 | REND-01 | Teams are instantly distinguishable; players look like footballers | DONE | O: kits/skin/numbers/indicators merged; see PLAYER_RENDERING. One shared face, no hair geometry |
-| REND-02 | A stadium that looks like one (bowl, instanced crowd, boards) | PART | O: merged (WIP state) — bowl, coloured instanced crowd, LED boards, scoreboard. Open: black frame at very close cameras on non-lite tiers; RENDERING_DESIGN.md pending |
-| REND-03 | Professional pitch, lighting presets, quality tiers | PART | same branch |
-| REND-04 | Goal nets that deform | PART | same branch; sim emits `net` |
+| REND-02 | A stadium that looks like one (bowl, instanced crowd, boards) | PART | O: bowl, 17k coloured instanced crowd reacting to `pulse`/goals, LED boards, scoreboards — see RENDERING_DESIGN. Black-frame bug (non-finite HDR texel through bloom) fixed by sanitising; source texel never identified. Real-GPU cost unmeasured |
+| REND-03 | Professional pitch, lighting presets, quality tiers | PART | O: analytic pitch, 5 presets, 4 tiers all boot without shader errors (screenshots). No grass-blade layer; dynamic resolution never exercised on a GPU |
+| REND-04 | Goal nets that deform | PART | O: Verlet cloth net reacts to `net`/`post`/ball; seen only as still frames |
 | CAM-01 | Readable broadcast camera with predictive framing + modes | PART | O: broadcast/tele/tactical/dynamic rigs; no settings UI; not human-tuned |
 | CAM-02 | Multi-angle replays from recorded play | PART | two-shot sequence; scrub/rate API exists, no UI |
 | AUD-01 | Bus-driven stadium audio with a crowd-emotion model | PART | A: merged; 90 offline numeric assertions + 58 unit tests on the pure emotion model; live match runs with no errors. **Nobody has listened to it** — see AUDIO_DESIGN |

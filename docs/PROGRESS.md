@@ -4,65 +4,67 @@ _Last updated: session 1 (2026-11-26)._
 
 ## Where things are
 
-Branch `claude/zealous-ritchie-lvr8qi`, draft PR jobendik/Strikers#21.
+Branch `claude/zealous-ritchie-lvr8qi`, draft PR jobendik/Strikers#21. Everything
+below is merged there and passes all gates.
 
-**Merged and passing all gates:** simulation core v2, AI adaptation, snapshot
-presenter/animation/camera/replay, input (gamepad etc.), player kits/rig, program docs.
+- Simulation core v2 (fixed step, seeded, physical ball, touch possession, strikes,
+  tackles, keepers, locomotion), AI adapted to it.
+- Snapshot presenter, animation driver, broadcast cameras, snapshot replays.
+- Input: keyboard, gamepad, touch; buffered actions; event-timestamp tap/hold.
+- Player rendering (kits, single-skeleton rig, indicators, ball) — `PLAYER_RENDERING.md`.
+- Stadium, crowd, pitch, nets, LED boards, lighting presets, quality tiers, post
+  chain — `RENDERING_DESIGN.md`.
+- Procedural audio engine + crowd-emotion model — `AUDIO_DESIGN.md`.
+- Dev lab overlay (F2), `window.__strikers`, harness modes, browser checks.
 
-**Parallel branches not merged yet** (git worktrees under `.claude/worktrees/`,
-branches `worktree-agent-*`; each owns disjoint files):
+The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
+under `.claude/worktrees/` can be deleted.
 
-| Branch | Owns | State at last check |
-| --- | --- | --- |
-| `worktree-agent-a88ee1f3d8ae17d15` | `rendering/{scene,stadium,pitch*,…}.ts`, quality tiers, `docs/RENDERING_DESIGN.md` | WIP: bowl, crowd, pitch, nets, sky, post chain written; wiring `stadium.ts` in progress |
-| `worktree-agent-a35111c9c2a84c83f` | `core/audio.ts`, `src/audio/*`, `docs/AUDIO_DESIGN.md` | Engine + crowd model committed; verification, tests and doc in progress |
-| `worktree-agent-a69471a86ed6dec24` | player rendering | **Merged** (incl. `docs/PLAYER_RENDERING.md`) |
-
-If those branches still exist when you read this: check `git log` on each, run its
-gates, then `git merge` into the work branch (conflicts are only expected in
-`simtest/vite.config.ts` stub strings, `src/core/settings.ts`, `index.html`).
-
-## Integration to do right after merging
-
-- **Audio:** delete nothing — the sim no longer calls legacy `Audio.kick()` etc.
-  Confirm `Audio.update(dt)` is called (it is, in `loop.ts`) and that the bus
-  subscriptions fire in a live match; wire any new volume/quality API into Settings.
-- **Stadium:** call `setCrowdColors(home, away)` in `modes.configureTeams`; pick an
-  environment preset per match (or expose it in the menu); check the gameplay
-  camera (`camera.ts` RIGS) is not occluded; make sure `renderFrame()` owns the
-  post chain; confirm the lite tier still disables replays.
-- Re-take the browser smoke screenshots (`scratchpad/pw/smoke.cjs` pattern in
-  CLAUDE.md) and update `QUALITY_STANDARD.md`.
+Integration already done: crowd colours + scoreboard names per fixture, a random
+lighting/weather preset per match (`modes.configureTeams`), audio quality follows
+the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 ## Next actions, in order
 
-1. Merge + integrate the two remaining branches (above).
-2. **Balance pass (PLAY-03 / GK-01):** conversion ≈ 50 % → 25–30 %. Levers already
-   identified: too many shots from < 10 m (cover/second-defender behaviour, keeper
-   smother), keeper outcome curve too binary by distance (`npm run sim -- --gk`),
-   difficulty should not raise both sides' scoring. Use `--diag` (shots by
-   distance) and `--gk` after each change.
-3. **Human-control verification:** a Playwright script that plays as the user
-   (dribble, turn, pass to a team-mate, through-ball, tackle) and asserts
-   outcomes; verify gamepad code with a mocked `navigator.getGamepads`.
-4. **Animation calibration:** frame-step the kick and dive clips against the ball
-   (`__strikers.step(1)` + close camera) and fix `CLIP_CAL` in `playerAnim.ts`.
-5. **Dev lab overlay (TOOL-02):** trajectory, intents, passing candidates.
-6. Settings UI for camera mode, assists, dead zone; remove the stale `animState`
-   field; update README controls table.
-7. Then Milestone 3 (team intelligence) — start with a pitch-control grid.
+1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
+   Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
+2. **Balance (PLAY-03 / GK-01):** conversion is 33 % at PRO but 44–49 % at
+   Legend+; ~60 % of shots come from 5–10 m; `--gk` shows a cliff between an
+   unsaveable precise 11 m corner and near-certain saves from 16 m+. Next levers:
+   more shots from range (AI shot selection), defenders blocking more, keeper
+   reaction variance. Passing is too quick (≈ 120 passes / 4 min) — make carriers
+   take players on and hold the ball. Use `--diag` and `--gk` after each change.
+3. **New-player protection:** with the stick idle at kick-off the user's taker is
+   dispossessed and the AI can score within ~6 s. Consider a short "idle assist"
+   (AI plays the user's man after ~1.5 s of no input) or a softer AI press on EASY.
+4. **Settings UI:** camera mode, assists (receive / tackle), stick dead zone, audio
+   bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
+5. **Milestone 3 — team intelligence:** start with a pitch-control grid (who gets
+   to each cell first, from `predict` + athletic profiles), then use it for support
+   runs, pass selection and the lab overlay; then a team tactical state machine.
+6. **Animation:** source licensed walk/jog/strafe/slide/header/keeper-set clips;
+   upper-body layer; leg IK to the ball; a proper shooting clip.
+7. **Milestone 5 prerequisite:** make pitch/team size per-match config (remove
+   module-level reads of `CFG.halfL` etc. in `Team.spots`, `FORMATION`, `penalty.ts`,
+   `rendering/layout.ts`).
+8. Use `simulateMatch` for World Cup AI-v-AI fixtures; put `test:browser` in CI.
 
 ## Known issues
 
-- Conversion and close-range chances too high (see above).
-- `README.md` still describes the old controls and the old physics.
-- Old stadium (TV-static crowd, near-side stand intruding at the bottom of the
-  frame) is still what this branch renders until the stadium branch is merged.
-- Gamepad code has never run against a real or mocked pad.
+- No human playtest; no real-GPU or real-phone measurements; nobody has heard the audio.
+- Finishing still too clinical at the top difficulties; passing too quick (see above).
+- Idle human at kick-off concedes quickly (see above).
+- One shared face / no hair geometry on players; crowd cards look flat in close
+  side-on replays; exterior of the bowl is bare.
+- Gamepad verified only with a mocked pad. Under 1–2 fps software rendering a pad
+  *tap* reads as a hold (it is polled per frame) — not an issue at real frame rates.
+- Set pieces are quick restarts (no walls, no routines); no shielding/skill moves.
 - `CFG` pitch dimensions are read at module load in a few places (blocks 7/11-a-side).
-- Penalty shoot-out was ported to the new physics but only type-checked, not played.
-- World Cup AI-v-AI fixtures still use the statistical model in `worldcup.ts`
-  (could now use `simulateMatch`).
+- World Cup AI-v-AI fixtures still use the statistical model in `worldcup.ts`.
+- The Mixamo `.fbx` files are redistributed in the repo — the owner must confirm
+  the licence allows that (see `PLAYER_RENDERING.md`).
+- Invented brand/stadium names (VELOQA, BRIZZO, TELLURA, PYXEL PLAY, ZEPHRA, "The
+  Meridian Bowl") have not been checked against trademark registers.
 
 ## Baseline numbers
 
