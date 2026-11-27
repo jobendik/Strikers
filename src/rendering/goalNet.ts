@@ -30,7 +30,7 @@ const SEG_Z = 40; // across the goal width
 const SEG_Y = 15; // up the height
 const SEG_X = 12; // along the depth
 /** Cloth tuning (see docs/RENDERING_DESIGN.md §Goals). */
-export const NET = { slack: 1.03, stiff: 0.1, damp: 0.972, kick: 0.55, iterations: 3 };
+export const NET = { slack: 1.03, stiff: 0.1, damp: 0.972, kick: 0.7, iterations: 3 };
 const SUBSTEP = 1 / 90;
 const MAX_SUBSTEPS = 5;
 
@@ -254,7 +254,7 @@ class NetCloth {
   }
 
   /** Kick the net around world point (x, y, z) along (dx, dy, dz) at `speed` m/s. */
-  impulse(x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, radius = 0.85): void {
+  impulse(x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, radius = 0.95): void {
     const l = Math.hypot(dx, dy, dz);
     if (l < 1e-4) {
       dx = this.side;
