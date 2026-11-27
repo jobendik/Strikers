@@ -15,7 +15,10 @@ below is merged there and passes all gates.
 - Stadium, crowd, pitch, nets, LED boards, lighting presets, quality tiers, post
   chain — `RENDERING_DESIGN.md`.
 - Procedural audio engine + crowd-emotion model — `AUDIO_DESIGN.md`.
-- Dev lab overlay (F2), `window.__strikers`, harness modes, browser checks.
+- Dev lab overlay (F2; `G` = pitch control), `window.__strikers`, harness modes, browser checks.
+- Settings: camera rig, conditions, assistance level, crowd/effects volume.
+- Milestone 3 started: pitch-control grid driving support runs and a pass-vs-keep
+  utility decision (`ai/pitchControl.ts`, `ai/passing.ts`) — see `FOOTBALL_AI.md`.
 
 The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
 under `.claude/worktrees/` can be deleted.
@@ -37,11 +40,13 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
    more shots from range (AI shot selection), defenders blocking more, keeper
    reaction variance. Passing is too quick (≈ 120 passes / 4 min) — make carriers
    take players on and hold the ball. Use `--diag` and `--gk` after each change.
-3. **Settings UI:** camera mode, assists (receive / tackle / idle), stick dead zone, audio
+3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
+   (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
-4. **Milestone 3 — team intelligence:** start with a pitch-control grid (who gets
-   to each cell first, from `predict` + athletic profiles), then use it for support
-   runs, pass selection and the lab overlay; then a team tactical state machine.
+4. **Milestone 3 — continue:** pitch control now drives support and passing. Next:
+   use it for defending (AI-05: cover shadows, press triggers, compactness, line
+   height), for the dribble direction, and build the team tactical state machine
+   (AI-06). Draw pass lanes + defensive assignments in the lab.
 5. **Animation:** source licensed walk/jog/strafe/slide/header/keeper-set clips;
    upper-body layer; leg IK to the ball; a proper shooting clip.
 6. **Milestone 5 prerequisite:** make pitch/team size per-match config (remove

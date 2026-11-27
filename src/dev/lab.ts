@@ -8,6 +8,8 @@ import { ball, match } from '../game/state';
 import { ballTrajectory, interceptPoint } from '../game/predict';
 import { loopCtl, stepTicks } from '../game/loop';
 import { Steer } from '../entities/Player';
+import { PC_NX, PC_NZ, control, pcVersion } from '../ai/pitchControl';
+import { chooseBestPass, keepValue, makePassOption } from '../ai/passing';
 
 /*
  * Football Development Lab — an optional in-game overlay for understanding the
@@ -34,6 +36,11 @@ let panel: HTMLDivElement | null = null;
 let traj: THREE.Line | null = null;
 let intents: THREE.LineSegments | null = null;
 let marks: THREE.Points | null = null;
+let pcMesh: THREE.Mesh | null = null;
+let pcTex: THREE.DataTexture | null = null;
+let pcSeen = -1;
+let showPc = true;
+const _opt = makePassOption();
 const events: string[] = [];
 const MAXP = 64;
 
@@ -77,6 +84,21 @@ function build(): void {
   marks.renderOrder = 21;
   scene.add(marks);
 
+  // pitch control: one texel per grid cell, bilinear-filtered over the whole pitch
+  pcTex = new THREE.DataTexture(new Uint8Array(PC_NX * PC_NZ * 4), PC_NX, PC_NZ, THREE.RGBAFormat);
+  pcTex.magFilter = THREE.LinearFilter;
+  pcTex.minFilter = THREE.LinearFilter;
+  pcTex.colorSpace = THREE.SRGBColorSpace;
+  pcMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(2 * CFG.halfL, 2 * CFG.halfW),
+    new THREE.MeshBasicMaterial({ map: pcTex, transparent: true, depthWrite: false, depthTest: false, toneMapped: false }),
+  );
+  pcMesh.rotation.x = -Math.PI / 2;
+  pcMesh.position.y = 0.04;
+  pcMesh.renderOrder = 15;
+  pcMesh.frustumCulled = false;
+  scene.add(pcMesh);
+
   onAny((e: SimEvent) => {
     if (!on || e.t === 'toast') return;
     if (e.t === 'kick' && e.kind === 'touch') return;
@@ -96,6 +118,7 @@ function build(): void {
     else if (e.code === 'BracketRight') loopCtl.speed = Math.min(8, loopCtl.speed * 2);
     else if (e.code === 'Backslash') loopCtl.manual = !loopCtl.manual;
     else if (e.code === 'Period' && loopCtl.manual) stepTicks(1);
+    else if (e.code === 'KeyG') showPc = !showPc;
   });
 }
 
@@ -106,6 +129,7 @@ export function toggleLab(v?: boolean): void {
   if (traj) traj.visible = on;
   if (intents) intents.visible = on;
   if (marks) marks.visible = on;
+  if (pcMesh) pcMesh.visible = on && showPc;
   if (!on) {
     loopCtl.speed = 1;
     loopCtl.manual = false;
@@ -119,6 +143,27 @@ export function labActive(): boolean {
 /** Refresh the overlay. Call once per rendered frame. */
 export function updateLab(): void {
   if (!on || !panel || !traj || !intents || !marks) return;
+
+  // --- pitch control (home = blue, away = red; stronger colour = firmer control) ---
+  if (pcMesh && pcTex) {
+    pcMesh.visible = showPc && (match.state === 'play' || match.state === 'celebrate');
+    if (pcMesh.visible && pcSeen !== pcVersion) {
+      pcSeen = pcVersion;
+      const d = pcTex.image.data as unknown as Uint8Array;
+      for (let iz = 0; iz < PC_NZ; iz++)
+        for (let ix = 0; ix < PC_NX; ix++) {
+          const c = control[iz * PC_NX + ix];
+          // the plane's v axis runs toward −Z after the −90° X rotation, so flip rows
+          const o = ((PC_NZ - 1 - iz) * PC_NX + ix) * 4;
+          const k = Math.abs(c - 0.5) * 2;
+          d[o] = c < 0.5 ? 255 : 40;
+          d[o + 1] = c < 0.5 ? 70 : 130;
+          d[o + 2] = c < 0.5 ? 60 : 255;
+          d[o + 3] = Math.round(150 * k * k);
+        }
+      pcTex.needsUpdate = true;
+    }
+  }
 
   // --- predicted ball flight ---
   const tp = traj.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -199,7 +244,7 @@ export function updateLab(): void {
   const s = match.stats;
   const roles = (i: number): string => match.teams[i].players.map((p) => p.role[0] + (p.act !== 'none' ? `(${p.act[0]})` : '')).join(' ');
   panel.textContent =
-    `DEV LAB  F2 hide · [ ] speed · \\ step-mode · . tick\n` +
+    `DEV LAB  F2 hide · [ ] speed · \\ step-mode · . tick · G pitch control\n` +
     `frame ${loopCtl.frameMs.toFixed(1)} ms   sim ${loopCtl.simMs.toFixed(2)} ms   ticks/frame ${loopCtl.steps}   ${SIM_HZ} Hz\n` +
     `speed ×${loopCtl.speed}${loopCtl.manual ? '  [STEP MODE]' : ''}   tick ${sim.tick}   seed ${rngSeed()}\n` +
     `draw calls ${ri.calls}   tris ${(ri.triangles / 1000).toFixed(0)}k\n` +
@@ -207,7 +252,18 @@ export function updateLab(): void {
     `ball  v ${pulse.ballSpeed.toFixed(1)} m/s  y ${ball.position.y.toFixed(2)}  ω(${ball.w.x.toFixed(0)},${ball.w.y.toFixed(0)},${ball.w.z.toFixed(0)})${ball.shot ? '  SHOT' : ''}\n` +
     `on ball ${c ? `${c.team.short} ${c.name}` : '—'}   threat ${pulse.threat[0].toFixed(2)} / ${pulse.threat[1].toFixed(2)}\n` +
     `${match.teams[0].short} ${roles(0)}\n${match.teams[1].short} ${roles(1)}\n` +
+    decisionLine() +
     (u ? `you  ${u.name}  v ${u.getSpeed().toFixed(1)}  sta ${(u.stamina * 100).toFixed(0)}%  act ${u.act}${u.queued ? ' +queued ' + u.queued.kind : ''}\n` : '') +
     `xG ${s.xg[0].toFixed(2)}–${s.xg[1].toFixed(2)}  shots ${s.shots[0]}–${s.shots[1]}  pass ${s.passesDone[0]}/${s.passes[0]}–${s.passesDone[1]}/${s.passes[1]}\n` +
     events.join('\n');
+}
+
+/** The carrier's live keep-vs-pass utility (the same numbers the AI decides on). */
+function decisionLine(): string {
+  const c = match.controlPlayer;
+  if (!c || c.roleType === 'GK' || match.state !== 'play') return '';
+  const opp = match.teams[0] === c.team ? match.teams[1] : match.teams[0];
+  const keep = keepValue(c);
+  if (!chooseBestPass(c, opp, _opt)) return `keep ${keep.toFixed(2)}   pass —\n`;
+  return `keep ${keep.toFixed(2)}   best pass ${_opt.utility.toFixed(2)} → ${_opt.receiver.name}${_opt.space ? ' (into space)' : ''}\n`;
 }

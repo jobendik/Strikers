@@ -46,7 +46,7 @@ export const CFG = {
   passLong: 22,
   clearPow: 24,
   shootAttempts: 6,
-  potShot: 0.035,
+  potShot: 0.012,
   passInterceptScale: 0.22,
   comfortZone: 3.0,
   minPassDist: 5,

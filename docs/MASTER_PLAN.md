@@ -49,11 +49,16 @@ Milestones are not silos; each must leave a playable, better game.
 
 ## M3 — Football intelligence
 
-Pitch-control / influence maps, team tactical state machine (build-up, press,
-mid/low block, transitions), structured runs (overlap, third man, near/far post),
-zonal + man marking, offside line management, tactical identities per nation,
-opponent adaptation, Football Intelligence Lab overlay. See `FOOTBALL_AI.md` — all TODO
-except the cover defender and xG-based shot selection (PART).
+| ID | Requirement | Status | Evidence / limits |
+| --- | --- | --- | --- |
+| AI-01 | A shared spatial picture: who controls which grass | DONE | A: `pitchControl.ts`, deterministic (harness hash check); O: lab overlay |
+| AI-02 | Team-mates run into space the team can win, not to fixed spots | PART | A: support from pitch control; pass completion +4–5 pts. No overlaps / third-man / near-far-post patterns yet |
+| AI-03 | Passing is a value decision (pass vs keep vs take him on) | PART | A: utility model in `passing.ts`; passes ≈ 130/4 min (was ≈ 120 pinball → now with intent, 78 % complete). Not human-reviewed for "looks like football" |
+| AI-04 | Shot selection by chance quality | PART | A: xG × openness threshold; conversion still above target at top tiers |
+| AI-05 | Defending as a unit: press triggers, cover shadows, line height, compactness | TODO | only chaser + cover defender + nearest-man marking |
+| AI-06 | Team tactical states (build-up, press, mid/low block, transitions, counter) | TODO | |
+| AI-07 | Tactical identities per nation; opponent adaptation | TODO | only score-reactive mentality |
+| AI-08 | Football Intelligence Lab | PART | O: control field, intents, interception points, live keep/pass utilities. Missing: pass lanes, defensive assignments, decision history |
 
 ## M4 — Next-generation presentation
 

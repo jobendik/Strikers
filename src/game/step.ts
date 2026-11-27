@@ -10,6 +10,7 @@ import { kickOff, tickClock } from './flow';
 import { updateShootout } from './penalty';
 import { planarToBall } from './aerial';
 import { goalX } from '../ai/analysis';
+import { updatePitchControl } from '../ai/pitchControl';
 
 /*
  * One fixed simulation tick — THE match simulation.
@@ -122,6 +123,7 @@ export function stepSimulation(opts: StepOptions): void {
       match.callTimer -= dt;
       if (match.callTimer <= 0) setPassRequest(null);
     }
+    updatePitchControl();
     updateRestart(dt);
     updateKicks(dt);
     resolveControl(dt);

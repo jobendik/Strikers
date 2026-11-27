@@ -51,7 +51,9 @@ function evaluateRunner(carrier: Player, runner: Player): RequestCandidate | nul
   const toRunner = runner.position.distanceTo(carrier.position);
   if (toRunner < CFG.minPassDist * 0.75 || toRunner > 26) return null;
 
-  runTarget(carrier, runner, _lead);
+  // a supporter already has a run picked from pitch control — call for the ball there
+  if (runner.role === 'SUPPORT' && Math.hypot(runner.supportTarget.x - runner.position.x, runner.supportTarget.z - runner.position.z) > 2.5) _lead.copy(runner.supportTarget);
+  else runTarget(carrier, runner, _lead);
   let target = _lead;
   let laneBonus = 1.2;
   if (!isInside(target) || !isPassSafe(ball.position, target, runner, power, opp, true)) {

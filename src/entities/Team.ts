@@ -5,7 +5,8 @@ import { teamMeta } from '../config/players';
 import { V3, clamp, distSq } from '../core/math';
 import { ball, match, oppOf } from '../game/state';
 import { updatePerception } from '../ai/perception';
-import { canShoot, isPassSafe, ownGoalX, supportSpot } from '../ai/analysis';
+import { isPassSafe, ownGoalX } from '../ai/analysis';
+import { PC_NX, PC_NZ, arrivalTime, cellX, cellZ, oppArrivalAt, threatAt } from '../ai/pitchControl';
 import { updatePassRequest } from '../ai/passRequests';
 import { Player } from './Player';
 import type { PlayerRole } from '../config/types';
@@ -76,34 +77,59 @@ export class Team {
     return MENTALITY[this.mentality]?.push ?? 0;
   }
 
-  /** Buckland-style SupportSpotCalculator: scores candidate spots for the off-ball attacker. */
-  computeSupport(carrier: Player): Vector3 | null {
-    if (this.bestSpot && !this.supportRegulator.ready()) return this.bestSpot;
+  /**
+   * Off-ball support from pitch control. Each supporter (most advanced first) is
+   * sent to the patch of grass that is worth most to us *and* that he gets to
+   * before any defender: expected threat there, his time advantage over the
+   * nearest opponent, an open passing lane from the ball, a sensible distance
+   * from the carrier, and room away from the team-mate already making a run.
+   * Defenders by trade offer the safer option behind or level with the ball.
+   */
+  assignSupport(carrier: Player, others: Player[]): void {
+    if (!this.supportRegulator.ready()) return;
     const opp = oppOf(this);
-    let best: Vector3 | null = null;
-    let bs = 0;
-    for (const s of this.spots) {
-      let sc = 0;
-      if (isPassSafe(ball.position, s, null, CFG.passLong, opp)) sc += 2;
-      if (canShoot(s, CFG.shootPow, this, opp, _scratch)) sc += 1.5;
-      sc += 2 * clamp(carrier.position.distanceTo(s) / 9, 0, 1);
-      // Reward spots that are genuinely open: the further the nearest defender,
-      // the more useful the run. Spots covered by a defender score poorly so
-      // the off-ball runner doesn't sprint into a marked position.
-      let nearestDefDist = Infinity;
-      for (const o of opp.players) {
-        if (o.sentOff) continue;
-        const d = Math.hypot(o.position.x - s.x, o.position.z - s.z);
-        if (d < nearestDefDist) nearestDefDist = d;
+    const side = this.side;
+    const taken: Vector3[] = [];
+    for (const r of others) {
+      const cautious = r.roleType === 'DEF';
+      let best = -Infinity;
+      let bx = r.supportTarget.x;
+      let bz = r.supportTarget.z;
+      for (let iz = 1; iz < PC_NZ - 1; iz++) {
+        const z = cellZ(iz);
+        for (let ix = 1; ix < PC_NX - 1; ix++) {
+          const x = cellX(ix);
+          const ahead = (x - carrier.position.x) * side;
+          if (ahead < (cautious ? -12 : -5) || ahead > (cautious ? 9 : 24)) continue;
+          const dC = Math.hypot(x - carrier.position.x, z - carrier.position.z);
+          if (dC < 6 || dC > 26) continue;
+          const tRun = arrivalTime(r, x, z);
+          if (tRun > 3.2) continue;
+          const margin = oppArrivalAt(this, x, z) - tRun;
+          let sc = (cautious ? 1.1 : 2.4) * threatAt(this, x, z) + 1.3 * clamp(margin, -0.8, 1.2);
+          sc -= 0.03 * Math.abs(dC - 13); // a comfortable passing distance
+          sc -= 0.12 * tRun; // don't promise a run he can't make soon
+          for (const t of taken) if (Math.hypot(t.x - x, t.z - z) < 8) sc -= 1.6; // don't run into the same space
+          if (Math.hypot(r.supportTarget.x - x, r.supportTarget.z - z) < 3) sc += 0.35; // hysteresis
+          if (sc < best - 1.6) continue; // can't win even with an open lane — skip the lane test
+          _scratch.set(x, 0, z);
+          if (isPassSafe(ball.position, _scratch, r, CFG.passLong, opp, true)) sc += 1.5;
+          if (match.simRules && ahead > 0) {
+            // stay onside: not beyond the second-last defender while ahead of the ball
+            let goalSide = 0;
+            for (const o of opp.players) if (!o.sentOff && o.position.x * side >= x * side - 0.3) goalSide++;
+            if (goalSide < 2 && x * side > ball.position.x * side) sc -= 3;
+          }
+          if (sc > best) {
+            best = sc;
+            bx = x;
+            bz = z;
+          }
+        }
       }
-      sc += 1.5 * clamp(nearestDefDist / 8, 0, 1);
-      if (sc > bs) {
-        bs = sc;
-        best = s;
-      }
+      r.supportTarget.set(bx, 0, bz);
+      taken.push(r.supportTarget);
     }
-    this.bestSpot = best;
-    return best;
   }
 
   /** Assign markers (defending POSITION players) to the most dangerous attackers. */
@@ -184,15 +210,10 @@ export class Team {
       if (this.passRequestRegulator.ready()) updatePassRequest(carrier);
       if (carrier.roleType !== 'GK') carrier.role = 'CARRIER';
       const others = of.filter((p) => p !== carrier).sort((a, b) => b.position.x * side - a.position.x * side);
-      if (others[0]) {
-        others[0].role = 'SUPPORT';
-        const sp = carrier.roleType !== 'GK' ? this.computeSupport(carrier) : null;
-        others[0].supportTarget.copy(sp ?? supportSpot(this, carrier, 1));
-      }
-      if (others[1]) {
-        others[1].role = 'SUPPORT';
-        others[1].supportTarget.copy(supportSpot(this, carrier, -1));
-      }
+      // the two most advanced make runs; a third stays as the safe option behind the ball
+      const runners = others.slice(0, 2);
+      for (const r of runners) r.role = 'SUPPORT';
+      this.assignSupport(carrier, runners);
 
       // A teammate who has actively requested the pass makes the visible run
       // into their advertised target instead of passively holding a generic spot.
