@@ -32,12 +32,8 @@ export interface QualityProfile {
   auxLights: number;
   /** Fraction of seats that get a spectator instance. */
   crowdDensity: number;
-  /** Waving flags in the crowd. */
-  crowdFlags: boolean;
   /** 0 = flat albedo, 1 = + detail texture, 2 = + normal/roughness detail. */
   grassDetail: 0 | 1 | 2;
-  /** Near-camera instanced grass blades (pitch-level cameras). */
-  grassBlades: number;
   /** HDR post chain: bloom + colour grade + vignette (+ MSAA on the HDR target). */
   postFx: boolean;
   /** MSAA samples on the HDR target when postFx is on. */
@@ -65,9 +61,7 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     secondShadow: false,
     auxLights: 1,
     crowdDensity: 0.42,
-    crowdFlags: false,
     grassDetail: 0,
-    grassBlades: 0,
     postFx: false,
     msaa: 0,
     envMapSize: 64,
@@ -87,9 +81,7 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     secondShadow: false,
     auxLights: 3,
     crowdDensity: 0.72,
-    crowdFlags: false,
     grassDetail: 1,
-    grassBlades: 0,
     postFx: false,
     msaa: 0,
     envMapSize: 128,
@@ -109,9 +101,7 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     secondShadow: false,
     auxLights: 3,
     crowdDensity: 1,
-    crowdFlags: true,
     grassDetail: 2,
-    grassBlades: 0,
     postFx: true,
     msaa: 4,
     envMapSize: 256,
@@ -131,9 +121,7 @@ const PROFILES: Record<QualityTier, QualityProfile> = {
     secondShadow: true,
     auxLights: 3,
     crowdDensity: 1,
-    crowdFlags: true,
     grassDetail: 2,
-    grassBlades: 60000,
     postFx: true,
     msaa: 4,
     envMapSize: 256,

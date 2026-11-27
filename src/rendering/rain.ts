@@ -64,7 +64,7 @@ export class Rain {
           float dist = length( toCam );
           vec3 side = normalize( cross( dir, toCam ) );
           float len = 0.55 + 0.6 * aSeed.w;
-          float width = max( 0.007, dist * 0.0011 );
+          float width = max( 0.005, dist * 0.0007 );
           wp += dir * ( -position.y * len ) + side * position.x * width;
           vV = position.y;
           // fade at the box faces (hides the wrap) and very close to the lens
@@ -79,7 +79,7 @@ export class Rain {
         varying float vA;
         varying float vV;
         void main() {
-          float a = vA * uAmount * 0.34 * sin( vV * 3.14159 );
+          float a = vA * uAmount * 0.17 * sin( vV * 3.14159 );
           if ( a < 0.004 ) discard;
           vec3 col = ( uFlood * 1.5 + uAmbSky * 1.2 ) * vec3( 0.86, 0.92, 1.0 );
           gl_FragColor = vec4( col, a );
@@ -88,6 +88,7 @@ export class Rain {
         }`,
       transparent: true,
       depthWrite: false,
+      side: THREE.DoubleSide, // the billboard's winding depends on the view direction
     });
     this.mesh = new THREE.Mesh(g, this.mat);
     this.mesh.frustumCulled = false;

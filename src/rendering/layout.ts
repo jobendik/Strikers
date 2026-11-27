@@ -113,7 +113,7 @@ export interface Section {
   corner: boolean;
   /** true for every section that carries the upper tier. */
   upper: boolean;
-  /** true for the single-tier +Z stand. */
+  /** true for the camera-side (+Z) main stand. */
   wall: boolean;
   /** Perimeter length at outward distance d. */
   length(d: number): number;

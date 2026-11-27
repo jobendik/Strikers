@@ -126,7 +126,7 @@ export function glowMaterial(): THREE.ShaderMaterial {
         g *= smoothstep( 1.0, 0.6, r );
         // horizontal anamorphic streak
         g += exp( -abs( vQ.y ) * 26.0 ) * exp( -abs( vQ.x ) * 2.4 ) * 0.35;
-        vec3 col = uFlood * 0.0 + vec3( 0.92, 0.96, 1.0 ) * g * uFloodOn * 2.2;
+        vec3 col = vec3( 0.92, 0.96, 1.0 ) * g * uFloodOn * 2.2;
         gl_FragColor = vec4( col, 1.0 );
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
