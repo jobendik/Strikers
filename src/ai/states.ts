@@ -37,7 +37,7 @@ function aiHeader(p: Player): void {
 /** Hold/return to formation position; shuffle or mark when defending. */
 class PositionState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     if (canHead(p)) {
       aiHeader(p);
       return;
@@ -62,7 +62,7 @@ class PositionState extends State<Player> {
 /** Closest defender to the ball — close down, jockey, and pick the moment to tackle. */
 class ChaseState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     if (canHead(p)) {
       aiHeader(p);
       return;
@@ -121,7 +121,7 @@ class ChaseState extends State<Player> {
 /** The carrier — dribble toward goal and decide shoot/pass/clear. */
 class CarryState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     aiCarry(p, sim.dt);
   }
 }
@@ -129,7 +129,7 @@ class CarryState extends State<Player> {
 /** Off-ball attacker — move to the best support spot. */
 class SupportState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     if (canHead(p)) {
       aiHeader(p);
       return;
@@ -146,7 +146,7 @@ class SupportState extends State<Player> {
  */
 class ReceiveState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     if (canHead(p)) {
       aiHeader(p);
       return;
@@ -172,7 +172,7 @@ class ReceiveState extends State<Player> {
 /** Goalkeeper brain — tend goal, rush to intercept, or distribute. */
 class GkState extends State<Player> {
   override execute(p: Player): void {
-    if (p.isHuman) return;
+    if (p.isHuman && !p.autopilot) return;
     gkBrain(p, sim.dt);
   }
 }

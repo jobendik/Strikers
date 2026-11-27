@@ -69,6 +69,10 @@ export interface MatchState {
   assistReceive: boolean;
   /** Assist: the user's player makes a standing tackle automatically when he gets to the ball. */
   assistTackle: boolean;
+  /** Assist: after a spell with the controls untouched, the AI plays the user's man until input resumes. */
+  assistIdle: boolean;
+  /** Seconds since the user last touched the controls. */
+  userIdleT: number;
   /** Presentation is showing a goal replay: don't kick off until it releases the hold. */
   holdKickoff: boolean;
   /** Seed the current match's simulation RNG stream was started from. */
@@ -166,6 +170,8 @@ export function createGameState(): void {
     shotLog: [],
     assistReceive: true,
     assistTackle: true,
+    assistIdle: true,
+    userIdleT: 0,
     holdKickoff: false,
     seed: 1,
   };

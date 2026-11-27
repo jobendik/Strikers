@@ -28,6 +28,8 @@ buffered and played first-time.
   a loose ball next to him.
 - `assistTackle` — the controlled player makes a standing tackle on his own when
   he reaches the ball facing it (manual J still works and can be better timed).
+- `assistIdle` — after 1.6 s with the controls untouched the AI plays the user's
+  player (a new player who hesitates is not punished); any input takes over at once.
 - Shot aim is clamped inside the posts by a margin that shrinks with the
   shooter's rating; execution error can still miss.
 - Passes lead a moving receiver; weight is solved to arrive at 9.5 m/s (5 m/s for

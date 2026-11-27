@@ -115,6 +115,8 @@ export class Player extends Vehicle {
   /** Per-frame tactical role assigned by the team AI. */
   role: PlayerRole = 'POSITION';
   isHuman = false;
+  /** The user's player is being played by the AI because the controls have been idle (idle assist). */
+  autopilot = false;
   heading: number;
   /** >0 for a moment after striking the ball — he can't immediately re-collect his own kick. */
   kickCooldown = 0;

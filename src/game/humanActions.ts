@@ -36,6 +36,7 @@ export interface ShotMods {
 const _tmp = V3();
 
 function live(): Player | null {
+  match.userIdleT = 0; // a button press is the user taking charge
   if (match.paused || match.state !== 'play' || match.restart) return null;
   return match.userPlayer;
 }

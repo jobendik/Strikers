@@ -20,6 +20,9 @@ below is merged there and passes all gates.
 The three parallel branches (`worktree-agent-*`) are fully merged; their worktrees
 under `.claude/worktrees/` can be deleted.
 
+All gates pass at the end of session 1: typecheck, build, 214 unit tests, `npm run sim`
+(+ `--physics`, all green), `npm run test:browser` (13 checks).
+
 Integration already done: crowd colours + scoreboard names per fixture, a random
 lighting/weather preset per match (`modes.configureTeams`), audio quality follows
 the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
@@ -34,26 +37,24 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
    more shots from range (AI shot selection), defenders blocking more, keeper
    reaction variance. Passing is too quick (≈ 120 passes / 4 min) — make carriers
    take players on and hold the ball. Use `--diag` and `--gk` after each change.
-3. **New-player protection:** with the stick idle at kick-off the user's taker is
-   dispossessed and the AI can score within ~6 s. Consider a short "idle assist"
-   (AI plays the user's man after ~1.5 s of no input) or a softer AI press on EASY.
-4. **Settings UI:** camera mode, assists (receive / tackle), stick dead zone, audio
+3. **Settings UI:** camera mode, assists (receive / tackle / idle), stick dead zone, audio
    bus volumes (`Audio.setVolume`), lighting preset choice, key/pad remapping.
-5. **Milestone 3 — team intelligence:** start with a pitch-control grid (who gets
+4. **Milestone 3 — team intelligence:** start with a pitch-control grid (who gets
    to each cell first, from `predict` + athletic profiles), then use it for support
    runs, pass selection and the lab overlay; then a team tactical state machine.
-6. **Animation:** source licensed walk/jog/strafe/slide/header/keeper-set clips;
+5. **Animation:** source licensed walk/jog/strafe/slide/header/keeper-set clips;
    upper-body layer; leg IK to the ball; a proper shooting clip.
-7. **Milestone 5 prerequisite:** make pitch/team size per-match config (remove
+6. **Milestone 5 prerequisite:** make pitch/team size per-match config (remove
    module-level reads of `CFG.halfL` etc. in `Team.spots`, `FORMATION`, `penalty.ts`,
    `rendering/layout.ts`).
-8. Use `simulateMatch` for World Cup AI-v-AI fixtures; put `test:browser` in CI.
+7. Use `simulateMatch` for World Cup AI-v-AI fixtures; put `test:browser` in CI.
 
 ## Known issues
 
 - No human playtest; no real-GPU or real-phone measurements; nobody has heard the audio.
 - Finishing still too clinical at the top difficulties; passing too quick (see above).
-- Idle human at kick-off concedes quickly (see above).
+- Idle assist (`match.assistIdle`): after 1.6 s with the controls untouched the AI plays
+  the user's man until input resumes — on by default, no settings toggle yet.
 - One shared face / no hair geometry on players; crowd cards look flat in close
   side-on replays; exterior of the bowl is bare.
 - Gamepad verified only with a mocked pad. Under 1–2 fps software rendering a pad

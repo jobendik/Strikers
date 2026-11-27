@@ -299,7 +299,7 @@ function solveLaunch(spec: KickSpec, out: { vx: number; vy: number; vz: number; 
   // Refine yaw/pitch (and lob speed) against the real integrator so drag and
   // Magnus are accounted for: fly it, measure the miss at the target distance, correct.
   if (spec.mode !== 'ground' || Math.abs(wy) > 1) {
-    for (let it = 0; it < 4; it++) {
+    for (let it = 0; it < 5; it++) {
       const ch = Math.cos(pitch);
       const hx = Math.cos(yaw);
       const hz = Math.sin(yaw);
@@ -321,11 +321,13 @@ function solveLaunch(spec: KickSpec, out: { vx: number; vy: number; vz: number; 
       let lat = 0;
       let yAt = by;
       let landed = -1;
+      let topY = by;
       const h = 1 / 60;
       for (let i = 0; i < 240; i++) {
         lastAlong = along;
         lastY = SIMS.py;
         const b = stepBallState(SIMS, h);
+        if (SIMS.py > topY) topY = SIMS.py;
         along = (SIMS.px - bx) * tdx + (SIMS.pz - bz) * tdz;
         if (spec.mode === 'lob' && (b > 0 || SIMS.grounded) && landed < 0) {
           landed = along;
@@ -341,7 +343,17 @@ function solveLaunch(spec: KickSpec, out: { vx: number; vy: number; vz: number; 
       }
       yaw -= Math.atan2(lat, d) * 0.9;
       if (spec.mode === 'lob') {
-        if (landed > 0.5) speed = Math.min(CFG.ballMax, speed * clamp(Math.sqrt(d / landed), 0.7, 1.4));
+        if (landed > 0.5) {
+          // correct range (horizontal speed) and apex (vertical speed) separately:
+          // drag shortens the flight *and* flattens it
+          let hs = Math.cos(pitch) * speed * clamp(d / landed, 0.6, 1.6);
+          const got = Math.max(0.2, topY - CFG.ballR);
+          const vy = Math.sin(pitch) * speed * clamp(Math.sqrt(Math.max(0.4, spec.apex) / got), 0.8, 1.3);
+          const sp = Math.hypot(hs, vy);
+          if (sp > CFG.ballMax) hs *= CFG.ballMax / sp;
+          speed = Math.min(CFG.ballMax, Math.hypot(hs, vy));
+          pitch = Math.atan2(vy, hs);
+        }
       } else if (spec.mode === 'aim') {
         pitch += Math.atan2(spec.ty - yAt, d) * 0.9;
         pitch = clamp(pitch, -0.05, 1.1);

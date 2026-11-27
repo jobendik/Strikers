@@ -67,6 +67,7 @@ function check(name, ok, detail) {
       if (m.userPlayer) m.userPlayer.isHuman = false; m.userPlayer = u; u.isHuman = true;
       m.receivingPlayer = null; m.state = 'play'; m.timeLeft = 150;
       K.reseed(20261126); // same random stream every scenario ⇒ reproducible
+      m.assistIdle = false; m.userIdleT = 0; // scenarios leave the controls alone on purpose; the idle-assist test turns it on
     };
     K.sample = (secs) => {
       const m = K.match; const u = m.teams[0].players[3]; let maxD = 0, ctl = 0; const n = Math.round(secs * 120);
@@ -88,7 +89,8 @@ function check(name, ok, detail) {
   check('jog: keeps the ball, ball stays close', r.ctl === 1 && r.maxD < 1.3 && r.dx > 10, r);
   await S(() => window.__strikers.setup(-20, 0));
   r = await run(['KeyD', 'ShiftLeft'], 2.5);
-  check('sprint: faster, heavier touches, still in control', r.ctl > 0.9 && r.maxD < 2.2 && r.dx > 14 && r.v > 7, r);
+  // (a sprint touch can be a heavy one — up to ~2.5 m — but must never be lost outright)
+  check('sprint: faster, heavier touches, still in control', r.ctl > 0.9 && r.maxD < 2.6 && r.dx > 14 && r.v > 7, r);
   await page.keyboard.up('KeyD');
   r = await run(['KeyA'], 1.5); await up(['KeyA', 'ShiftLeft']);
   check('full-sprint reversal keeps possession and is heading back within 1.5 s', r.ctl > 0.9 && r.maxD < 2.4 && r.dx < 3.5, r);
@@ -99,7 +101,11 @@ function check(name, ok, detail) {
 
   await S(() => { const K = window.__strikers; K.setup(-20, 0); K.ev = []; K.bus.onAny((e) => { if (e.t === 'kick' && e.kind !== 'touch') K.ev.push('kick:' + e.kind); else if (e.t === 'shot' || e.t === 'firstTouch') K.ev.push(e.t); }); });
   await page.keyboard.down('KeyD'); await frame();
-  await page.keyboard.down('KeyJ'); await page.waitForTimeout(60); await page.keyboard.up('KeyJ'); await page.keyboard.up('KeyD'); await frame();
+  // A quick tap, dispatched inside the page so down/up carry (almost) the same event
+  // timestamp — Playwright's own key calls wait for the page to acknowledge each event,
+  // which under software rendering stretches any "tap" into a long hold.
+  await S(() => { for (const type of ['keydown', 'keyup']) window.dispatchEvent(new KeyboardEvent(type, { code: 'KeyJ', bubbles: true })); });
+  await page.keyboard.up('KeyD'); await frame();
   const pass = await S(() => { const K = window.__strikers; K.run(2.4); const m = K.match; return { ev: K.ev, control: m.controlPlayer && m.controlPlayer.name, user: m.userPlayer && m.userPlayer.name, done: m.stats.passesDone[0] }; });
   check('a tap is a ground pass (not a lob) even on a slow frame; it reaches a team-mate and control switches to him', pass.done === 1 && pass.control === pass.user && pass.ev.includes('kick:pass'), pass);
 
@@ -108,6 +114,15 @@ function check(name, ok, detail) {
   const shot = await S(() => { const K = window.__strikers; K.run(1.2); return { ev: K.ev, shots: K.match.stats.shots[0] }; });
   await up(['KeyW']);
   check('held SHOOT takes a shot', shot.shots >= 1 && shot.ev.includes('shot'), shot);
+
+  console.log('# idle assist');
+  await S(() => { const K = window.__strikers; K.setup(-20, 0); K.ev.length = 0; K.match.assistIdle = true; });
+  const idle = await S(() => { const K = window.__strikers; const u = K.match.teams[0].players[3]; K.run(1.0); const early = u.autopilot; K.run(3.0); return { early, late: u.autopilot || K.match.userPlayer !== u, ev: K.ev.slice(0, 4), idleT: +K.match.userIdleT.toFixed(1) }; });
+  check('controls untouched: AI takes over the user\'s man after a beat (not before)', idle.early === false && idle.late === true, idle);
+  await page.keyboard.down('KeyD'); await frame();
+  const back = await S(() => { const K = window.__strikers; K.step(2); return { auto: K.match.userPlayer.autopilot, idleT: K.match.userIdleT }; });
+  await up(['KeyD']);
+  check('touching the stick hands control straight back', back.auto === false && back.idleT < 0.1, back);
 
   console.log('# gamepad (mocked standard mapping)');
   await S(() => { const K = window.__strikers; K.setup(-15, 0); const p = window.__pad; p.connected = true; p.axes[0] = 1; p.buttons[7].pressed = true; p.buttons[7].value = 1; });

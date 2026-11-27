@@ -261,7 +261,7 @@ export function movePlayers(dt: number): void {
         accelOverride = 40;
       } else {
         // ---- free movement ----
-        if (p.isHuman) humanWant(p);
+        if (p.isHuman && !p.autopilot) humanWant(p);
         else {
           aiWant(p);
           addSeparation(p);

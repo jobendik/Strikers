@@ -27,6 +27,9 @@ export interface StepOptions {
 
 const _t = V3();
 
+/** Seconds of untouched controls before the idle assist takes over the user's player. */
+const IDLE_ASSIST_AFTER = 1.6;
+
 /** The user's player steps in with a standing tackle on his own when he gets to the ball (assist). */
 function userAssists(): void {
   const u = match.userPlayer;
@@ -123,7 +126,15 @@ export function stepSimulation(opts: StepOptions): void {
     updateKicks(dt);
     resolveControl(dt);
     updateGkHold(dt);
-    if (opts.human) selectUserPlayer(dt);
+    if (opts.human) {
+      selectUserPlayer(dt);
+      // idle assist: nobody at the controls → the AI plays the user's man until they return
+      const inp = match.input;
+      if (Math.hypot(inp.x, inp.z) > 0.15 || inp.sprint || inp.jockey) match.userIdleT = 0;
+      else match.userIdleT += dt;
+      const auto = match.assistIdle && match.userIdleT > IDLE_ASSIST_AFTER;
+      for (const p of match.teams[0].players) p.autopilot = auto && p === match.userPlayer;
+    }
     match.teams[0].update(dt);
     match.teams[1].update(dt);
     movePlayers(dt);

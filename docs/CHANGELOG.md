@@ -26,7 +26,13 @@
 - Gamepad support; finesse, chip, through-ball, lobbed through, jockey,
   directional switching; buffered first-time actions; desktop key hints.
 
+### Assists
+- Assisted receiving, auto standing tackle, idle assist (AI plays the user's man
+  while the controls are untouched).
+
 ### Tooling
+- `npm run test:browser`: scripted gameplay checks in headless Chromium.
+- Development lab overlay (F2 / `?lab`).
 - Seeded harness with determinism check; `--physics`, `--gk`, `--diag` modes.
 - `window.__strikers` dev/test API.
 
