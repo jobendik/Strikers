@@ -304,11 +304,47 @@ function initialPreset(): EnvPresetName {
 }
 setEnvironmentPreset(initialPreset());
 
-// Dev / QA hook (screenshots, tier measurements). Not used by game code.
+/**
+ * Diagnostic: render the current view into a float target (no post, no MSAA) and
+ * report non-finite / extreme HDR texels with their screen position. Use it when
+ * a frame looks wrong on a post-processing tier: `__gfx.scanHdr()`.
+ */
+export function scanHdr(width = 480): { nonFinite: number; over1000: number; max: number; at: [number, number] | null } {
+  const height = Math.max(1, Math.round(width / camera.aspect));
+  const rt = new THREE.WebGLRenderTarget(width, height, { type: THREE.FloatType, depthBuffer: true });
+  const prev = renderer.getRenderTarget();
+  renderer.setRenderTarget(rt);
+  renderer.render(scene, camera);
+  const buf = new Float32Array(width * height * 4);
+  renderer.readRenderTargetPixels(rt, 0, 0, width, height, buf);
+  renderer.setRenderTarget(prev);
+  rt.dispose();
+  let nonFinite = 0;
+  let over1000 = 0;
+  let max = 0;
+  let at: [number, number] | null = null;
+  for (let i = 0; i < width * height; i++) {
+    const r = buf[i * 4];
+    const g = buf[i * 4 + 1];
+    const b = buf[i * 4 + 2];
+    const fin = Number.isFinite(r) && Number.isFinite(g) && Number.isFinite(b);
+    const m = fin ? Math.max(r, g, b) : Infinity;
+    if (!fin) nonFinite++;
+    else if (m > 1000) over1000++;
+    if (m > max || (!fin && at === null)) {
+      max = m;
+      at = [(i % width) / width, 1 - Math.floor(i / width) / height]; // 0..1, origin top-left
+    }
+  }
+  return { nonFinite, over1000, max, at };
+}
+
+// Dev / QA hook (screenshots, tier measurements, diagnostics). Not used by game code.
 (window as unknown as { __gfx?: unknown }).__gfx = {
   setEnvironmentPreset,
   getEnvironmentPreset,
   getRenderStats,
+  scanHdr,
   presets: ENV_PRESETS,
   renderer,
   scene,

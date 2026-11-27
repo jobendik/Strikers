@@ -29,7 +29,8 @@ import { envU } from './env';
 const SEG_Z = 40; // across the goal width
 const SEG_Y = 15; // up the height
 const SEG_X = 12; // along the depth
-const SLACK = 1.045;
+/** Cloth tuning (see docs/RENDERING_DESIGN.md §Goals). */
+export const NET = { slack: 1.03, stiff: 0.1, damp: 0.972, kick: 0.7, iterations: 3 };
 const SUBSTEP = 1 / 90;
 const MAX_SUBSTEPS = 5;
 
@@ -216,7 +217,7 @@ class NetCloth {
       const dx = P[a * 3] - P[b * 3];
       const dy = P[a * 3 + 1] - P[b * 3 + 1];
       const dz = P[a * 3 + 2] - P[b * 3 + 2];
-      this.cL[i] = Math.hypot(dx, dy, dz) * SLACK;
+      this.cL[i] = Math.hypot(dx, dy, dz) * NET.slack;
     });
     this.map = new Uint16Array(rMap);
 
@@ -241,7 +242,7 @@ class NetCloth {
 
     // let the slack settle into its hanging shape before the first frame
     this.awake = 1;
-    for (let i = 0; i < 160; i++) this.step(4);
+    for (let i = 0; i < 160; i++) this.step(NET.iterations);
     this.rest.set(this.pos);
     this.prev.set(this.pos);
     this.upload();
@@ -253,7 +254,7 @@ class NetCloth {
   }
 
   /** Kick the net around world point (x, y, z) along (dx, dy, dz) at `speed` m/s. */
-  impulse(x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, radius = 0.85): void {
+  impulse(x: number, y: number, z: number, dx: number, dy: number, dz: number, speed: number, radius = 0.95): void {
     const l = Math.hypot(dx, dy, dz);
     if (l < 1e-4) {
       dx = this.side;
@@ -264,7 +265,7 @@ class NetCloth {
       dy /= l;
       dz /= l;
     }
-    const kick = Math.min(Math.max(speed, 1.5), 36) * 0.5 * SUBSTEP;
+    const kick = Math.min(Math.max(speed, 1.5), 36) * NET.kick * SUBSTEP;
     const r2 = radius * radius;
     const { pos, prev, inv } = this;
     for (let i = 0; i < this.n; i++) {
@@ -279,7 +280,7 @@ class NetCloth {
       prev[i * 3 + 1] -= dy * f;
       prev[i * 3 + 2] -= dz * f;
     }
-    this.awake = 2.5;
+    this.awake = 3;
   }
 
   private ballActive = false;
@@ -301,13 +302,13 @@ class NetCloth {
     this.br = r + 0.035;
   }
 
-  update(dt: number, iterations: number): void {
+  update(dt: number): void {
     if (this.awake <= 0) return;
     this.awake -= dt;
     this.acc = Math.min(this.acc + dt, SUBSTEP * MAX_SUBSTEPS);
     while (this.acc >= SUBSTEP) {
       this.acc -= SUBSTEP;
-      this.step(iterations);
+      this.step(NET.iterations);
     }
     this.upload();
     if (this.awake <= 0) {
@@ -319,7 +320,7 @@ class NetCloth {
   private step(iterations: number): void {
     const { pos, prev, inv, cA, cB, cL, n } = this;
     const g = -9.8 * SUBSTEP * SUBSTEP;
-    const damp = 0.972;
+    const damp = NET.damp;
     for (let i = 0; i < n; i++) {
       if (inv[i] === 0) continue;
       const o = i * 3;
@@ -348,7 +349,7 @@ class NetCloth {
         const d = Math.sqrt(d2);
         const wa = inv[cA[c]];
         const wb = inv[cB[c]];
-        const k = ((d - L) / d / (wa + wb)) * 0.82;
+        const k = ((d - L) / d / (wa + wb)) * NET.stiff;
         pos[a] += dx * k * wa;
         pos[a + 1] += dy * k * wa;
         pos[a + 2] += dz * k * wa;
@@ -489,10 +490,10 @@ export class Goals {
     net.impulse(side * (CFG.halfL + CFG.goalDepth), y, z, side, 0, 0, strength);
   }
 
-  update(dt: number, iterations: number, ballX: number, ballY: number, ballZ: number, ballLive: boolean): void {
+  update(dt: number, ballX: number, ballY: number, ballZ: number, ballLive: boolean): void {
     for (const net of this.nets) {
       if (ballLive) net.setBall(ballX, ballY, ballZ, CFG.ballR);
-      net.update(dt, iterations);
+      net.update(dt);
     }
   }
 }

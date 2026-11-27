@@ -57,6 +57,8 @@ const FinalShader = {
 
     void main() {
       vec3 c = texture2D( tDiffuse, vUv ).rgb;
+      // sanitise (NaN → 0, Inf → bright) so a bad texel is at worst one white pixel
+      c = vec3( c.r > 0.0 ? min( c.r, 64.0 ) : 0.0, c.g > 0.0 ? min( c.g, 64.0 ) : 0.0, c.b > 0.0 ? min( c.b, 64.0 ) : 0.0 );
       c = ACESFilmicToneMapping( c );
       // grade in display-linear
       c *= uTint;
@@ -72,6 +74,21 @@ const FinalShader = {
       gl_FragColor.rgb += ( hash12( gl_FragCoord.xy ) - 0.5 ) / 255.0;
     }`,
 };
+
+/** Bright-pass for the bloom that can never emit a non-finite or absurd value. */
+const SAFE_HIGH_PASS = /* glsl */ `
+  uniform sampler2D tDiffuse;
+  uniform float luminosityThreshold;
+  uniform float smoothWidth;
+  varying vec2 vUv;
+  void main() {
+    vec3 c = texture2D( tDiffuse, vUv ).rgb;
+    // NaN fails every comparison, so this maps NaN → 0 and ±Inf / huge → [0, 24]
+    c = vec3( c.r > 0.0 ? min( c.r, 24.0 ) : 0.0, c.g > 0.0 ? min( c.g, 24.0 ) : 0.0, c.b > 0.0 ? min( c.b, 24.0 ) : 0.0 );
+    float v = dot( c, vec3( 0.299, 0.587, 0.114 ) );
+    float alpha = smoothstep( luminosityThreshold, luminosityThreshold + smoothWidth, v );
+    gl_FragColor = vec4( c * alpha, 1.0 );
+  }`;
 
 export class PostFx {
   private composer: EffectComposer;
@@ -92,7 +109,15 @@ export class PostFx {
     this.renderPass = new RenderPass(scene, camera);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.3, 0.55, 1.2);
     // a wide knee so highlights roll into the bloom instead of popping on
-    (this.bloom as unknown as { highPassUniforms: Record<string, THREE.IUniform> }).highPassUniforms.smoothWidth.value = 0.8;
+    const bloomInternals = this.bloom as unknown as { highPassUniforms: Record<string, THREE.IUniform>; materialHighPassFilter: THREE.ShaderMaterial };
+    bloomInternals.highPassUniforms.smoothWidth.value = 0.8;
+    // Robustness: the HDR target is half-float, so one over-range specular texel
+    // (GGX on a glossy boot/ball a metre from a low replay camera easily exceeds
+    // 65504) becomes +Inf, and a single Inf/NaN fed into the bloom's mip-chain
+    // blur turns into NaN across the WHOLE frame (Inf·0 weights) → black screen.
+    // The bright-pass therefore sanitises its input: NaN → 0, everything clamped.
+    bloomInternals.materialHighPassFilter.fragmentShader = SAFE_HIGH_PASS;
+    bloomInternals.materialHighPassFilter.needsUpdate = true;
     const mat = new THREE.RawShaderMaterial({
       name: FinalShader.name,
       uniforms: THREE.UniformsUtils.clone(FinalShader.uniforms),
