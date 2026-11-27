@@ -7,6 +7,7 @@ import { skipReplay } from './replay';
 import { quitToMenu, restartMatch, resumeGame, togglePause } from './flow';
 import { cycleCameraMode } from './camera';
 import { flashToast } from '../ui/hud';
+import { saveSettings } from '../core/settings';
 
 /*
  * Input: touch, keyboard and gamepad merged into one intent.
@@ -103,6 +104,13 @@ export function shootCharge(): number {
   return shooting ? clamp((performance.now() - shootDownAt) / MAX_CHARGE_MS, 0, 1) : 0;
 }
 
+/** Next camera rig; remembered in settings. */
+function cycleCamera(): void {
+  const m = cycleCameraMode();
+  saveSettings({ camera: m });
+  flashToast(`CAMERA: ${m.toUpperCase()}`);
+}
+
 /* ------------------------------------------------------------------ gamepad */
 
 /** Stick dead zone (0–0.5). Configurable; persisted by settings when changed there. */
@@ -161,7 +169,7 @@ function pollGamepad(): void {
     switchPlayer();
   });
   edge(9, () => togglePause()); // Start
-  edge(8, () => flashToast(`CAMERA: ${cycleCameraMode().toUpperCase()}`)); // Back / Select
+  edge(8, () => cycleCamera()); // Back / Select
   // right stick flick: directional player switch (defending) / knock-on (on the ball)
   const rx = gp.axes[2] ?? 0;
   const ry = gp.axes[3] ?? 0;
@@ -241,7 +249,7 @@ export function initInput(): void {
         sprintTap(e.timeStamp);
         break;
       case 'KeyV':
-        flashToast(`CAMERA: ${cycleCameraMode().toUpperCase()}`);
+        cycleCamera();
         break;
       case 'Enter':
         skipReplay();

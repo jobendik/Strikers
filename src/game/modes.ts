@@ -94,8 +94,9 @@ function configureTeams(homeKey: string, awayKey: string): void {
   setScoreboardTeams(match.teams[0].short, match.teams[1].short);
   // conditions for the day: mostly floodlit evenings and bright afternoons, the odd
   // golden hour, grey day or downpour (purely visual — weather does not change the physics)
+  const want = getSettings().env;
   const roll = Math.random();
-  setEnvironmentPreset(roll < 0.36 ? 'night' : roll < 0.66 ? 'afternoon' : roll < 0.82 ? 'golden' : roll < 0.93 ? 'overcast' : 'rain');
+  setEnvironmentPreset(want !== 'auto' ? want : roll < 0.36 ? 'night' : roll < 0.66 ? 'afternoon' : roll < 0.82 ? 'golden' : roll < 0.93 ? 'overcast' : 'rain');
 }
 
 /**
