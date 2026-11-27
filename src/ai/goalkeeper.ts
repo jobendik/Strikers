@@ -3,9 +3,9 @@ import { V3, clamp } from '../core/math';
 import { rngNormal, rngRange } from '../core/rng';
 import { sim } from '../core/time';
 import { ball, match } from '../game/state';
-import { inOwnBox, startGkDive } from '../game/control';
+import { clearBall, inOwnBox, kick, startGkDive } from '../game/control';
 import { crossingAt, interceptPoint } from '../game/predict';
-import { ownGoalX } from './analysis';
+import { findBestPass, ownGoalX, passWeight } from './analysis';
 import type { Player } from '../entities/Player';
 
 /*
@@ -35,6 +35,17 @@ export function gkBrain(p: Player, _dt: number): void {
 
   // holding the ball (or a restart): nothing to tend
   if (match.controlPlayer === p) {
+    if (match.gkHold <= 0 && match.setPieceT <= 0 && p.act === 'none' && !p.queued) {
+      // ball at his feet (collected outside the box, or a back-pass): don't dwell on it —
+      // find a team-mate, otherwise get rid
+      const opp = match.teams[0] === team ? match.teams[1] : match.teams[0];
+      const pass = findBestPass(p, CFG.passLong, CFG.minPassDist, opp);
+      if (pass) {
+        const dx = pass.target.x - ball.position.x;
+        const dz = pass.target.z - ball.position.z;
+        kick(p, _t.set(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.passLong), 'pass', 0, 'pass', pass.receiver);
+      } else clearBall(p);
+    }
     p.deact();
     return;
   }
@@ -120,14 +131,15 @@ export function gkBrain(p: Player, _dt: number): void {
   // --- sweeping: a loose ball he gets to first inside (or just outside) his box ---
   if (loose && distGoal < 19 && speed < 22) {
     const hit = interceptPoint(p.position.x, p.position.z, p.ath.sprint * 0.95, 0.12, CFG.headHigh, 1.0);
-    if (hit && Math.abs(hit.x - own) < CFG.boxDepth - 0.5 && Math.abs(hit.z) < CFG.boxHalfW - 0.5) {
+    // only for balls close to goal that he clearly wins — a keeper stranded off his line is a goal
+    if (hit && Math.abs(hit.x - own) < 8.5 && Math.abs(hit.z) < CFG.goalHalf + 4.5) {
       // is any attacker getting there before him?
       let beaten = false;
       const opp = match.teams[0] === team ? match.teams[1] : match.teams[0];
       for (const o of opp.players) {
         if (o.sentOff) continue;
         const d = Math.hypot(o.position.x - hit.x, o.position.z - hit.z) - CFG.controlR;
-        if (d / o.ath.sprint < hit.t - 0.1) {
+        if (d / o.ath.sprint < hit.t + 0.3) {
           beaten = true;
           break;
         }
@@ -150,17 +162,17 @@ export function gkBrain(p: Player, _dt: number): void {
       if (Math.hypot(m.position.x - bx, m.position.z - bz) < 2.2) covered = true;
     }
     if (!covered && distGoal < 9.5 && Math.abs(bz) < 7) {
-      if (dKeeper < 1.7 && Math.hypot(ball.position.x - c.position.x, ball.position.z - c.position.z) > 0.7 && p.diveCd <= 0) {
+      if (dKeeper < 1.7 && distGoal < 7 && Math.hypot(ball.position.x - c.position.x, ball.position.z - c.position.z) > 0.7 && p.diveCd <= 0) {
         // the ball is off his foot: go down at his feet
         startGkDive(p, bx, bz, 0.3);
         return;
       }
-      // advance along the ball→goal line, staying big
-      const gx = own - bx;
-      const gz = -bz;
-      const gl = Math.hypot(gx, gz) || 1;
-      const stand = clamp(dKeeper * 0.45, 1.2, 3.5);
-      _t.set(bx + (gx / gl) * stand, 0, bz + (gz / gl) * stand);
+      // advance along the goal→ball line to narrow the angle, staying big — but never
+      // further than ~5 m off his line, and never past the ball
+      const ux = (bx - own) / (distGoal || 1);
+      const uz = bz / (distGoal || 1);
+      const out = clamp(distGoal - 2.6, CFG.gkTend, 4.8 * (0.75 + 0.25 * K));
+      _t.set(own + ux * out, 0, clamp(uz * out, -CFG.goalHalf - 1, CFG.goalHalf + 1));
       p.goArrive(_t, true);
       p.faceYaw = Math.atan2(bx - p.position.x, bz - p.position.z);
       return;
@@ -185,7 +197,8 @@ export function gkBrain(p: Player, _dt: number): void {
   const tLine = Math.abs(hx) > 1e-3 ? (own - bx) / hx : 0;
   let gz = clamp(bz + hz * tLine, -G + 0.3, G - 0.3);
   const wide = Math.atan2(Math.abs(bz), Math.abs(bx - own) + 0.5); // 0 = straight on, π/2 = on the byline
-  gz += Math.sign(bz || 1) * clamp((wide - 0.35) * 1.5, 0, 1.25);
+  // only at a really tight angle does he shade off the bisector toward the near post
+  gz += Math.sign(bz || 1) * clamp((wide - 0.95) * 2.2, 0, 1.0);
   gz = clamp(gz, -G + 0.35, G - 0.35);
   // (narrowing the angle is how a keeper stops a close-range finish; from range he stays home,
   // and at a tight angle he stays on his line to protect the near post)

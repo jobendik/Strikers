@@ -26,25 +26,25 @@ Milestones are not silos; each must leave a playable, better game.
 | MOVE-01 | Players have weight but respond | Acceleration/brake/grip/turn-rate body model shared by human and AI | PART | A: runs, distances plausible (≈1.2 km / 4 min). H: responsiveness untested by a human |
 | MOVE-02 | Players feel different | Derived athletic profile from ratings drives speed/accel/agility/control/strength | PART | A: values differ per player; no test that shows a winger out-turning a centre-half yet |
 | MOVE-03 | Contact matters | Strength-weighted body contact, stumbles | PART | A: `collide` events ≈ 50/match. No shielding action |
-| GK-01 | Keepers make believable saves and mistakes | Reaction, reading error, finite dive, catch/parry/tip/spill | PART | A: `--gk` table. Still a cliff between "no chance" (≤11 m corner) and "always saved" (16 m+ low corner); in-match conversion ~50 % is too high |
+| GK-01 | Keepers make believable saves and mistakes | Reaction, reading error, finite dive, catch/parry/tip/spill/smother | PART | A: `--gk` table, goal tracers (fixed over-rushing, near-post shade, slow hands). Still a cliff between "no chance" (precise 11 m corner) and "almost always saved" (16 m+); conversion 33 % at PRO, 44–49 % at the top tiers |
 | DEF-01 | Winning the ball is a skill | Geometric tackles/slides, fouls for man-first | PART | A: tackles ≈ 14–20/match, fouls ≈ 1/match. H: timing feel untested |
-| CTRL-01 | Gamepad is first-class | Standard-mapping pad plays everything, dead zone handled | PART | A: typecheck only — **no gamepad was available to test**; logic unverified at runtime |
+| CTRL-01 | Gamepad is first-class | Standard-mapping pad plays everything, dead zone handled | PART | A: browser run with a *mocked* standard pad (move, sprint, pass, shoot, shoot-out). No physical controller tested; no remap/dead-zone UI |
 | CTRL-02 | First-time play | Buffered kick requests resolve as the ball arrives | PART | A: AI first-time finishes occur; human path exercised only by script |
 | CTRL-03 | Expressive shooting/passing | Charge → power+height, stick aim, finesse, chip, through, lob | PART | A: script shot registers; aim/feel need human testing |
 | TOOL-01 | Developers can see why | `--diag`, `--gk`, `--physics`, `window.__strikers` | DONE | A: used to find the net-ejection, over-dive and first-touch bugs |
-| TOOL-02 | Football Intelligence / physics lab overlay | In-browser visualisation of trajectories, intents, pitch control | TODO | |
+| TOOL-02 | Football Intelligence / physics lab overlay | In-browser visualisation of trajectories, intents, pitch control | PART | O: `F2` / `?lab` overlay — predicted flight, steering intents by role, interception points, timings, seed, bus events, speed/step controls. No pitch control, no pass-candidate scores yet |
 
 ## M2 — The beautiful game
 
 | ID | Requirement | Status | Notes |
 | --- | --- | --- | --- |
 | ANIM-01 | Animation is a function of game state (works in replays) | DONE | A/O: replays animate; see ANIMATION_DESIGN |
-| ANIM-02 | Boot meets ball on the contact tick | PART | calibration constant unverified frame-by-frame |
+| ANIM-02 | Boot meets ball on the contact tick | PART | O: contact frame measured from a strip (0.47); keeper dive verified frame-by-frame in game. Shots use the same side-foot clip |
 | ANIM-03 | Walk/jog/strafe/slide/header/keeper clips | TODO | needs licensed clips |
 | ANIM-04 | Leg IK to the ball, upper-body layers | TODO | |
 | PLAY-01 | Shielding, skill moves, player-triggered runs | TODO | |
 | PLAY-02 | Proper set pieces (throw-ins, corners, free kicks with walls) | TODO | currently quick restarts |
-| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | now ≈ 5 goals / 4 min, 62 % on target, ~50 % conversion, 72 % pass accuracy |
+| PLAY-03 | Balance: 2–4 goals per 6 min, ~45–55 % on target, ~25–30 % conversion, 78 %+ pass accuracy | PART | PRO now ≈ 3.6 goals / 4 min, 51 % on target, 33 % conversion, 76 % pass accuracy (baseline ≈ 11.5 goals, 96 %) |
 | PLAY-04 | Practice arena | TODO | |
 
 ## M3 — Football intelligence
@@ -60,12 +60,12 @@ except the cover defender and xG-based shot selection (PART).
 | ID | Requirement | Status | Notes |
 | --- | --- | --- | --- |
 | REND-01 | Teams are instantly distinguishable; players look like footballers | DONE | O: kits/skin/numbers/indicators merged; see PLAYER_RENDERING. One shared face, no hair geometry |
-| REND-02 | A stadium that looks like one (bowl, instanced crowd, boards) | PART | in progress on a parallel branch — see RENDERING_DESIGN when merged |
+| REND-02 | A stadium that looks like one (bowl, instanced crowd, boards) | PART | O: merged (WIP state) — bowl, coloured instanced crowd, LED boards, scoreboard. Open: black frame at very close cameras on non-lite tiers; RENDERING_DESIGN.md pending |
 | REND-03 | Professional pitch, lighting presets, quality tiers | PART | same branch |
 | REND-04 | Goal nets that deform | PART | same branch; sim emits `net` |
 | CAM-01 | Readable broadcast camera with predictive framing + modes | PART | O: broadcast/tele/tactical/dynamic rigs; no settings UI; not human-tuned |
 | CAM-02 | Multi-angle replays from recorded play | PART | two-shot sequence; scrub/rate API exists, no UI |
-| AUD-01 | Bus-driven stadium audio with a crowd-emotion model | PART | in progress on a parallel branch — see AUDIO_DESIGN when merged. Nobody has listened to it |
+| AUD-01 | Bus-driven stadium audio with a crowd-emotion model | PART | A: merged; 90 offline numeric assertions + 58 unit tests on the pure emotion model; live match runs with no errors. **Nobody has listened to it** — see AUDIO_DESIGN |
 | UI-01 | Premium menus / broadcast HUD | TODO | only key hints added |
 
 ## M5 — Full-scale football

@@ -101,7 +101,7 @@ function diag(n: number): void {
   const offG = onAny((e: SimEvent) => {
     if (e.t === 'goal') {
       goalBins[Math.min(5, Math.floor(lastShotD / 5))]++;
-      if (lastShotD > 10 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)}`);
+      if (lastShotD > 9 && lastShotD < 16 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)}`);
     }
   });
   (globalThis as unknown as { __shotDbg: unknown }).__shotDbg = (p: { name: string; position: { x: number; z: number }; team: { side: number } }, sp: { kind: string; tx: number; ty: number; tz: number; speed: number; err: number; curl: number }) => {

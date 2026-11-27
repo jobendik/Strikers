@@ -135,9 +135,9 @@ const BASE_ERR: Record<KickKind, number> = {
   through: 2.0,
   cross: 3.0,
   lob: 2.8,
-  shot: 3.3,
-  finesse: 2.3,
-  chip: 3.2,
+  shot: 5.2,
+  finesse: 3.6,
+  chip: 4.0,
   clear: 7,
   header: 6,
   volley: 6,
@@ -740,7 +740,8 @@ function keeperLine(gk: Player, out: { ax: number; ay: number; az: number; bx: n
     const high = 1 - 0.3 * clamp((gk.diveY - 1.0) / 1.4, 0, 1);
     const reach = (0.35 + CFG.gkArm * k) * high;
     // the body lays out along the dive: trailing hip → fingertips, at the height of the ball
-    const yHand = 1.1 + (gk.diveY - 1.1) * k;
+    // the hands get to the ball's height quickly (down to a low one, up to a high one)
+    const yHand = 1.1 + (gk.diveY - 1.1) * clamp(gk.actT / 0.14, 0, 1);
     const yHip = 0.95 + (clamp(gk.diveY - 0.45, 0.3, 1.7) - 0.95) * k;
     out.ax = gk.position.x - gk.actDirX * 0.45 * k;
     out.ay = yHip;
