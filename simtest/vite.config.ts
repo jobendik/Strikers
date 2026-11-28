@@ -24,7 +24,7 @@ const STUBS: Record<string, string> = {
   'platform/crazygames': `export const initCrazyGames=async()=>{};export const available=()=>false;export const environment=()=>'local';export const loadingStart=()=>{};export const loadingStop=()=>{};export const gameplayStart=()=>{};export const gameplayStop=()=>{};export const happytime=()=>{};export const requestAd=(_t,cb)=>cb(false);export const interstitial=(cb)=>cb();export const rewarded=(cb)=>cb(false);`,
   'rendering/stadium': `export const buildStadium=()=>{};export const updateStadium=()=>{};export const setCrowdColors=()=>{};export const setScoreboardTeams=()=>{};export const netImpulse=()=>{};`,
   'rendering/quality': `export const QUALITY_TIERS=['lite','standard','high','ultra'];export const applyQualityTier=()=>{};export const getQualityTier=()=>'lite';export const getQuality=()=>({tier:'lite'});export const onQualityChange=()=>{};export const isQualityTier=()=>true;export const defaultQualityTier=()=>'lite';`,
-  'core/settings': `export const getSettings=()=>({team:'USA',mentality:1,diff:1,half:180,mode:'friendly',sim:false,sound:false,haptics:false,quality:'lite',lefty:false,titles:0});export const saveSettings=()=>{};export const applySettings=()=>{};export const initSettings=()=>{};`,
+  'core/settings': `export const getSettings=()=>({team:'USA',mentality:1,diff:1,half:180,mode:'friendly',sim:false,sound:false,haptics:false,quality:'lite',lefty:false,titles:0,camera:'broadcast',env:'auto',assist:2,volCrowd:1,volSfx:1});export const saveSettings=()=>{};export const applySettings=()=>{};export const initSettings=()=>{};`,
 };
 
 function stubPlugin() {

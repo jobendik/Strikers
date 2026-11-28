@@ -6,6 +6,8 @@ import { setReplayEnabled } from '../game/replay';
 import { match } from '../game/state';
 import { DEFAULT_TEAM, TEAMS, teamMeta } from '../config/players';
 import type { GameMode } from '../config/types';
+import { CAMERA_MODES, setCameraMode, type CameraMode } from '../game/camera';
+import { ENV_PRESETS, type EnvPresetName } from '../rendering/scene';
 
 /*
  * Persistent player settings (localStorage). Covers presentation prefs (sound,
@@ -26,6 +28,15 @@ export interface Settings {
   mentality: number;
   team: string;
   titles: number;
+  /** Gameplay camera rig. */
+  camera: CameraMode;
+  /** Match conditions: a fixed lighting/weather preset, or 'auto' (varies per match). */
+  env: EnvPresetName | 'auto';
+  /** Assistance: 2 full (assisted receive + auto tackle + idle assist) · 1 semi (assisted receive only) · 0 manual. */
+  assist: number;
+  /** Crowd and effects volume, 0..1. */
+  volCrowd: number;
+  volSfx: number;
 }
 
 const KEY = 'yuka-strikers/settings';
@@ -43,7 +54,15 @@ const DEFAULTS: Settings = {
   mentality: 1,
   team: DEFAULT_TEAM,
   titles: 0,
+  camera: 'broadcast',
+  env: 'auto',
+  assist: 2,
+  volCrowd: 1,
+  volSfx: 1,
 };
+
+const ENV_CHOICES: Array<EnvPresetName | 'auto'> = ['auto', 'afternoon', 'golden', 'night', 'overcast', 'rain'];
+const VOL_STEPS = [0, 0.45, 1];
 
 const S: Settings = load();
 
@@ -57,6 +76,9 @@ function load(): Settings {
       // graphics tier: 'high' | 'lite' from older builds are still valid tiers;
       // anything unrecognised falls back to the device default
       if (!isQualityTier(s.quality)) s.quality = DEFAULTS.quality;
+      if (!CAMERA_MODES.includes(s.camera)) s.camera = DEFAULTS.camera;
+      if (s.env !== 'auto' && !ENV_PRESETS.includes(s.env)) s.env = 'auto';
+      if (!(s.assist >= 0 && s.assist <= 2)) s.assist = DEFAULTS.assist;
       return s;
     }
   } catch {
@@ -105,6 +127,12 @@ function applyQuality(): void {
   Audio.setQuality(S.quality === 'lite' ? 'lite' : 'full'); // fewer voices / no reverb on the lite tier
 }
 
+function nearestStep(v: number): number {
+  let best = 0;
+  for (let i = 1; i < VOL_STEPS.length; i++) if (Math.abs(VOL_STEPS[i] - v) < Math.abs(VOL_STEPS[best] - v)) best = i;
+  return best;
+}
+
 /** Reflect the team picker's selection (highlight + the chosen team's name). */
 function reflectTeam(): void {
   el('teamPick')
@@ -128,7 +156,14 @@ export function applySettings(): void {
   if (match) {
     match.simRules = S.sim;
     match.teams[0].mentality = S.mentality; // the user team's chosen approach
+    // assistance level → the individual assists the simulation reads
+    match.assistReceive = S.assist >= 1;
+    match.assistTackle = S.assist >= 2;
+    match.assistIdle = S.assist >= 2;
   }
+  setCameraMode(S.camera);
+  Audio.setVolume('crowd', S.volCrowd);
+  Audio.setVolume('sfx', S.volSfx);
 
   const mute = el('muteBtn');
   if (mute) mute.textContent = S.sound ? '🔊' : '🔇';
@@ -140,6 +175,11 @@ export function applySettings(): void {
   setSeg('segHaptics', S.haptics ? 1 : 0);
   setSeg('segQuality', QUALITY_TIERS.indexOf(S.quality));
   setSeg('segLayout', S.lefty ? 1 : 0);
+  setSeg('segCamera', CAMERA_MODES.indexOf(S.camera));
+  setSeg('segEnv', ENV_CHOICES.indexOf(S.env));
+  setSeg('segAssist', S.assist);
+  setSeg('segCrowd', nearestStep(S.volCrowd));
+  setSeg('segSfx', nearestStep(S.volSfx));
   reflectTeam();
 }
 
@@ -165,6 +205,11 @@ export function initSettings(): void {
   seg('segHaptics', (v) => (S.haptics = v === 1));
   seg('segQuality', (v) => (S.quality = QUALITY_TIERS[v] ?? 'high'));
   seg('segLayout', (v) => (S.lefty = v === 1));
+  seg('segCamera', (v) => (S.camera = CAMERA_MODES[v] ?? 'broadcast'));
+  seg('segEnv', (v) => (S.env = ENV_CHOICES[v] ?? 'auto'));
+  seg('segAssist', (v) => (S.assist = v));
+  seg('segCrowd', (v) => (S.volCrowd = VOL_STEPS[v] ?? 1));
+  seg('segSfx', (v) => (S.volSfx = VOL_STEPS[v] ?? 1));
 
   // team picker (string keys, so wired separately from the numeric segments)
   el('teamPick')

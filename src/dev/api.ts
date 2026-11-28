@@ -3,9 +3,9 @@ import * as bus from '../core/bus';
 import { sim, SIM_DT, SIM_HZ } from '../core/time';
 import { rngSeed, seedRng } from '../core/rng';
 import { ball, match } from '../game/state';
-import { loopCtl, stepTicks } from '../game/loop';
+import { loopCtl, skipGoalReplayNow, stepTicks } from '../game/loop';
 import { ballTrajectory } from '../game/predict';
-import { replayCtl } from '../game/replay';
+import { filmCtl, recordedSeconds, replayCtl } from '../game/replay';
 import { setCameraMode, getCameraMode } from '../game/camera';
 import { renderer } from '../rendering/scene';
 import { startShootout, inShootout } from '../game/penalty';
@@ -42,9 +42,25 @@ export function installDevApi(): void {
     replay: replayCtl,
     /** Advance exactly `n` simulation ticks now (use with loop.manual = true for frame-rate-free tests). */
     step: (n = 1) => stepTicks(n),
+    /** Skip a goal replay the match is waiting on (for scripts stepping without frames). */
+    skipGoalReplay: () => skipGoalReplayNow(),
     /** Advance `seconds` of simulated time. */
     run: (seconds: number) => stepTicks(Math.round(seconds * SIM_HZ)),
     trajectory: () => ballTrajectory(),
+    /**
+     * Look back at recorded play without re-simulating: `film.show(s)` presents the
+     * frame `s` seconds before the latest recorded one (the last ~7 s are kept),
+     * `film.live()` returns to the live view. Use with loop.manual = true.
+     */
+    film: {
+      show: (secondsAgo: number) => {
+        filmCtl.secondsAgo = Math.max(0, secondsAgo);
+      },
+      live: () => {
+        filmCtl.secondsAgo = -1;
+      },
+      seconds: () => recordedSeconds(),
+    },
     camera: { set: setCameraMode, get: getCameraMode },
     /** Show/hide the development lab overlay. */
     lab: toggleLab,

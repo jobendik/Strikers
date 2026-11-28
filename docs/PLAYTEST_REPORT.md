@@ -61,7 +61,92 @@ goals 5 / 33 / 5 / 2 / 2.
   checked frame by frame (set → full stretch → parry → get up).
 - Phone landscape (844×390, touch): boots on the `standard` tier, touch pad shown.
 
+### Balance pass 2 (2026-11-27) — 16 × (2×120 s) per scenario, seeded
+| Scenario | Goals | Shots | On target | Conversion | Pass acc. | Saves |
+| --- | --- | --- | --- | --- | --- | --- |
+| EASY USA v BRA | 0.7–1.1 | 4.3–5.7 | 34 % | 18 % | 91 % | 1.9 |
+| PRO USA v BRA | 0.8–0.9 | 3.6–5.4 | 34 % | 19 % | 90 % | 1.7 |
+| LEGEND USA v BRA | 0.9–0.9 | 3.6–3.7 | 40 % | 25 % | 86 % | 2.1 |
+| ULTIMATE USA v BRA | 0.8–1.4 | 4.3–6.2 | 37 % | 21 % | 85 % | 2.3 |
+| WORLD CLASS USA v BRA | 0.9–1.2 | 4.6–5.6 | 33 % | 20 % | 82 % | 1.5 |
+| PRO BRA v BRA (mirror) | 1.1–1.1 | 3.9–4.9 | 40 % | 25 % | 89 % | 1.8 |
+| PRO ARG v FRA | 0.9–1.0 | 4.1–5.1 | 32 % | 21 % | 88 % | 1.3 |
+| PRO NOR v SEN | 1.0–1.5 | 4.6–4.4 | 40 % | 28 % | 88 % | 1.9 |
+| LEGEND GER v ENG | 0.8–0.8 | 3.3–3.1 | 44 % | 26 % | 87 % | 1.6 |
+
+What the new diagnostics showed before the fixes (WORLD CLASS, 8 matches): 35 shots
+from inside 5 m with the nearest defender 7 m away and the keeper 1 m from the ball —
+almost all taken 0.1–0.3 s after the *keeper's own* pass or clearance from his feet;
+61 headers a match, 57 of them straight after another header; 75 % of passes played
+with a defender inside 1.8 m, a quarter of those cut out within 4 m of the passer.
+After: headers ≈ 15 a match, pressed mid-range passes complete 85–89 %.
+
+AI observation (one seeded sequence, five stills): the keeper holds the ball, the
+nearest forward backs off to the edge of the box, the throw reaches a team-mate.
+
+### Attacking variety (2026-11-27, PRO, 12 × (2×120 s), `--diag`)
+| How the chance was made | before | after |
+| --- | --- | --- |
+| Loose ball / rebound | 34 % | 29 % |
+| Pass, a touch, shot | 20 % | 13 % |
+| Solo carry | 15 % | 18 % |
+| Through ball (any finish) | 9 % | 15 % |
+| Header from a cross | 2 % | 10 % |
+| First-time finish | 0 % | 8 % |
+| Crosses per match | 2.6 | 8.7 |
+
+Cause found on the way: with the ball between two of its own players a side was not
+"in attack", so for every pass its off-ball players dropped into defensive positions
+and one of them chased the pass. After fixing that and adding pass-and-move runs,
+shots rose to 3.4 a minute (target ≤ 2.7) with 60 % of close-range shooters unmarked;
+tighter marking of runners brought it back to 2.32 shots and 0.60 goals a minute over
+90 matches. None of this has been watched as continuous play.
+
+### Crosses and headers (2026-11-28)
+`--diag` "shots by kind" showed AI headers at goal were **never** on target: the
+header aimed at a point 14 m away along the line to goal — beyond the goal — and the
+aim solver lofted a 13 m/s header to reach it, crossing the line at 2–4 m. The user's
+headers at goal used the same call. Fixed (aim at the goal line). The next trace
+("after a header at goal") showed half the corrected headers being headed away at
+once by a marker a metre from the striker; defenders now get the same reaction window
+for heading as for feet. Header on-target share 0 % → 48 %.
+
+Balance over 90 matches at all tiers, real 2×3 min: 0.61 goals/min, 2.32 shots/min,
+48 % on target, 26 % conversion, 79 % pass completion — every target met.
+
+### A one-two, filmed (2026-11-28, AI observation of stills)
+Found by stepping an AI-v-AI match in the browser until a player received a return
+pass ≥ 4 m further on than where he gave it, then shown from the replay recording
+(`__strikers.film`, broadcast camera). In the stills (`docs/evidence/one-two-2026-11-28.png`)
+an Argentina player on the far touchline, with a defender on him, plays it inside,
+runs past the defender and is found again further down the line. That is one
+sequence, judged from four still frames — not continuous playback.
+
 ### Open observations
+- **Correction:** an earlier version of this report said chances were now too scarce.
+  That compared 2×2-minute runs with targets written for the game's real 2×3 minutes.
+  At the real length (10 seeds per scenario, after AI shooters were taught to aim inside
+  the post by their expected spread):
+
+  | Scenario (2×180 s) | Goals | Shots | On target | Conversion | Pass acc. | Saves |
+  | --- | --- | --- | --- | --- | --- | --- |
+  | EASY USA v BRA | 1.2–2.3 | 5.2–6.6 | 47 % | 30 % | 91 % | 3.5 |
+  | PRO USA v BRA | 1.2–1.9 | 4.8–7.1 | 46 % | 26 % | 88 % | 3.6 |
+  | LEGEND USA v BRA | 1.2–1.3 | 4.3–5.3 | 55 % | 26 % | 86 % | 3.5 |
+  | ULTIMATE USA v BRA | 1.7–2.7 | 6.2–9.2 | 45 % | 29 % | 85 % | 4.2 |
+  | WORLD CLASS USA v BRA | 1.0–2.3 | 7.4–6.2 | 41 % | 24 % | 83 % | 3.4 |
+  | PRO BRA v BRA (mirror) | 2.3–2.8 | 7.4–7.6 | 52 % | 34 % | 89 % | 4.4 |
+  | PRO ARG v FRA | 2.0–2.1 | 6.6–9.1 | 46 % | 26 % | 89 % | 4.5 |
+  | PRO NOR v SEN | 1.5–1.4 | 4.9–6.5 | 48 % | 25 % | 88 % | 3.7 |
+  | LEGEND GER v ENG | 1.2–1.3 | 4.9–5.5 | 36 % | 24 % | 86 % | 2.1 |
+
+  These meet the targets in `QUALITY_STANDARD.md` (2–4 goals, 10–16 shots, 45–55 % on
+  target, 25–30 % conversion) apart from two scenarios' on-target share, the mirror's
+  5.1 goals and pass completion a few points above the 78–85 % band.
+- Possession spells (PRO, 8 matches): ≈ 42 a match, 48 % reach the final third, 43 % of
+  those end in a shot — but a final-third spell lasts only ≈ 3.3 s. Attacks are quick
+  strikes; there is little sustained pressure or combination play.
+- _Superseded by balance pass 2 — the three points below describe the state before it:_
 - Conversion is still above target at the higher difficulties (44–49 %) and most
   shots still come from 5–10 m; `--gk` still shows a cliff between "unsaveable"
   (precise 11 m corner) and "almost always saved" (16 m+).

@@ -6,7 +6,7 @@ import { sim } from '../core/time';
 import { emit, type KickKind } from '../core/bus';
 import { ball, match, oppOf, setPassRequest, setReceiver, teamIndex } from './state';
 import { GROUND_Y, planarToBall } from './aerial';
-import { findBestPass, goalX, nearestOpp, ownGoalX, passWeight } from '../ai/analysis';
+import { goalX, nearestOpp, ownGoalX } from '../ai/analysis';
 import { addStoppage } from './flow';
 import { foulCard, resolveOffside } from './rules';
 import { awardRestart, ballStruck, makeBallState, stepBallState, type BallState } from './physics';
@@ -169,6 +169,12 @@ export function makeKick(
   const turn = clamp((0.3 - facing) / 1.3, 0, 1);
   const human = o.human ?? p.isHuman;
   let err = BASE_ERR[kind] * (1.5 - skill) * (1 + 0.45 * sp * sp + (isShot ? 1.5 : 0.7) * press * (1.15 - p.ath.composure) + 0.7 * turn);
+  // power costs accuracy: a ball struck flat out is far harder to place than a
+  // side-footed finish (the same for the user's charged shots and the AI's)
+  if (isShot && kind !== 'chip') {
+    const pf = clamp((speed / CFG.shootPow - 0.72) / 0.28, 0, 1.2);
+    err *= 1 + 0.8 * pf * pf;
+  }
   err *= human ? 0.85 : D().noise;
   return {
     kind,
@@ -405,6 +411,7 @@ export function strike(p: Player, spec: KickSpec): void {
     p.statPasses++;
     match.stats.passes[ti]++;
     match.pendingPass = p;
+    (globalThis as { __passDbg?: (ev: string, a: Player, b: Player | KickSpec) => void }).__passDbg?.('kick', p, spec);
   }
   ball.shot = spec.shot;
   if (spec.shot) {
@@ -454,14 +461,19 @@ export function shootAt(p: Player, tx: number, ty: number, tz: number, speed: nu
 }
 
 /** Header an airborne ball toward a point. `down` aims it at the turf (on goal); otherwise it is looped clear. */
-export function headBall(p: Player, dir: Vector3, power: number, shot = false): boolean {
+export function headBall(p: Player, dir: Vector3, power: number, shot = false, land = 0): boolean {
   const dl = Math.hypot(dir.x, dir.z) || 1;
-  const far = 14;
-  const spec = makeKick(p, 'header', 'aim', ball.position.x + (dir.x / dl) * far, shot ? 0.6 : 2.6, ball.position.z + (dir.z / dl) * far, power * (0.75 + 0.25 * p.ath.strength), {
-    shot,
-    pass: false,
-  });
-  return requestKick(p, spec);
+  const ux = dir.x / dl;
+  const uz = dir.z / dl;
+  if (shot) {
+    // at goal: `dir` points at the spot on the goal line; the header is aimed to cross
+    // it low (a target beyond the goal made the aim solver loft it over the bar)
+    return requestKick(p, makeKick(p, 'header', 'aim', ball.position.x + dir.x, 0.5, ball.position.z + dir.z, power * (0.75 + 0.25 * p.ath.strength), { shot: true, pass: false }));
+  }
+  // anywhere else it is headed *down* to land `land` metres away (default: scaled from
+  // the power asked for) — a header that stays up at head height just gets headed again
+  const dist = land > 0 ? land : power * (0.8 + 0.25 * p.ath.strength);
+  return requestKick(p, makeKick(p, 'header', 'lob', ball.position.x + ux * dist, 0, ball.position.z + uz * dist, 0, { apex: dist > 11 ? 0.7 : 0.3, shot: false, pass: false }));
 }
 
 /** Hoof the ball clear, upfield and wide of the middle. */
@@ -722,6 +734,7 @@ function resolvePendingPass(by: Player): void {
   const passer = match.pendingPass;
   if (!passer) return;
   match.pendingPass = null;
+  (globalThis as { __passDbg?: (ev: string, a: Player, b: Player | KickSpec) => void }).__passDbg?.('end', passer, by);
   const ti = teamIndex(passer.team);
   if (by.team === passer.team && by !== passer) {
     passer.statPassesDone++;
@@ -752,7 +765,7 @@ function distToSeg(px: number, py: number, pz: number, ax: number, ay: number, a
  */
 function keeperLine(gk: Player, out: { ax: number; ay: number; az: number; bx: number; by: number; bz: number }): void {
   if (gk.act === 'dive') {
-    const k = clamp(gk.actT / 0.3, 0, 1); // arms reach full stretch about a third of a second in
+    const k = clamp(gk.actT / 0.4, 0, 1); // arms reach full stretch about 0.4 s in
     // a high ball is at the end of a diagonal: he can't get as far across for it
     const high = 1 - 0.3 * clamp((gk.diveY - 1.0) / 1.4, 0, 1);
     const reach = (0.35 + CFG.gkArm * k) * high;
@@ -789,6 +802,7 @@ function keeperContact(gk: Player): boolean {
   // legs and arms wide — which is how keepers actually stop shots they can't react to.
   const spread = !diving && sim.elapsed - gk.spreadT < 0.25 && ball.position.y < 1.35 ? 0.5 * (0.55 + 0.45 * D().keeper) : 0;
   const touchR = CFG.gkTouchR + CFG.ballR + (diving ? 0 : 0.3) + spread;
+  (globalThis as { __gkDbg?: (gk: Player, miss: number, along: number) => void }).__gkDbg?.(gk, _seg.d - touchR, _seg.t);
   if (_seg.d > touchR) return false;
 
   const speed = Math.hypot(ball.velocity.x, ball.velocity.y, ball.velocity.z);
@@ -830,21 +844,30 @@ function keeperContact(gk: Player): boolean {
   const K = D().keeper;
   const stretch = diving ? _seg.t : 0;
   const edge = _seg.d / touchR;
+  // Spread big he fills the goal but is not a wall: a shot through the outer part
+  // of that shape (under an arm, past a boot) gets through more often than not.
+  if (spread > 0 && edge > 0.55) {
+    if (sim.elapsed - gk.beatenT < 0.35) return false;
+    if (chance(((edge - 0.55) / 0.45) * (0.95 - 0.35 * K))) {
+      gk.beatenT = sim.elapsed;
+      return false;
+    }
+  }
   const onTarget = headingForGoal(gk, 0);
   const ti = teamIndex(gk.team);
   const zs = Math.sign(ball.position.z - gk.position.z || gk.actDirZ || 1);
 
   // fingertips: only a faint touch — it changes course but keeps most of its pace
-  if (edge > 0.82 && speed > 13 && diving) {
-    const a = zs * rngRange(0.12, 0.3);
+  if (edge > 0.88 && speed > 13 && diving) {
+    const a = zs * rngRange(0.2, 0.5);
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     const vx = ball.velocity.x;
     const vz = ball.velocity.z;
     // rotate away from goal centre
     const sgn = gk.team.side > 0 ? 1 : -1; // keeps the rotation outward for both ends
-    ball.velocity.x = (vx * ca - vz * sa * sgn) * 0.84;
-    ball.velocity.z = (vx * sa * sgn + vz * ca) * 0.84;
+    ball.velocity.x = (vx * ca - vz * sa * sgn) * 0.78;
+    ball.velocity.z = (vx * sa * sgn + vz * ca) * 0.78;
     ball.velocity.y = ball.velocity.y * 0.8 + rngRange(0.5, 2.5);
     ball.w.multiplyScalar(0.3);
     ball.lastTouch = gk.team;
@@ -946,13 +969,20 @@ export function resolveControl(dt: number): void {
   const by = ball.position.y - CFG.ballR;
   if (by > CFG.chestHeight) return; // only heads up there
 
+  // A ball that has only just been struck cannot be *reacted* to: for the first
+  // tenth of a second an opponent only stops it if it actually hits him; his full
+  // reach (a leg stuck out) comes in over the next fifth. This is what lets a pass
+  // be slipped past a man who is closing down, and a shot beat a defender a yard away.
+  const since = sim.elapsed - ball.lastKickT;
+  const fresh = !c && since < 0.32 ? clamp((since - 0.1) / 0.22, 0, 1) : 1;
   let near: Player | null = null;
   let nd = Infinity;
   for (const t of match.teams)
     for (const p of t.players) {
       if (p === c || p.sentOff || p.busy() || p.kickCooldown > 0 || p.act === 'kick' || p.act === 'header' || p.queued) continue;
       if (protect && p !== protect) continue;
-      const reach = CFG.controlR + (match.receivingPlayer === p ? 0.15 : 0);
+      let reach = CFG.controlR + (match.receivingPlayer === p ? 0.15 : 0);
+      if (fresh < 1 && p.team !== ball.lastTouch) reach = 0.42 + (reach - 0.42) * fresh;
       const d = planarToBall(p);
       if (d < reach && d < nd) {
         nd = d;
@@ -1152,31 +1182,69 @@ export function updateGkHold(dt: number): void {
   if (match.gkHold > 0) return;
   match.gkHold = 0;
   const opp = oppOf(gk.team);
-  // put it down at his feet and play it
+  const side = gk.team.side;
+  // He distributes from his hands — a throw to a team-mate in space, otherwise a
+  // punt upfield. The ball leaves at shoulder height, so a forward loitering in
+  // front of him cannot simply stick a foot in the way.
   const f = headingVec(gk.heading);
-  ball.position.set(gk.position.x + f.x * 0.5, GROUND_Y, gk.position.z + f.z * 0.5);
-  ball.velocity.set(0, 0, 0);
-  ball.grounded = true;
-  const pass = findBestPass(gk, CFG.passLong, CFG.minPassDist, opp);
-  if (pass) {
-    const dx = pass.target.x - ball.position.x;
-    const dz = pass.target.z - ball.position.z;
-    const dist = Math.hypot(dx, dz);
-    const spec = makeKick(gk, 'pass', 'ground', pass.target.x, 0, pass.target.z, passWeight(dist, CFG.passLong), { receiver: pass.receiver, pass: true });
-    strike(gk, spec);
-  } else {
-    // nothing short on: go long toward the most advanced team-mate
-    let best: Player | null = null;
-    let adv = -Infinity;
-    for (const m of gk.team.outfield()) {
-      const a = m.position.x * gk.team.side;
-      if (a > adv) {
-        adv = a;
-        best = m;
-      }
+  const hx = gk.position.x + f.x * 0.4;
+  const hz = gk.position.z + f.z * 0.4;
+  let best: Player | null = null;
+  let bestScore = 0.5;
+  for (const m of gk.team.outfield()) {
+    if (m.sentOff) continue;
+    const mx = m.position.x + m.velocity.x * 0.4;
+    const mz = m.position.z + m.velocity.z * 0.4;
+    const dx = mx - hx;
+    const dz = mz - hz;
+    const d = Math.hypot(dx, dz);
+    if (d < 7 || d > 27) continue;
+    // how much room does he have, and is anyone standing in the way near the keeper?
+    let room = 12;
+    let blocked = false;
+    for (const o of opp.players) {
+      if (o.sentOff) continue;
+      room = Math.min(room, Math.hypot(o.position.x - mx, o.position.z - mz));
+      const ox = o.position.x - hx;
+      const oz = o.position.z - hz;
+      const along = (ox * dx + oz * dz) / d;
+      const off = Math.abs(ox * dz - oz * dx) / d;
+      // a body in the first few metres of the throw, or under where it comes down
+      if (along > 0 && along < 4.5 && off < 1.6) blocked = true;
+      if (along > d - 5 && along < d + 1 && off < 1.5) blocked = true;
     }
-    const tx = best ? best.position.x + gk.team.side * 2 : gk.position.x + gk.team.side * 28;
-    const tz = best ? best.position.z : rngRange(-8, 8);
-    strike(gk, makeKick(gk, 'clear', 'lob', tx, 0, tz, 0, { apex: 7, receiver: best, pass: !!best }));
+    if (blocked || room < 4.5) continue;
+    const score = 0.12 * room + 0.03 * (mx - gk.position.x) * side - 0.035 * Math.abs(d - 15);
+    if (score > bestScore) {
+      bestScore = score;
+      best = m;
+    }
   }
+  ball.velocity.set(0, 0, 0);
+  ball.w.set(0, 0, 0);
+  ball.grounded = false;
+  if (best) {
+    ball.position.set(hx, 1.55, hz);
+    // thrown to land a few metres short of him, so it reaches his feet on the bounce
+    const mx = best.position.x + best.velocity.x * 0.5;
+    const mz = best.position.z + best.velocity.z * 0.5;
+    const d = Math.hypot(mx - hx, mz - hz);
+    const k = d > 10 ? 0.8 : 0.9;
+    strike(gk, makeKick(gk, 'pass', 'lob', hx + (mx - hx) * k, 0, hz + (mz - hz) * k, 0, { apex: 1.9 + 0.06 * d, receiver: best, pass: true }));
+    return;
+  }
+  // nothing short on: a punt out of his hands toward the most advanced team-mate
+  let far: Player | null = null;
+  let adv = -Infinity;
+  for (const m of gk.team.outfield()) {
+    const a = m.position.x * side;
+    if (a > adv) {
+      adv = a;
+      far = m;
+    }
+  }
+  ball.position.set(hx, 0.9, hz);
+  const tx = far ? far.position.x + side * 2 : gk.position.x + side * 28;
+  const tz = far ? far.position.z : rngRange(-8, 8);
+  strike(gk, makeKick(gk, 'clear', 'lob', tx, 0, tz, 0, { apex: 8, receiver: far, pass: !!far }));
 }

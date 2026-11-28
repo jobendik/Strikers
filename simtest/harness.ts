@@ -35,7 +35,19 @@ function check(label: string, ok: boolean, detail: string): void {
   }
 }
 
+/** Totals over every reported scenario — the balance guard at the end reads them. */
+const agg = { matches: 0, minutes: 0, goals: 0, shots: 0, onT: 0, passes: 0, comp: 0 };
+
 function report(label: string, rs: SimResult[]): void {
+  for (const r of rs) {
+    agg.matches++;
+    agg.minutes += r.ticks / 120 / 60;
+    agg.goals += r.score[0] + r.score[1];
+    agg.shots += r.shots[0] + r.shots[1];
+    agg.onT += r.onTarget[0] + r.onTarget[1];
+    agg.passes += r.passes[0] + r.passes[1];
+    agg.comp += r.completed;
+  }
   const comp = mean(rs, (r) => r.completed);
   const intc = mean(rs, (r) => r.intercepted);
   const passes = mean(rs, (r) => r.passes[0] + r.passes[1]);
@@ -71,6 +83,10 @@ function report(label: string, rs: SimResult[]): void {
   check(label, !rs.some((r) => r.guardHit), 'match failed to finish');
   check(label, Math.max(...rs.map((r) => r.maxOOB)) < 1.2, `ball ${Math.max(...rs.map((r) => r.maxOOB)).toFixed(2)} m out of play`);
   check(label, onT <= shots, 'on-target exceeds shots');
+  // shared AI state must be live in *every* match of a run (a module-level regulator once
+  // froze the pitch-control grid after the first match — this guards against that class of bug)
+  const minPc = Math.min(...rs.map((r) => r.pcUpdates / (r.ticks / 120)));
+  check(label, minPc > 5, `pitch control refreshed only ${minPc.toFixed(1)}×/s in some match`);
 }
 
 /** `--diag`: play a few matches with the event bus live and print what actually happens. */
@@ -87,6 +103,7 @@ function diag(n: number): void {
     if (e.t === 'shot') {
       shotPow.push(e.power);
       shotXg.push(e.xg);
+      xgBins[lastBin] += e.xg;
     }
     if (e.t === 'firstTouch') ftq.push(e.quality);
     if (e.t === 'toast') toasts[e.text] = (toasts[e.text] ?? 0) + 1;
@@ -98,10 +115,41 @@ function diag(n: number): void {
   let printed = 0;
   const shotBins = [0, 0, 0, 0, 0, 0];
   const goalBins = [0, 0, 0, 0, 0, 0];
+  const xgBins = [0, 0, 0, 0, 0, 0];
+  const ctx = [0, 1, 2, 3, 4, 5].map(() => ({ near: 0, cone: 0, gkOut: 0, gkD: 0, head: 0, err: 0, free: 0 }));
+  const outcomeBins = [0, 1, 2, 3, 4, 5].map(() => ({ save: 0, block: 0, post: 0 }));
+  const kindOut: Record<string, { n: number; on: number; goal: number }> = {};
+  let lastKind = '';
+  let headPrinted = 0;
+  let lastShotTick = -1;
+  let lastBin = 0;
+  let headWatch = 0;
+  const headEnds: Record<string, number> = {};
+  const offH = onAny((e: SimEvent) => {
+    if (!headWatch) return;
+    if (simClock.tick - headWatch > 180) { headEnds['(nothing in 1.5 s)'] = (headEnds['(nothing in 1.5 s)'] ?? 0) + 1; headWatch = 0; return; }
+    if (e.t === 'kick' || e.t === 'save' || e.t === 'goal' || e.t === 'block' || e.t === 'post' || e.t === 'firstTouch' || e.t === 'setpiece' || e.t === 'whistle' || e.t === 'collide' || e.t === 'net') {
+      const k = e.t === 'kick' ? `kick:${e.kind}` : e.t === 'setpiece' ? `setpiece:${(e as { kind?: string }).kind ?? ''}` : e.t;
+      if (e.t === 'kick' && e.kind === 'header' && simClock.tick === headWatch) return;
+      headEnds[k] = (headEnds[k] ?? 0) + 1;
+      headWatch = 0;
+    }
+  });
+  const offO = onAny((e: SimEvent) => {
+    if (simClock.tick - lastShotTick > 240 || lastShotTick < 0) return;
+    if ((e.t === 'save' || e.t === 'goal') && kindOut[lastKind]) {
+      kindOut[lastKind].on++;
+      if (e.t === 'goal') kindOut[lastKind].goal++;
+    }
+    if (e.t === 'save') { outcomeBins[lastBin].save++; lastShotTick = -1; }
+    else if (e.t === 'block') { outcomeBins[lastBin].block++; lastShotTick = -1; }
+    else if (e.t === 'post') { outcomeBins[lastBin].post++; lastShotTick = -1; }
+    else if (e.t === 'goal') lastShotTick = -1;
+  });
   const offG = onAny((e: SimEvent) => {
     if (e.t === 'goal') {
       goalBins[Math.min(5, Math.floor(lastShotD / 5))]++;
-      if (lastShotD > 9 && lastShotD < 16 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)}`);
+      if (lastShotD > 9 && lastShotD < 16 && printed++ < 12 && lastGk) console.log(`   GOAL ${lastShotInfo} || at goal: gk(${lastGk.position.x.toFixed(1)},${lastGk.position.z.toFixed(1)}) act=${lastGk.act} diveCd=${lastGk.diveCd.toFixed(2)} react=${lastGk.shotReact.toFixed(2)} || ${gkMissInfo}`);
     }
   });
   (globalThis as unknown as { __shotDbg: unknown }).__shotDbg = (p: { name: string; position: { x: number; z: number }; team: { side: number } }, sp: { kind: string; tx: number; ty: number; tz: number; speed: number; err: number; curl: number }) => {
@@ -114,9 +162,132 @@ function diag(n: number): void {
     }
     const b = Math.min(5, Math.floor(lastShotD / 5));
     shotBins[b]++;
+    {
+      // how was this chance made? the shooting side's last real kick before it
+      const mine = lastKickTeam === (p.team.side > 0 ? 0 : 1);
+      const ago = simClock.elapsed - lastKickT;
+      const held = simClock.elapsed - (p as unknown as { gotBallT: number }).gotBallT;
+      const firstTime = match.controlPlayer !== (p as unknown);
+      let how: string;
+      if (sp.kind === 'header') how = mine && ago < 3 ? `header from ${lastKickKind}` : 'header (loose)';
+      else if (!mine && ago < 2.5) how = 'rebound / loose ball';
+      else if (mine && ago < 4) how = `${lastKickKind}${firstTime ? ' → first-time' : held > 2.2 ? ' → carry' : ' → touch + shot'}`;
+      else how = 'solo carry';
+      shotHow[how] = (shotHow[how] ?? 0) + 1;
+      shotHowTotal++;
+    }
+    if (b === 0 && process.argv.includes('--close')) {
+      const q = p as unknown as { gotBallT: number; name: string; roleType: string };
+      const defT = match.teams[p.team.side > 0 ? 1 : 0];
+      const pos = defT.players.map((d) => `${d.roleType[0]}(${(d.position.x * p.team.side).toFixed(0)},${d.position.z.toFixed(0)})`).join(' ');
+      console.log(`   CLOSE ${sp.kind} t=${simClock.elapsed.toFixed(1)} ${q.roleType} held ${(simClock.elapsed - q.gotBallT).toFixed(2)}s at (${(ball.position.x * p.team.side).toFixed(1)},${ball.position.z.toFixed(1)}) lastKick=${lastKickKind} ${(simClock.elapsed - lastKickT).toFixed(1)}s ago from (${(lastKickX * p.team.side).toFixed(0)},${lastKickZ.toFixed(0)}) sameTeam=${lastKickTeam === (p.team.side > 0 ? 0 : 1)} defTactic=${(defT as unknown as { tactic: string }).tactic} def: ${pos}`);
+    }
+    lastBin = b;
+    lastShotTick = simClock.tick;
+    lastKind = sp.kind;
+    if (sp.kind === 'header') headWatch = simClock.tick;
+    if (sp.kind === 'header' && process.argv.includes('--headers') && headPrinted++ < 12) {
+      const gxl = p.team.side * CFG.halfL;
+      const hit = flyTo(gxl);
+      console.log(`   HEADER from (${ball.position.x.toFixed(1)},${ball.position.y.toFixed(2)},${ball.position.z.toFixed(1)}) v=(${ball.velocity.x.toFixed(1)},${ball.velocity.y.toFixed(1)},${ball.velocity.z.toFixed(1)}) aim(${sp.tx.toFixed(1)},${sp.ty.toFixed(1)},${sp.tz.toFixed(1)}) spd=${sp.speed.toFixed(1)} → goal line y=${hit.y.toFixed(2)} z=${hit.z.toFixed(2)} t=${hit.t.toFixed(2)}`);
+    }
+    (kindOut[sp.kind] ??= { n: 0, on: 0, goal: 0 }).n++;
+    gkMiss = 99;
+    gkMissInfo = '';
+    {
+      const def = match.teams[p.team.side > 0 ? 1 : 0];
+      const gk = def.gk;
+      const gxx = p.team.side * CFG.halfL;
+      let near = 99;
+      let cone = 0;
+      for (const q of def.players) {
+        if (q === gk) continue;
+        const dq = Math.hypot(q.position.x - ball.position.x, q.position.z - ball.position.z);
+        near = Math.min(near, dq);
+        // inside the triangle ball → posts?
+        const ax = gxx - ball.position.x;
+        const fx = (q.position.x - ball.position.x) / (ax || 1);
+        if (fx > 0.05 && fx < 1) {
+          const zl = ball.position.z + (-CFG.goalHalf - ball.position.z) * fx;
+          const zr = ball.position.z + (CFG.goalHalf - ball.position.z) * fx;
+          if (q.position.z > zl - 0.4 && q.position.z < zr + 0.4) cone++;
+        }
+      }
+      const c = ctx[b];
+      c.near += Math.min(near, 10);
+      c.cone += cone;
+      c.gkOut += Math.abs(gxx - gk.position.x);
+      c.gkD += Math.hypot(gk.position.x - ball.position.x, gk.position.z - ball.position.z);
+      c.head += sp.kind === 'header' || sp.kind === 'volley' ? 1 : 0;
+      c.err += sp.err;
+      c.free += near > 2.5 ? 1 : 0;
+    }
     if (shown++ > 0) return;
     const hit = flyTo(sp.tx);
     console.log(`   shot ${sp.kind} by ${p.name} from (${ball.position.x.toFixed(1)},${ball.position.z.toFixed(1)},y${ball.position.y.toFixed(2)}) aim (y${sp.ty.toFixed(2)}, z${sp.tz.toFixed(2)}) v=${sp.speed.toFixed(1)} err=${sp.err.toFixed(2)}° curl=${sp.curl.toFixed(0)} → crosses y=${hit.y.toFixed(2)} z=${hit.z.toFixed(2)} t=${hit.t.toFixed(2)}`);
+  };
+  let lastKickKind = '';
+  let lastKickT = 0;
+  let lastKickX = 0;
+  let lastKickZ = 0;
+  let lastKickTeam = -1;
+  const headPrev: Record<string, number> = {};
+  const offK = onAny((e: SimEvent) => {
+    if (e.t === 'kick' && e.kind === 'header') {
+      const k = `${lastKickKind}${simClock.elapsed - lastKickT < 1.5 ? '' : '(old)'} y=${ball.position.y.toFixed(0)}`;
+      headPrev[k] = (headPrev[k] ?? 0) + 1;
+    }
+    if (e.t === 'kick' && e.kind !== 'touch' && e.kind !== 'shot' && e.kind !== 'finesse' && e.kind !== 'chip') {
+      lastKickKind = e.kind;
+      lastKickT = simClock.elapsed;
+      lastKickX = ball.position.x;
+      lastKickZ = ball.position.z;
+      lastKickTeam = e.team;
+    }
+  });
+  const shotHow: Record<string, number> = {};
+  let shotHowTotal = 0;
+  let gkMiss = 99;
+  let gkMissInfo = '';
+  (globalThis as unknown as { __gkDbg: unknown }).__gkDbg = (g: { act: string; actT: number; position: { x: number; z: number } }, miss: number, along: number) => {
+    if (miss < gkMiss) {
+      gkMiss = miss;
+      gkMissInfo = `closest: miss by ${miss.toFixed(2)} m (along ${along.toFixed(2)}) act=${g.act}@${g.actT.toFixed(2)} gk(${g.position.x.toFixed(1)},${g.position.z.toFixed(1)}) ball(${ball.position.x.toFixed(1)},${ball.position.y.toFixed(2)},${ball.position.z.toFixed(1)})`;
+    }
+  };
+  // pass outcomes by kind / length / pressure
+  const oneTwo = { played: 0, forward: 0, prevX: 0, prevPasser: null as unknown, prevT: -9 };
+  const passT: Record<string, { n: number; ok: number; cut: number; cutNear: number; cutFar: number }> = {};
+  let cur: { key: string; x: number; z: number; tx: number; tz: number } | null = null;
+  (globalThis as unknown as { __passDbg: unknown }).__passDbg = (ev: string, a: { position: { x: number; z: number }; team: unknown; pressure: number }, b: { kind?: string; tx?: number; tz?: number; position?: { x: number; z: number }; team?: unknown }) => {
+    if (ev === 'kick') {
+      // one-two: this pass goes back to the man who passed to the passer moments ago
+      const rcv = (b as { receiver?: unknown }).receiver;
+      if (rcv && rcv === oneTwo.prevPasser && simClock.elapsed - oneTwo.prevT < 3.2) {
+        oneTwo.played++;
+        const r = rcv as { position: { x: number }; team: { side: number } };
+        // a real wall pass: he has gone forward since he gave it, and gets it back further on
+        if ((r.position.x - oneTwo.prevX) * r.team.side > 4 && ((b.tx ?? 0) - oneTwo.prevX) * r.team.side > 5) oneTwo.forward++;
+      }
+      oneTwo.prevPasser = a;
+      oneTwo.prevT = simClock.elapsed;
+      oneTwo.prevX = a.position.x;
+      const d = Math.hypot((b.tx ?? 0) - ball.position.x, (b.tz ?? 0) - ball.position.z);
+      const key = `${b.kind} ${d < 8 ? 'short' : d < 16 ? 'mid' : 'long'}${a.pressure > 0.5 ? ' pressed' : ''}`;
+      cur = { key, x: ball.position.x, z: ball.position.z, tx: b.tx ?? 0, tz: b.tz ?? 0 };
+      (passT[key] ??= { n: 0, ok: 0, cut: 0, cutNear: 0, cutFar: 0 }).n++;
+    } else if (cur && b.position) {
+      const r = passT[cur.key];
+      if (b.team === a.team) r.ok++;
+      else {
+        r.cut++;
+        const fromStart = Math.hypot(b.position.x - cur.x, b.position.z - cur.z);
+        const toEnd = Math.hypot(b.position.x - cur.tx, b.position.z - cur.tz);
+        if (fromStart < 4) r.cutNear++;
+        else if (toEnd < 3.5) r.cutFar++;
+      }
+      cur = null;
+    }
   };
   const nick = { n: 0, heldLt03: 0, heldLt1: 0, sprint: 0, kicking: 0, stumble: 0, cdSum: 0, slow: 0 };
   (globalThis as unknown as { __nickDbg: unknown }).__nickDbg = (c: { gotBallT: number; sprinting: boolean; act: string; velocity: { x: number; z: number }; queued: unknown }, cd: number) => {
@@ -131,9 +302,92 @@ function diag(n: number): void {
     nick.cdSum += cd;
   };
   const rs: SimResult[] = [];
-  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: 2, seed: 900 + i, events: true }));
+  const di = process.argv.indexOf('--diff');
+  const dDiff = di > 0 ? Number(process.argv[di + 1]) : 2;
+  // where the side in possession has the ball (thirds of the pitch, toward the goal it attacks)
+  const zone = [0, 0, 0, 0, 0, 0];
+  let zoneN = 0;
+  const lossZone = [0, 0, 0, 0, 0, 0];
+  let lastOwner: unknown = null;
+  let lastOwnerX = 0;
+  // possession spells: how far each one gets and how it ends
+  const spell = { team: null as unknown, maxAx: 0, t0: 0, shot: false, entered: 0, lastAx: 0, lastCarrier: '' };
+  const spells = { n: 0, mid: 0, final: 0, box: 0, shotFromFinal: 0, shots: 0, durFinal: 0, endFinal: {} as Record<string, number> };
+  let shotsSeen = 0;
+  const closeSpell = (why: string): void => {
+    if (!spell.team) return;
+    if (shotsSeen > 0) spell.shot = true;
+    spells.n++;
+    if (spell.maxAx > 0.5) spells.mid++;
+    if (spell.maxAx > 2 / 3) {
+      spells.final++;
+      spells.durFinal += simClock.elapsed - spell.entered;
+      if (spell.shot) spells.shotFromFinal++;
+      const k = spell.shot ? 'shot' : why;
+      spells.endFinal[k] = (spells.endFinal[k] ?? 0) + 1;
+    }
+    if (spell.maxAx > 1 - CFG.boxDepth / (2 * CFG.halfL)) spells.box++;
+    if (spell.shot) spells.shots++;
+    spell.team = null;
+  };
+  let lastToast = '';
+  const offSp = onAny((e: SimEvent) => {
+    if (e.t === 'shot') shotsSeen++;
+    if (e.t === 'toast') lastToast = e.text;
+  });
+  const onTick = (): void => {
+    if (match.state !== 'play') { closeSpell('whistle'); return; }
+    if (match.restart) { closeSpell('out of play / foul'); return; }
+    const t = match.controlTeam;
+    if (t) {
+      const axs = (ball.position.x * t.side + CFG.halfL) / (2 * CFG.halfL);
+      if (spell.team !== t) {
+        closeSpell(lastToast === 'TACKLE' || lastToast === 'SLIDE TACKLE' || lastToast === 'BALL WON' || lastToast === 'DISPOSSESSED' ? 'tackled' : lastToast === 'INTERCEPTED' ? 'pass cut out' : spell.lastCarrier === '' ? 'loose ball lost' : 'pass cut out / loose');
+        spell.team = t; spell.maxAx = axs; spell.t0 = simClock.elapsed; spell.shot = false; spell.entered = axs > 2 / 3 ? simClock.elapsed : 0; shotsSeen = 0; lastToast = '';
+      }
+      if (axs > 2 / 3 && spell.maxAx <= 2 / 3) spell.entered = simClock.elapsed;
+      spell.maxAx = Math.max(spell.maxAx, axs);
+      if (shotsSeen > 0) spell.shot = true;
+      spell.lastCarrier = match.controlPlayer ? 'c' : '';
+    }
+    if (t) {
+      const ax = (ball.position.x * t.side + CFG.halfL) / (2 * CFG.halfL);
+      if (simClock.tick % 12 === 0) {
+        zone[Math.min(5, Math.floor(ax * 6))]++;
+        zoneN++;
+      }
+      if (lastOwner && lastOwner !== t) lossZone[Math.min(5, Math.max(0, Math.floor(lastOwnerX * 6)))]++;
+      lastOwner = t;
+      lastOwnerX = ax;
+    }
+  };
+  for (let i = 0; i < n; i++) rs.push(simulateMatch('ARGENTINA', 'FRANCE', { diff: dDiff, seed: 900 + i, events: true, onTick }));
+  console.log('ball position while in possession (own goal → their goal, sixths):', zone.map((v) => `${((100 * v) / zoneN).toFixed(0)}%`).join(' '), ' | possession lost in:', lossZone.map((v) => (v / n).toFixed(1)).join(' '));
+  offSp();
+  console.log(`possession spells/match ${(spells.n / n).toFixed(0)}: reach their half ${((100 * spells.mid) / spells.n).toFixed(0)}%, final third ${((100 * spells.final) / spells.n).toFixed(0)}% (${(spells.final / n).toFixed(1)}/match, ${(spells.durFinal / Math.max(1, spells.final)).toFixed(1)} s each), box ${((100 * spells.box) / spells.n).toFixed(0)}% (${(spells.box / n).toFixed(1)}/match); final-third entries ending in a shot ${((100 * spells.shotFromFinal) / Math.max(1, spells.final)).toFixed(0)}%`);
+  console.log('   final-third entries end:', Object.entries(spells.endFinal).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / spells.final).toFixed(0)}%`).join('  '));
   offG();
+  offO();
+  offK();
+  console.log('passes (kind length [pressed]): n/match  completed%  intercepted% (at source / at the receiver)');
+  for (const [k, r] of Object.entries(passT).sort((x, y) => y[1].n - x[1].n)) {
+    if (r.n / n < 1) continue;
+    console.log(`   ${k.padEnd(24)} ${(r.n / n).toFixed(1).padStart(5)}  ok ${((100 * r.ok) / r.n).toFixed(0).padStart(3)}%  cut ${((100 * r.cut) / r.n).toFixed(0).padStart(3)}% (${((100 * r.cutNear) / r.n).toFixed(0)}% / ${((100 * r.cutFar) / r.n).toFixed(0)}%)  other ${((100 * (r.n - r.ok - r.cut)) / r.n).toFixed(0)}%`);
+  }
+  offH();
+  console.log('after a header at goal:', Object.entries(headEnds).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join('  '));
+  console.log('shots by kind:', Object.entries(kindOut).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `${k} ${(v.n / n).toFixed(1)}/match on target ${((100 * v.on) / v.n).toFixed(0)}% scored ${((100 * v.goal) / v.n).toFixed(0)}%`).join('  |  '));
+  console.log(`return passes (to the man who just passed) per match: ${(oneTwo.played / n).toFixed(1)}, of which real one-twos (he went ≥ 4 m on and gets it ≥ 5 m further forward): ${(oneTwo.forward / n).toFixed(1)}`);
+  console.log('chances made by:', Object.entries(shotHow).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / shotHowTotal).toFixed(0)}%`).join('  '));
+  console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));
   console.log('shots by distance (0-5,5-10,…,25+ m):', shotBins.join(' '), ' goals:', goalBins.join(' '));
+  for (let b = 0; b < 6; b++) {
+    const k = shotBins[b];
+    if (!k) continue;
+    const c = ctx[b];
+    const o = outcomeBins[b];
+    console.log(`   ${String(b * 5).padStart(2)}-${String(b * 5 + 5).padEnd(2)} m  n=${String(k).padStart(3)} goals ${((100 * goalBins[b]) / k).toFixed(0).padStart(3)}%  xG ${((100 * xgBins[b]) / k).toFixed(0).padStart(3)}%  saved ${((100 * o.save) / k).toFixed(0).padStart(3)}%  blocked ${((100 * o.block) / k).toFixed(0).padStart(3)}%  post ${((100 * o.post) / k).toFixed(0).padStart(2)}% | nearest def ${(c.near / k).toFixed(1)} m, unmarked ${((100 * c.free) / k).toFixed(0)}%, defenders in cone ${(c.cone / k).toFixed(2)}, gk off line ${(c.gkOut / k).toFixed(1)} m / ${(c.gkD / k).toFixed(1)} m from ball, headers ${((100 * c.head) / k).toFixed(0)}%, err ${(c.err / k).toFixed(1)}°`);
+  }
   console.log('nicks   ', JSON.stringify(nick), 'avg cd', (nick.cdSum / (nick.n || 1)).toFixed(2));
   off();
   const per = (o: Record<string, number>): string =>
@@ -142,12 +396,16 @@ function diag(n: number): void {
       .map(([k, v]) => `${k}:${(v / n).toFixed(1)}`)
       .join('  ');
   const avg = (a: number[]): string => (a.length ? (a.reduce((x, y) => x + y, 0) / a.length).toFixed(2) : '-');
-  console.log(`# diag: ${n} matches ARG v FRA (LEGEND), per-match averages`);
+  console.log(`# diag: ${n} matches ARG v FRA (difficulty ${dDiff}), per-match averages`);
   console.log('events  ', per(counts));
   console.log('kicks   ', per(kinds));
   console.log('toasts  ', per(toasts));
   console.log(`shots    n=${(shotPow.length / n).toFixed(1)} avgPower=${avg(shotPow)} avgXg=${avg(shotXg)}`);
   console.log(`1stTouch n=${(ftq.length / n).toFixed(1)} avgQuality=${avg(ftq)} poor(<0.4)=${(ftq.filter((q) => q < 0.4).length / n).toFixed(1)}`);
+  const tt: Record<string, number> = {};
+  let tot = 0;
+  for (const r of rs) for (const [k, v] of Object.entries(r.tactics)) { tt[k] = (tt[k] ?? 0) + v; tot += v; }
+  console.log('tactics ', Object.entries(tt).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / tot).toFixed(0)}%`).join('  '));
   report('diag', rs);
 }
 
@@ -354,7 +612,7 @@ function physicsTests(): void {
 }
 
 // ---- run ----
-const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
+const args = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !['--only', '--diff'].includes(all[i - 1] ?? ''));
 const N = Number(args[0] ?? 6);
 const SECS = Number(args[1] ?? 120);
 CFG.matchSeconds = SECS;
@@ -387,7 +645,10 @@ const scenarios: [string, string, string, number, boolean][] = [
 ];
 const t0 = Date.now();
 let ticks = 0;
+const onlyIdx = process.argv.indexOf('--only');
+const only = onlyIdx > 0 ? process.argv[onlyIdx + 1] : '';
 scenarios.forEach(([label, h, a, d, fz], si) => {
+  if (only && !label.includes(only)) return;
   const rs: SimResult[] = [];
   for (let i = 0; i < N; i++) {
     const r = simulateMatch(h, a, { diff: d, freeze: fz, seed: si * 1000 + i + 1 });
@@ -398,6 +659,23 @@ scenarios.forEach(([label, h, a, d, fz], si) => {
 });
 const secs = (Date.now() - t0) / 1000;
 console.log(`\n# ${ticks} ticks in ${secs.toFixed(1)}s = ${(ticks / 120 / secs).toFixed(0)}× real time`);
+
+// ---- balance guard: wide bands around the targets in docs/QUALITY_STANDARD.md, over all
+// scenarios together. Not a tuning tool (use --diag) — it exists so that a regression the
+// size of "the keeper gives the ball away" or "nobody can complete a pass" fails the run.
+if (!only && agg.matches >= 30) {
+  const gpm = agg.goals / agg.minutes;
+  const conv = agg.goals / (agg.shots || 1);
+  const onT = agg.onT / (agg.shots || 1);
+  const pacc = agg.comp / (agg.passes || 1);
+  const spm = agg.shots / agg.minutes;
+  console.log(`# balance over ${agg.matches} matches: ${gpm.toFixed(2)} goals/min, ${spm.toFixed(2)} shots/min, ${(100 * onT).toFixed(0)}% on target, ${(100 * conv).toFixed(0)}% conversion, ${(100 * pacc).toFixed(0)}% pass completion`);
+  check('balance: goals per minute', gpm > 0.3 && gpm < 0.95, `${gpm.toFixed(2)} (want 0.3–0.95; target ≈ 0.33–0.67)`);
+  check('balance: shots per minute', spm > 1.3 && spm < 3.6, `${spm.toFixed(2)} (want 1.3–3.6; target ≈ 1.7–2.7)`);
+  check('balance: on target', onT > 0.36 && onT < 0.62, `${(100 * onT).toFixed(0)}% (want 36–62 %)`);
+  check('balance: conversion', conv > 0.16 && conv < 0.38, `${(100 * conv).toFixed(0)}% (want 16–38 %)`);
+  check('balance: pass completion', pacc > 0.76 && pacc < 0.94, `${(100 * pacc).toFixed(0)}% (want 76–94 %)`);
+}
 
 // ---- determinism: same seed ⇒ identical match ----
 const a = simulateMatch('SPAIN', 'ITALY', { diff: 2, seed: 4242 });

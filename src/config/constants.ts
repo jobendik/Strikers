@@ -46,7 +46,7 @@ export const CFG = {
   passLong: 22,
   clearPow: 24,
   shootAttempts: 6,
-  potShot: 0.035,
+  potShot: 0.012,
   passInterceptScale: 0.22,
   comfortZone: 3.0,
   minPassDist: 5,
@@ -197,15 +197,15 @@ export const DIFF: DiffSetting[] = [
   // Difficulty changes how well the AI *thinks and executes* — never how fast it
   // can physically run (`aiSpd` is a mild work-rate factor: how readily players
   // commit to a sprint, capped at 1.0 = the same physics the human gets).
-  //   react  — seconds of reaction lag (keeper reads, tackle timing, decisions)
+  //   react  — seconds of lag in a defender's tackle timing (the keeper's reactions come from `keeper`)
   //   noise  — execution error multiplier on passes/shots
   //   keeper — keeper quality 0..1 (read accuracy, reaction, handling)
   //   press  — how aggressively/cohesively the team closes down (0..1)
-  { label: 'EASY', aiSpd: 0.9, react: 0.4, passSafe: 2.6, shootBias: 0.55, keeper: 0.55, noise: 1.7, press: 0.35 },
-  { label: 'PRO', aiSpd: 0.95, react: 0.27, passSafe: 2.1, shootBias: 0.78, keeper: 0.68, noise: 1.3, press: 0.55 },
-  { label: 'LEGEND', aiSpd: 1.0, react: 0.19, passSafe: 1.7, shootBias: 0.95, keeper: 0.78, noise: 1.0, press: 0.72 },
-  { label: 'ULTIMATE', aiSpd: 1.0, react: 0.15, passSafe: 1.45, shootBias: 1.05, keeper: 0.86, noise: 0.8, press: 0.86 },
-  { label: 'WORLD CLASS', aiSpd: 1.0, react: 0.12, passSafe: 1.25, shootBias: 1.12, keeper: 0.93, noise: 0.62, press: 1.0 },
+  { label: 'EASY', aiSpd: 0.9, react: 0.4, keeper: 0.55, noise: 1.6, press: 0.35 },
+  { label: 'PRO', aiSpd: 0.95, react: 0.27, keeper: 0.68, noise: 1.3, press: 0.55 },
+  { label: 'LEGEND', aiSpd: 1.0, react: 0.19, keeper: 0.78, noise: 1.15, press: 0.72 },
+  { label: 'ULTIMATE', aiSpd: 1.0, react: 0.15, keeper: 0.86, noise: 1.05, press: 0.86 },
+  { label: 'WORLD CLASS', aiSpd: 1.0, react: 0.12, keeper: 0.93, noise: 0.95, press: 1.0 },
 ];
 
 /**

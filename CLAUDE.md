@@ -11,10 +11,10 @@ next-generation browser football game. **Start every session by reading
 npm run typecheck
 npm run build
 npm run test                 # 156+ unit tests (progression/economy/save migration)
-npm run sim                  # headless AI-vs-AI balance run + determinism check
+npm run sim                  # headless AI-vs-AI balance run + determinism check + balance guard
 npm run sim -- --physics     # ball-model / aim-solver self-tests
 npm run sim -- --gk          # keeper save-rate scenarios (read the table, no pass/fail)
-npm run sim -- 6 120 --diag  # event diagnostics for tuning
+npm run sim -- 6 120 --diag  # event diagnostics for tuning (--diff 0..4 picks the tier, --close traces point-blank chances)
 ```
 
 ## Rules of the codebase

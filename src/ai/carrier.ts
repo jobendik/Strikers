@@ -3,25 +3,26 @@ import { V3, clamp, distSq, headingVec } from '../core/math';
 import { chance, rngRange } from '../core/rng';
 import { sim } from '../core/time';
 import { ball, match, oppOf, teamIndex } from '../game/state';
-import { clearBall, estimateXg, kick, lobKick, pressureOn, shootAt } from '../game/control';
+import { clearBall, estimateXg, kick, lobKick, makeKick, pressureOn, shootAt } from '../game/control';
 import { evaluateCarrier } from './fuzzy';
 
 import {
   addNoise,
   canChipKeeper,
-  findBestPass,
-  findThroughBall,
   goalX,
   isOppWithin,
   nearestOpp,
   passWeight,
   pickShotTarget,
 } from './analysis';
+import { chooseBestPass, keepValue, makePassOption } from './passing';
 import type { Player } from '../entities/Player';
 
 // scratch targets reused by the carrier decision
 const _shot = V3();
 const _chip = V3();
+const _tgt = V3();
+const _opt = makePassOption();
 
 /**
  * Ball-carrier behaviour. Every tick he steers his dribble (toward goal, away
@@ -86,6 +87,15 @@ export function aiCarry(p: Player, _dt: number): void {
   const held = sim.elapsed - p.gotBallT;
   // closed down: someone within ~1.5 m — or within ~2.5 m once he has had a moment on it
   const pressured = press > 0.6 || (press > 0.32 && held > 0.45);
+  // about to be closed down: the nearest man will be on him within a beat
+  let closing = false;
+  if (o && !pressured) {
+    const ox = p.position.x - o.position.x;
+    const oz = p.position.z - o.position.z;
+    const od = Math.hypot(ox, oz) || 1;
+    const rate = ((o.velocity.x - p.velocity.x) * ox + (o.velocity.z - p.velocity.z) * oz) / od;
+    closing = od < 6 && rate > 1.5 && (od - 1.4) / rate < 0.7;
+  }
   const speedNow = Math.hypot(p.velocity.x, p.velocity.z);
   const boxedIn = held > 0.8 && speedNow < 1.8 && !open;
 
@@ -102,10 +112,14 @@ export function aiCarry(p: Player, _dt: number): void {
 
   // 1) SHOOT — value of the chance vs. the nerve to take it
   if (faceGoal > -0.1 && distToGoal < CFG.shootRange) {
-    const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot);
+    // placement close in, power from range (power costs accuracy — see control.makeKick)
+    const power = CFG.shootPow * clamp(0.6 + 0.013 * distToGoal + 0.12 * A.shooting, 0.68, 1);
+    // he knows roughly how true he can hit it from here, and aims inside the post accordingly
+    const errDeg = makeKick(p, 'shot', 'aim', gx, 0.3, 0, power).err;
+    const openness = pickShotTarget(ball.position, team, opp, A.composure, _shot, errDeg);
     const xg = estimateXg(team, ball.position.x, ball.position.z, press) * (0.45 + 0.75 * openness);
     // threshold falls with composure and urgency, rises when protecting a lead
-    let need = 0.14 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve;
+    let need = 0.115 - 0.05 * A.composure - 0.07 * urgency + 0.12 * conserve - 0.035 * team.directness();
     // fuzzy approval (close + central + unmarked) lowers it; a hopeless angle raises it
     need -= (desire.shoot - 50) / 380;
     // a better pass on (someone calling in a better spot) makes him pickier
@@ -115,7 +129,6 @@ export function aiCarry(p: Player, _dt: number): void {
     }
     const pot = chance(CFG.potShot * (1 + urgency * 3) * (1 - conserve * 0.9)) && distToGoal < 24;
     if (xg > need || (pot && openness > 0.25)) {
-      const power = CFG.shootPow * (0.82 + 0.2 * A.shooting) * (distToGoal < 9 ? 0.86 : 1);
       // a clinical finisher bends it away from the keeper, around him into the corner
       const curlSign = Math.sign(_shot.z - opp.gk.position.z || 1) * side;
       const finesse = distToGoal < 17 && A.shooting > 0.8 && openness < 0.8 && chance(0.4);
@@ -125,45 +138,18 @@ export function aiCarry(p: Player, _dt: number): void {
     }
   }
 
-  // 2) REQUESTED PASS — honour a team-mate who has found a safe lane
-  const caller = match.callingPlayer;
-  if (
-    caller &&
-    caller.team === team &&
-    caller !== p &&
-    !caller.sentOff &&
-    match.callTarget &&
-    (pressured || boxedIn || (held > 0.5 && (desire.pass >= 52 ? chance(0.3) : chance(0.06 + A.passing * 0.1))))
-  ) {
-    const target = match.callTarget.clone();
-    addNoise(target, A.passing);
-    const dx = target.x - ball.position.x;
-    const dz = target.z - ball.position.z;
-    const ahead = dx * side > 3;
-    kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.passLong, ahead ? CFG.passArriveThrough + 1.5 : CFG.passArrive), 'pass', 0, ahead ? 'through' : 'pass', caller);
-    return;
-  }
-
-  // 3) THROUGH-BALL — slide a runner in behind when not yet in shooting range
-  if (distToGoal > 11 && held > 0.35 && chance(0.07 + A.passing * 0.14 + (pressured ? 0.2 : 0))) {
-    const thr = findThroughBall(p, opp);
-    if (thr) {
-      addNoise(thr.target, A.passing);
-      const dx = thr.target.x - ball.position.x;
-      const dz = thr.target.z - ball.position.z;
-      kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.throughPow, CFG.passArriveThrough), 'pass', 0, 'through', thr.receiver);
-      return;
-    }
-  }
-
-  // 4) CROSS — a lofted ball into the box from a wide, advanced position
+  // 2) CROSS — a lofted ball into the box from a wide, advanced position
   if (Math.abs(p.position.z) > 9 && p.position.x * side > 8) {
     let mate: Player | null = null;
     let bestD = Infinity;
     for (const m of team.outfield()) {
       if (m === p) continue;
       const central = Math.abs(m.position.z) < 8 && m.position.x * side > 12;
-      const d = Math.hypot(gx - m.position.x, m.position.z);
+      // the runner with the most room — a man attacking the far post unmarked beats
+      // a closer one with a defender on his shoulder
+      let marked = 9;
+      for (const o of opp.outfield()) marked = Math.min(marked, Math.hypot(o.position.x - m.position.x, o.position.z - m.position.z));
+      const d = Math.hypot(gx - m.position.x, m.position.z) - 1.2 * Math.min(marked, 4);
       if (central && d < bestD) {
         bestD = d;
         mate = m;
@@ -172,25 +158,56 @@ export function aiCarry(p: Player, _dt: number): void {
     if (mate && held > 0.3 && chance(pressured ? 0.6 : 0.22)) {
       const swing = CFG.curlCross * Math.sign(p.position.z || 1) * side; // in-swinging toward goal
       // aim in front of the runner, between him and the goal
-      const tx = clamp(mate.position.x + side * 1.5 + mate.velocity.x * 0.5, -CFG.halfL + 2, CFG.halfL - 2);
-      lobKick(p, V3(tx, 0, mate.position.z + mate.velocity.z * 0.5), rngRange(3.2, 4.6), 'pass', swing, 'cross', mate);
+      // a man attacking a post is crossed for where he is going, not where he is
+      const st = mate.supportTarget;
+      const toSpot = Math.hypot(st.x - mate.position.x, st.z - mate.position.z);
+      const useSpot = mate.role === 'SUPPORT' && toSpot > 1 && toSpot < 7;
+      const ax = useSpot ? st.x : mate.position.x + mate.velocity.x * 0.5;
+      const az = useSpot ? st.z : mate.position.z + mate.velocity.z * 0.5;
+      const tx = clamp(ax + side * 1.5, -CFG.halfL + 2, CFG.halfL - 2);
+      lobKick(p, V3(tx, 0, az), rngRange(3.2, 4.6), 'pass', swing, 'cross', mate);
       return;
     }
   }
 
-  // 5) PASS — when fuzzy says so or when threatened, and a safe lane exists
-  const passThreshold = 55 - conserve * 14;
-  if (pressured || boxedIn || (desire.pass >= passThreshold && held > 1.1 && chance(0.25)) || held > 3.2) {
-    const pass = findBestPass(p, CFG.passLong, CFG.minPassDist, opp);
-    if (pass) {
-      addNoise(pass.target, A.passing);
-      const dx = pass.target.x - ball.position.x;
-      const dz = pass.target.z - ball.position.z;
-      kick(p, V3(dx, 0, dz), passWeight(Math.hypot(dx, dz), CFG.passLong), 'pass', 0, 'pass', pass.receiver);
+  // 3) PASS or KEEP — a utility decision. The best ball on (to feet or into the
+  // space a runner is attacking, scored by threat, ownership and distance) is
+  // compared with what keeping it is worth (where he is, the room ahead, the
+  // pressure on him). He releases it when the pass is clearly better football —
+  // or straight away when he is being closed down.
+  const haveOption = chooseBestPass(p, opp, _opt, pressured && toGoal > 34);
+  if (haveOption) {
+    const keep = keepValue(p);
+    // a good passer sees it earlier; protecting a lead he recycles it more readily;
+    // fuzzy "pass desirability" (far out / wide / marked) nudges the bar down
+    const bar = 0.3 - 0.15 * A.passing - 0.25 * conserve - (desire.pass - 50) / 250;
+    const better = _opt.utility > keep + bar;
+    // Closed down he does not automatically get rid: with a man on him he will
+    // lay it off if that is at least as good, play safe in his own half, or — the
+    // better the dribbler, the more often — back himself to beat his man.
+    const dribbler = 0.5 * A.control + 0.3 * A.agility + 0.2 * A.pace;
+    const ownHalf = p.position.x * side < -2;
+    const onTop = press > 0.74; // defender within a metre
+    const underPressure =
+      pressured && (_opt.utility > keep + 0.12 || (ownHalf && chance(0.5)) || (onTop && chance(0.45)) || chance(0.22 * (1.25 - dribbler)));
+    // with time on the ball he takes a touch and looks up before moving it on — unless
+    // the pass on is a clear chance (a runner in behind, a man free in the box)
+    const killer = _opt.utility > keep + bar + 0.25;
+    // the good passer moves it *before* the challenge arrives, while the lane is open
+    const early = closing && held > 0.25 && _opt.utility > keep - 0.05 && chance(0.25 + 0.5 * A.passing);
+    const release = boxedIn || underPressure || early || (held > (killer ? 0.3 : 0.9) && better && chance(killer ? 0.6 : 0.3)) || held > 5;
+    if (release) {
+      _tgt.set(_opt.x, 0, _opt.z);
+      addNoise(_tgt, A.passing);
+      const dx = _tgt.x - ball.position.x;
+      const dz = _tgt.z - ball.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (_opt.space) kick(p, V3(dx, 0, dz), passWeight(dist, CFG.throughPow, CFG.passArriveThrough), 'pass', 0, 'through', _opt.receiver);
+      else kick(p, V3(dx, 0, dz), passWeight(dist, CFG.passLong), 'pass', 0, 'pass', _opt.receiver);
       return;
     }
   }
 
-  // 6) cornered deep in our own half under pressure -> clear it
-  if (isOppWithin(p, 1.8) && p.position.x * side < -8) clearBall(p);
+  // 4) cornered deep in our own half under pressure -> clear it
+  if (isOppWithin(p, 1.6) && p.position.x * side < -15 && held > 0.5) clearBall(p);
 }

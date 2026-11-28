@@ -94,8 +94,8 @@ export function gkBrain(p: Player, _dt: number): void {
           const reachStand = 0.6;
           const need = absLat - reachStand; // ground to make up beyond his standing reach
           p.faceYaw = side > 0 ? Math.PI / 2 : -Math.PI / 2;
-          if (need <= 0 && _cross.y < 2.1) {
-            // straight at him: set himself
+          if (need <= 0 && _cross.y < 2.5) {
+            // straight at him (a high one he takes above his head): set himself
             _t.set(planeX, 0, p.position.z + lat * 0.8);
             p.goArrive(_t);
             return;
@@ -108,7 +108,8 @@ export function gkBrain(p: Player, _dt: number): void {
             return;
           }
           // dive: go when the flight time matches the dive (not early, not late)
-          const diveLead = Math.min(CFG.gkDiveTime * 0.8, 0.12 + (need + 0.5) / CFG.gkDiveSpeed);
+          // (a high ball needs the jump started early enough for the hands to get up there)
+          const diveLead = Math.min(CFG.gkDiveTime * 0.8, Math.max(_cross.y > 1.9 ? 0.26 : 0, 0.12 + (need + 0.5) / CFG.gkDiveSpeed));
           if (t <= diveLead && p.diveCd <= 0) {
             startGkDive(p, planeX + (bx - planeX) * 0.06, pz, _cross.y);
             return;

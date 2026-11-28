@@ -6,6 +6,9 @@ export type RoleType = 'GK' | 'DEF' | 'ATT';
 /** The dynamic, per-frame tactical role assigned by the team AI. */
 export type PlayerRole = 'POSITION' | 'CHASER' | 'CARRIER' | 'SUPPORT' | 'RECEIVE' | 'GK';
 
+/** What a team is collectively doing (see Team.updateTactic). */
+export type TeamTactic = 'buildUp' | 'attack' | 'counter' | 'counterPress' | 'pressHigh' | 'midBlock' | 'lowBlock';
+
 /** High-level match flow state. */
 export type MatchStateName = 'menu' | 'play' | 'celebrate' | 'halftime' | 'shootout' | 'fulltime';
 
@@ -21,8 +24,6 @@ export interface DiffSetting {
   label: string;
   aiSpd: number;
   react: number;
-  passSafe: number;
-  shootBias: number;
   keeper: number;
   /** Execution-error multiplier on AI passes and shots. */
   noise: number;

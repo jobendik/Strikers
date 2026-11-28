@@ -81,6 +81,44 @@ export function recordFrame(): void {
   count = Math.min(count + 1, CAP);
 }
 
+/**
+ * Dev "film" view: show the live recording as it was `secondsAgo` before the latest
+ * recorded frame, without touching the simulation. Lets a test find a moment by
+ * running the sim, then look at the seconds that led up to it. -1 = off (live view).
+ */
+export const filmCtl = { secondsAgo: -1 };
+let filmView: Float32Array | null = null;
+let filmLast = -1;
+
+/** How many seconds of play the recording currently holds. */
+export function recordedSeconds(): number {
+  return count / REC_HZ;
+}
+
+/** Draw the recorded frame `filmCtl.secondsAgo` back. Returns false if nothing is recorded. */
+export function presentFilm(realDt: number): boolean {
+  if (!ring || count < 2) return false;
+  if (!filmView || filmView.length !== stride) filmView = new Float32Array(stride);
+  const back = clamp(filmCtl.secondsAgo * REC_HZ, 0, count - 1);
+  const c = count - 1 - back; // frame index from the oldest recorded
+  const i0 = Math.floor(c);
+  const i1 = Math.min(count - 1, i0 + 1);
+  const start = (head - count + CAP) % CAP;
+  const a = ((start + i0) % CAP) * stride;
+  const b = ((start + i1) % CAP) * stride;
+  lerpSnapshot(ring.subarray(a, a + stride), ring.subarray(b, b + stride), c - i0, filmView);
+  // animation advances by how far the film moved (negative when stepping back)
+  const animDt = filmLast < 0 ? 0 : (filmLast - filmCtl.secondsAgo);
+  filmLast = filmCtl.secondsAgo;
+  applyView(filmView, animDt, realDt);
+  return true;
+}
+
+/** The ball position in the frame the film view is showing (for aiming a camera). */
+export function filmBall(): [number, number, number] | null {
+  return filmView ? [filmView[0], filmView[1], filmView[2]] : null;
+}
+
 /** Drop the recorded history (called at kickoff so replays don't span restarts). */
 export function resetReplayBuffer(): void {
   head = 0;

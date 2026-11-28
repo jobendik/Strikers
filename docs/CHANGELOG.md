@@ -26,6 +26,55 @@
 - Gamepad support; finesse, chip, through-ball, lobbed through, jockey,
   directional switching; buffered first-time actions; desktop key hints.
 
+### Football intelligence
+- Pitch-control model (arrival times, control field, threat field) driving off-ball
+  support runs and a pass-vs-keep utility decision; carriers take defenders on.
+- Team tactical states with a line of engagement, second presser, compact
+  ball-oriented block, lane-denial marking and counter-attacks.
+- Dev lab: pitch-control field, live decision utilities, team tactic.
+- Team directness: a spell of possession that goes nowhere turns more direct
+  (forward passes, shooting); carriers move the ball before a closing defender arrives.
+
+### Balance pass 2 (found with new `--diag` tables)
+- Keeper distributes from his hands (throw to an open team-mate, else a punt);
+  opponents give him ten metres. Previously he put it at his feet and a forward a
+  metre away scored — about half of all goals.
+- Headers are headed down to land (no more 60-header rallies); unpressured players
+  bring the ball down; headers at goal only from close in.
+- Shot power costs accuracy for user and AI; AI places close finishes.
+- A freshly struck ball cannot be reacted to for a tenth of a second (only body
+  contact stops it) — passes can be slipped past a closing defender.
+- Keeper dive takes a realistic time to full stretch; spread stance is not a wall;
+  fingertip saves deflect more; high balls are taken standing.
+- Shot/pass execution noise compressed across difficulty tiers; dead knobs removed.
+- AI shooters aim inside the post by the strike's expected spread (on target 35 % → 47 %,
+  more saves, fewer shots sprayed wide).
+- A side keeps its attacking shape while its own pass is in flight (it used to switch
+  to defensive roles for every pass — about a third of the time in possession).
+- Pass and move: the passer runs on past his marker and is the favoured return ball.
+- Marking: most dangerous attacker first, leading his run, touch-tight in front of goal.
+- Crosses: the two runners split to the near and far post (held a few metres short
+  until the crosser is ready), the crosser picks the one with more room and plays it
+  to where he is going.
+- **Fix:** headers at goal (AI *and* user) aimed at a point 14 m away — beyond the
+  goal — so the aim solver lofted them over the bar. They now aim at the goal line
+  (AI header on-target share 0 % → 48 %).
+- A defender cannot get his head to a ball the other side has only just struck
+  (same reaction window as for feet); touch-tight markers were heading away half of
+  all headers at goal from a metre.
+- Dev film view: `__strikers.film.show(secondsAgo)` presents the replay recording
+  without re-simulating; `__strikers.skipGoalReplay()` lets frame-less scripts run past
+  goals; `simtest/browser/film-one-two.cjs` finds and films a one-two. `--diag` counts
+  one-twos.
+- `npm run sim` balance guard: fails if goals/min, shots/min, on-target share,
+  conversion or pass completion leave wide bands around the targets; `--diag` also
+  reports possession spells (how far they get, how they end).
+- Harness: `--diag --diff N`, per-distance shot context (marking, keeper position,
+  outcome), pass outcomes by kind/length/pressure, possession zones, `--close`.
+
+### Settings
+- Camera rig, match conditions, assistance level, crowd/effects volume.
+
 ### Assists
 - Assisted receiving, auto standing tackle, idle assist (AI plays the user's man
   while the controls are untouched).

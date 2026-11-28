@@ -1,14 +1,15 @@
 import { Vector3 } from 'yuka';
-import { SimRegulator } from '../core/time';
-import { CFG, FORMATION, MENTALITY } from '../config/constants';
+import { SimRegulator, sim } from '../core/time';
+import { CFG, DIFF, FORMATION, MENTALITY } from '../config/constants';
 import { teamMeta } from '../config/players';
 import { V3, clamp, distSq } from '../core/math';
 import { ball, match, oppOf } from '../game/state';
 import { updatePerception } from '../ai/perception';
-import { canShoot, isPassSafe, ownGoalX, supportSpot } from '../ai/analysis';
+import { isPassSafe, ownGoalX } from '../ai/analysis';
+import { PC_NX, PC_NZ, arrivalTime, cellX, cellZ, oppArrivalAt, threatAt } from '../ai/pitchControl';
 import { updatePassRequest } from '../ai/passRequests';
 import { Player } from './Player';
-import type { PlayerRole } from '../config/types';
+import type { PlayerRole, TeamTactic } from '../config/types';
 
 // scratch vector for the support-spot shoot test
 const _scratch = V3();
@@ -30,6 +31,20 @@ export class Team {
   gk: Player;
   bestSpot: Vector3 | null = null;
   spots: Vector3[] = [];
+
+  /** What the team is collectively doing right now (see updateTactic). */
+  tactic: TeamTactic = 'midBlock';
+  /** Sim time possession was last won / lost (drives transitions). */
+  wonT = -99;
+  lostT = -99;
+  private hadBall = false;
+  /**
+   * Out of possession: how far up the pitch (in our attacking direction, from the
+   * halfway line) the first defender engages the ball. Beyond it he only contains.
+   */
+  engageLine = 6;
+  /** Is the nearest defender allowed to go and win it (press), or just hold the carrier up (contain)? */
+  engage = true;
 
   /** Throttles the (relatively expensive) support-spot solver to ~4 Hz. */
   private supportRegulator = new SimRegulator(4);
@@ -76,34 +91,122 @@ export class Team {
     return MENTALITY[this.mentality]?.push ?? 0;
   }
 
-  /** Buckland-style SupportSpotCalculator: scores candidate spots for the off-ball attacker. */
-  computeSupport(carrier: Player): Vector3 | null {
-    if (this.bestSpot && !this.supportRegulator.ready()) return this.bestSpot;
+  /**
+   * Off-ball support from pitch control. Each supporter (most advanced first) is
+   * sent to the patch of grass that is worth most to us *and* that he gets to
+   * before any defender: expected threat there, his time advantage over the
+   * nearest opponent, an open passing lane from the ball, a sensible distance
+   * from the carrier, and room away from the team-mate already making a run.
+   * Defenders by trade offer the safer option behind or level with the ball.
+   */
+  assignSupport(carrier: Player, others: Player[]): void {
+    if (!this.supportRegulator.ready()) return;
     const opp = oppOf(this);
-    let best: Vector3 | null = null;
-    let bs = 0;
-    for (const s of this.spots) {
-      let sc = 0;
-      if (isPassSafe(ball.position, s, null, CFG.passLong, opp)) sc += 2;
-      if (canShoot(s, CFG.shootPow, this, opp, _scratch)) sc += 1.5;
-      sc += 2 * clamp(carrier.position.distanceTo(s) / 9, 0, 1);
-      // Reward spots that are genuinely open: the further the nearest defender,
-      // the more useful the run. Spots covered by a defender score poorly so
-      // the off-ball runner doesn't sprint into a marked position.
-      let nearestDefDist = Infinity;
-      for (const o of opp.players) {
-        if (o.sentOff) continue;
-        const d = Math.hypot(o.position.x - s.x, o.position.z - s.z);
-        if (d < nearestDefDist) nearestDefDist = d;
+    const side = this.side;
+    const taken: Vector3[] = [];
+    const countering = this.tactic === 'counter';
+    for (const r of others) {
+      const cautious = r.roleType === 'DEF';
+      let best = -Infinity;
+      let bx = r.supportTarget.x;
+      let bz = r.supportTarget.z;
+      for (let iz = 1; iz < PC_NZ - 1; iz++) {
+        const z = cellZ(iz);
+        for (let ix = 1; ix < PC_NX - 1; ix++) {
+          const x = cellX(ix);
+          const ahead = (x - carrier.position.x) * side;
+          if (ahead < (cautious ? -12 : -5) || ahead > (cautious ? 9 : 24)) continue;
+          const dC = Math.hypot(x - carrier.position.x, z - carrier.position.z);
+          if (dC < 6 || dC > 26) continue;
+          const tRun = arrivalTime(r, x, z);
+          if (tRun > 3.2) continue;
+          const margin = oppArrivalAt(this, x, z) - tRun;
+          // on the counter the runs are about getting in behind, quickly
+          let sc = (cautious ? 1.1 : 2.4) * (countering ? 1.5 : 1) * threatAt(this, x, z) + 1.3 * clamp(margin, -0.8, 1.2);
+          sc -= 0.03 * Math.abs(dC - 13); // a comfortable passing distance
+          sc -= 0.12 * tRun; // don't promise a run he can't make soon
+          for (const t of taken) if (Math.hypot(t.x - x, t.z - z) < 8) sc -= 1.6; // don't run into the same space
+          if (Math.hypot(r.supportTarget.x - x, r.supportTarget.z - z) < 3) sc += 0.35; // hysteresis
+          if (sc < best - 1.6) continue; // can't win even with an open lane — skip the lane test
+          _scratch.set(x, 0, z);
+          if (isPassSafe(ball.position, _scratch, r, CFG.passLong, opp, true)) sc += 1.5;
+          if (match.simRules && ahead > 0) {
+            // stay onside: not beyond the second-last defender while ahead of the ball
+            let goalSide = 0;
+            for (const o of opp.players) if (!o.sentOff && o.position.x * side >= x * side - 0.3) goalSide++;
+            if (goalSide < 2 && x * side > ball.position.x * side) sc -= 3;
+          }
+          if (sc > best) {
+            best = sc;
+            bx = x;
+            bz = z;
+          }
+        }
       }
-      sc += 1.5 * clamp(nearestDefDist / 8, 0, 1);
-      if (sc > bs) {
-        bs = sc;
-        best = s;
-      }
+      r.supportTarget.set(bx, 0, bz);
+      taken.push(r.supportTarget);
     }
-    this.bestSpot = best;
-    return best;
+  }
+
+  /**
+   * Team tactical state. Possession, where the ball is, how long since the ball
+   * changed hands, the scoreline-driven mentality and (for the AI) the pressing
+   * quality of the difficulty level decide what the whole side is doing:
+   *
+   *   in possession    buildUp · attack · counter (just won it with the opposition out of shape)
+   *   out of possession counterPress (just lost it — hunt for a few seconds) · pressHigh ·
+   *                     midBlock · lowBlock
+   */
+  /**
+   * How direct the side is with the ball right now, 0..1: a counter goes straight
+   * for goal; otherwise the longer a spell of possession lasts without getting
+   * anywhere, the more the side forces the issue (forward passes, running at
+   * defenders, shooting on sight) rather than passing round the block forever.
+   */
+  directness(): number {
+    const age = sim.elapsed - this.wonT;
+    const base = this.tactic === 'counter' ? 0.9 : this.tactic === 'attack' ? 0.35 : 0.15;
+    return clamp(base + clamp((age - 4) / 8, 0, 0.6) + (this.mentality === 2 ? 0.25 : this.mentality === 0 ? -0.1 : 0), 0, 1);
+  }
+
+  updateTactic(): void {
+    const opp = oppOf(this);
+    const side = this.side;
+    const bx = ball.position.x * side; // + = toward the goal we attack
+    const has = match.controlTeam === this || (match.controlTeam === null && match.lastPossession === this);
+    if (has && !this.hadBall) this.wonT = sim.elapsed;
+    if (!has && this.hadBall) this.lostT = sim.elapsed;
+    this.hadBall = has;
+    const press = this.isUser ? 0.7 : DIFF[CFG.diff].press;
+
+    if (has) {
+      // counter: we have just won it and few of their outfielders are goal-side of the ball
+      let behindBall = 0;
+      for (const o of opp.outfield()) if (o.position.x * side > bx + 1) behindBall++;
+      const fresh = sim.elapsed - this.wonT < 5;
+      if (fresh && behindBall <= 2 && bx > -18 && this.mentality > 0) this.tactic = 'counter';
+      else if (this.tactic === 'counter' && behindBall <= 2 && sim.elapsed - this.wonT < 8) this.tactic = 'counter';
+      else this.tactic = bx < -6 ? 'buildUp' : 'attack';
+      this.engage = true;
+      return;
+    }
+
+    // out of possession
+    const justLost = sim.elapsed - this.lostT < 1.6 + 1.4 * press;
+    // an all-out mentality presses anywhere beyond our own third; a well-drilled side
+    // (top difficulties) does it only once the ball is pinned in the opponents' third
+    const high = this.mentality === 2 ? bx > -6 : press > 0.85 && bx > 8;
+    if (justLost && press > 0.45 && bx > -14 && this.mentality > 0) this.tactic = 'counterPress';
+    else if (high) this.tactic = 'pressHigh';
+    else if (bx < -11 || this.mentality === 0) this.tactic = 'lowBlock';
+    else this.tactic = 'midBlock';
+
+    // where the first defender goes to win it rather than just contain
+    this.engageLine =
+      this.tactic === 'counterPress' || this.tactic === 'pressHigh' ? 40 : this.tactic === 'midBlock' ? 4 + 8 * press : -4 + 6 * press;
+    // hysteresis so the presser doesn't dither on the line
+    const lim = this.engageLine + (this.engage ? 2.5 : 0);
+    this.engage = bx < lim || ball.position.y > 1.2 || match.controlPlayer === null;
   }
 
   /** Assign markers (defending POSITION players) to the most dangerous attackers. */
@@ -119,7 +222,7 @@ export class Team {
     // spare defender leaves his man and gets on the line between ball and goal
     // (second defender: cover + block), instead of ball-watching beside a runner.
     const dGoal = Math.hypot(ball.position.x - ownGoal.x, ball.position.z);
-    if (dGoal < 19 && match.controlTeam === opp && markers.length) {
+    if (dGoal < 19 && (match.controlTeam === opp || opp.inAttack) && markers.length) {
       const gx = ownGoal.x - ball.position.x;
       const gz = -ball.position.z;
       const gl = Math.hypot(gx, gz) || 1;
@@ -142,31 +245,47 @@ export class Team {
         markers.splice(markers.indexOf(best), 1);
       }
     }
+    // Most dangerous attacker first (nearest our goal), each picked up by the nearest
+    // free defender — so the runner arriving in the box is never the one left over.
     const targets = opp
       .outfield()
       .filter((o) => o.position.x * this.side < 8)
       .sort((a, b) => distSq(a.position, ownGoal) - distSq(b.position, ownGoal));
-    const used = new Set<Player>();
-    for (const m of markers) {
-      let best: Player | null = null;
+    const free = markers.slice();
+    for (const o of targets) {
+      if (!free.length) break;
+      // where he will be in a moment: a marker who aims at where the runner *is* trails him
+      const ox = o.position.x + o.velocity.x * 0.35;
+      const oz = o.position.z + o.velocity.z * 0.35;
+      let m: Player | null = null;
       let bd = Infinity;
-      for (const o of targets) {
-        if (used.has(o)) continue;
-        const d = distSq(o.position, m.position);
+      for (const c of free) {
+        const d = (c.position.x - ox) ** 2 + (c.position.z - oz) ** 2;
         if (d < bd) {
           bd = d;
-          best = o;
+          m = c;
         }
       }
-      if (best) {
-        used.add(best);
-        m.marking = true;
-        const gx = ownGoalX(this);
-        const dx = gx - best.position.x;
-        const dz = 0 - best.position.z;
-        const dl = Math.hypot(dx, dz) || 1;
-        m.markTarget = V3(best.position.x + (dx / dl) * 1.8, 0, best.position.z + (dz / dl) * 1.8);
-      }
+      if (!m) break;
+      free.splice(free.indexOf(m), 1);
+      m.marking = true;
+      const gx = ownGoalX(this);
+      const dx = gx - ox;
+      const dz = 0 - oz;
+      const dl = Math.hypot(dx, dz) || 1;
+      // Near our goal he stays goal-side and touch-tight. Further out he steps
+      // toward the ball's side of his man (in the passing lane) — denying the
+      // pass is better than letting it be played and then tackling.
+      const lane = clamp((dl - 13) / 12, 0, 0.6) * (this.tactic === 'lowBlock' ? 0.4 : 1);
+      const bxr = ball.position.x - ox;
+      const bzr = ball.position.z - oz;
+      const bl = Math.hypot(bxr, bzr) || 1;
+      const tight = clamp(1 - (dl - 15) / 30, 0.6, 1);
+      const off = (this.tactic === 'lowBlock' ? 2.2 : 1.8) - 0.7 * (tight - 0.6) / 0.4;
+      const tx = ox + (dx / dl) * off * (1 - lane) + (bxr / bl) * 2.2 * lane;
+      const tz = oz + (dz / dl) * off * (1 - lane) + (bzr / bl) * 2.2 * lane;
+      m.markTarget = V3(tx, 0, tz);
+      m.markTight = tight;
     }
   }
 
@@ -174,24 +293,81 @@ export class Team {
     // refresh perception for all players before any decision-making
     for (const p of this.players) if (!p.sentOff) updatePerception(p);
 
-    this.inAttack = match.controlTeam === this;
+    // A pass of ours on its way to one of our players is still our attack: the side
+    // keeps its attacking shape and its runs instead of dropping into defensive
+    // positions for the half-second the ball is between two feet.
+    const rcv0 = match.receivingPlayer;
+    const ourPass = match.controlTeam === null && !!match.pendingPass && match.pendingPass.team === this && !!rcv0 && rcv0.team === this && !rcv0.sentOff;
+    this.inAttack = match.controlTeam === this || ourPass;
+    this.updateTactic();
     const of = this.outfield();
     const side = this.side;
     for (const p of this.players) p.role = p.roleType === 'GK' ? 'GK' : 'POSITION';
 
-    if (this.inAttack && match.controlPlayer && match.controlPlayer.team === this) {
-      const carrier = match.controlPlayer;
-      if (this.passRequestRegulator.ready()) updatePassRequest(carrier);
-      if (carrier.roleType !== 'GK') carrier.role = 'CARRIER';
+    const holder = match.controlPlayer && match.controlPlayer.team === this ? match.controlPlayer : null;
+    const carrier = holder ?? (ourPass ? rcv0 : null);
+    if (this.inAttack && carrier) {
+      if (holder && this.passRequestRegulator.ready()) updatePassRequest(holder);
+      if (holder && holder.roleType !== 'GK') holder.role = 'CARRIER';
       const others = of.filter((p) => p !== carrier).sort((a, b) => b.position.x * side - a.position.x * side);
-      if (others[0]) {
-        others[0].role = 'SUPPORT';
-        const sp = carrier.roleType !== 'GK' ? this.computeSupport(carrier) : null;
-        others[0].supportTarget.copy(sp ?? supportSpot(this, carrier, 1));
+      // the two most advanced make runs; a third stays as the safe option behind the ball
+      const runners = others.slice(0, 2);
+      for (const r of runners) r.role = 'SUPPORT';
+      this.assignSupport(carrier, runners);
+
+      // Attacking the cross: with the ball wide in the final third the two runners
+      // split — one to the near post, one to the far post — timed to arrive as the
+      // ball does, instead of both drifting to the same patch of the box.
+      const cz = carrier.position.z;
+      if (holder && Math.abs(cz) > 8 && carrier.position.x * side > 6 && runners.length) {
+        const gx = side * CFG.halfL;
+        const near = Math.sign(cz);
+        const spots = [
+          { x: gx - side * 5.2, z: near * 1.6 }, // near post
+          { x: gx - side * 6.8, z: -near * 2.8 }, // far post
+        ];
+        // whoever is nearer the near-post spot takes it
+        const r0 = runners[0];
+        const r1 = runners[1];
+        const d0 = Math.hypot(r0.position.x - spots[0].x, r0.position.z - spots[0].z);
+        const d1 = r1 ? Math.hypot(r1.position.x - spots[0].x, r1.position.z - spots[0].z) : Infinity;
+        const order = d0 <= d1 ? [r0, r1] : [r1, r0];
+        for (let k = 0; k < order.length; k++) {
+          const r = order[k];
+          if (!r) continue;
+          const sp = spots[k];
+          // hold the run a few metres short until the crosser is ready, then attack it
+          const ready = sim.elapsed - carrier.gotBallT > 0.5 || Math.abs(cz) > 12;
+          const hold = ready ? 0 : 3.5;
+          r.supportTarget.set(sp.x - side * hold, 0, sp.z);
+          if (ready) r.burstT = sim.elapsed + 0.25;
+        }
       }
-      if (others[1]) {
-        others[1].role = 'SUPPORT';
-        others[1].supportTarget.copy(supportSpot(this, carrier, -1));
+
+      // Pass and move: the man who has just played it does not stand and admire it —
+      // he goes past his marker for the return (the wall pass / one-two).
+      const giver = ball.passer;
+      const sincePass = sim.elapsed - ball.lastKickT;
+      if (giver && giver.team === this && giver !== carrier && giver.roleType !== 'GK' && !giver.sentOff && sincePass < 2.6 && this.tactic !== 'buildUp') {
+        const gxAdv = giver.position.x * side;
+        // not the last man, and only where a run forward leads somewhere
+        const deeper = of.filter((q) => q !== giver && q.position.x * side < gxAdv - 2).length;
+        if (deeper >= 1 && gxAdv > -12 && gxAdv < CFG.halfL - 9) {
+          let tx = giver.position.x + side * 11;
+          if (match.simRules) {
+            // hold the run on the shoulder of the second-last defender
+            const xs = oppOf(this).players.filter((o) => !o.sentOff).map((o) => o.position.x * side).sort((a, b) => b - a);
+            const line = Math.max(xs[1] ?? 0, ball.position.x * side, 0);
+            tx = side * Math.min(tx * side, line + 1.5);
+          }
+          tx = clamp(tx, -CFG.halfL + 4, CFG.halfL - 4);
+          // bend the run toward goal, but stay out of the carrier's channel
+          let tz = giver.position.z * 0.7;
+          if (Math.abs(tz - carrier.position.z) < 4) tz = carrier.position.z + Math.sign(giver.position.z - carrier.position.z || 1) * 5;
+          giver.role = 'SUPPORT';
+          giver.supportTarget.set(tx, 0, clamp(tz, -CFG.halfW + 2, CFG.halfW - 2));
+          giver.burstT = sim.elapsed + 0.3;
+        }
       }
 
       // A teammate who has actively requested the pass makes the visible run
@@ -209,10 +385,13 @@ export class Team {
       // If the first chaser is within 4 units the second player holds a covering
       // position behind the play — this blocks counter-attack through-balls
       // instead of leaving the back line exposed with two players committed.
-      if (ball.position.x * side < 0 && sorted[1]) {
+      const hunting = this.tactic === 'counterPress' || this.tactic === 'pressHigh';
+      if ((ball.position.x * side < 0 || hunting) && sorted[1]) {
         const firstChaser = sorted[0];
         const firstDist = firstChaser ? Math.hypot(firstChaser.position.x - ball.position.x, firstChaser.position.z - ball.position.z) : Infinity;
-        if (firstDist > 4) {
+        // a second man goes when the first can't get there alone — or, when the
+        // team is hunting the ball, to close the nearest way out
+        if (firstDist > 4 || (hunting && this.engage)) {
           sorted[1].role = 'CHASER';
         }
         // else sorted[1] stays as POSITION and holds its covering shape
