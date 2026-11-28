@@ -118,10 +118,29 @@ function diag(n: number): void {
   const xgBins = [0, 0, 0, 0, 0, 0];
   const ctx = [0, 1, 2, 3, 4, 5].map(() => ({ near: 0, cone: 0, gkOut: 0, gkD: 0, head: 0, err: 0, free: 0 }));
   const outcomeBins = [0, 1, 2, 3, 4, 5].map(() => ({ save: 0, block: 0, post: 0 }));
+  const kindOut: Record<string, { n: number; on: number; goal: number }> = {};
+  let lastKind = '';
+  let headPrinted = 0;
   let lastShotTick = -1;
   let lastBin = 0;
+  let headWatch = 0;
+  const headEnds: Record<string, number> = {};
+  const offH = onAny((e: SimEvent) => {
+    if (!headWatch) return;
+    if (simClock.tick - headWatch > 180) { headEnds['(nothing in 1.5 s)'] = (headEnds['(nothing in 1.5 s)'] ?? 0) + 1; headWatch = 0; return; }
+    if (e.t === 'kick' || e.t === 'save' || e.t === 'goal' || e.t === 'block' || e.t === 'post' || e.t === 'firstTouch' || e.t === 'setpiece' || e.t === 'whistle' || e.t === 'collide' || e.t === 'net') {
+      const k = e.t === 'kick' ? `kick:${e.kind}` : e.t === 'setpiece' ? `setpiece:${(e as { kind?: string }).kind ?? ''}` : e.t;
+      if (e.t === 'kick' && e.kind === 'header' && simClock.tick === headWatch) return;
+      headEnds[k] = (headEnds[k] ?? 0) + 1;
+      headWatch = 0;
+    }
+  });
   const offO = onAny((e: SimEvent) => {
     if (simClock.tick - lastShotTick > 240 || lastShotTick < 0) return;
+    if ((e.t === 'save' || e.t === 'goal') && kindOut[lastKind]) {
+      kindOut[lastKind].on++;
+      if (e.t === 'goal') kindOut[lastKind].goal++;
+    }
     if (e.t === 'save') { outcomeBins[lastBin].save++; lastShotTick = -1; }
     else if (e.t === 'block') { outcomeBins[lastBin].block++; lastShotTick = -1; }
     else if (e.t === 'post') { outcomeBins[lastBin].post++; lastShotTick = -1; }
@@ -165,6 +184,14 @@ function diag(n: number): void {
     }
     lastBin = b;
     lastShotTick = simClock.tick;
+    lastKind = sp.kind;
+    if (sp.kind === 'header') headWatch = simClock.tick;
+    if (sp.kind === 'header' && process.argv.includes('--headers') && headPrinted++ < 12) {
+      const gxl = p.team.side * CFG.halfL;
+      const hit = flyTo(gxl);
+      console.log(`   HEADER from (${ball.position.x.toFixed(1)},${ball.position.y.toFixed(2)},${ball.position.z.toFixed(1)}) v=(${ball.velocity.x.toFixed(1)},${ball.velocity.y.toFixed(1)},${ball.velocity.z.toFixed(1)}) aim(${sp.tx.toFixed(1)},${sp.ty.toFixed(1)},${sp.tz.toFixed(1)}) spd=${sp.speed.toFixed(1)} → goal line y=${hit.y.toFixed(2)} z=${hit.z.toFixed(2)} t=${hit.t.toFixed(2)}`);
+    }
+    (kindOut[sp.kind] ??= { n: 0, on: 0, goal: 0 }).n++;
     gkMiss = 99;
     gkMissInfo = '';
     {
@@ -347,6 +374,9 @@ function diag(n: number): void {
     if (r.n / n < 1) continue;
     console.log(`   ${k.padEnd(24)} ${(r.n / n).toFixed(1).padStart(5)}  ok ${((100 * r.ok) / r.n).toFixed(0).padStart(3)}%  cut ${((100 * r.cut) / r.n).toFixed(0).padStart(3)}% (${((100 * r.cutNear) / r.n).toFixed(0)}% / ${((100 * r.cutFar) / r.n).toFixed(0)}%)  other ${((100 * (r.n - r.ok - r.cut)) / r.n).toFixed(0)}%`);
   }
+  offH();
+  console.log('after a header at goal:', Object.entries(headEnds).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${v}`).join('  '));
+  console.log('shots by kind:', Object.entries(kindOut).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `${k} ${(v.n / n).toFixed(1)}/match on target ${((100 * v.on) / v.n).toFixed(0)}% scored ${((100 * v.goal) / v.n).toFixed(0)}%`).join('  |  '));
   console.log(`return passes (to the man who just passed) per match: ${(oneTwo.played / n).toFixed(1)}, of which real one-twos (he went ≥ 4 m on and gets it ≥ 5 m further forward): ${(oneTwo.forward / n).toFixed(1)}`);
   console.log('chances made by:', Object.entries(shotHow).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / shotHowTotal).toFixed(0)}%`).join('  '));
   console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));

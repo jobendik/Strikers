@@ -466,9 +466,9 @@ export function headBall(p: Player, dir: Vector3, power: number, shot = false, l
   const ux = dir.x / dl;
   const uz = dir.z / dl;
   if (shot) {
-    // at goal: driven down toward the line
-    const far = 14;
-    return requestKick(p, makeKick(p, 'header', 'aim', ball.position.x + ux * far, 0.6, ball.position.z + uz * far, power * (0.75 + 0.25 * p.ath.strength), { shot: true, pass: false }));
+    // at goal: `dir` points at the spot on the goal line; the header is aimed to cross
+    // it low (a target beyond the goal made the aim solver loft it over the bar)
+    return requestKick(p, makeKick(p, 'header', 'aim', ball.position.x + dir.x, 0.5, ball.position.z + dir.z, power * (0.75 + 0.25 * p.ath.strength), { shot: true, pass: false }));
   }
   // anywhere else it is headed *down* to land `land` metres away (default: scaled from
   // the power asked for) — a header that stays up at head height just gets headed again

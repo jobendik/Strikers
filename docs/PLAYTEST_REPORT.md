@@ -102,6 +102,18 @@ shots rose to 3.4 a minute (target ≤ 2.7) with 60 % of close-range shooters un
 tighter marking of runners brought it back to 2.32 shots and 0.60 goals a minute over
 90 matches. None of this has been watched as continuous play.
 
+### Crosses and headers (2026-11-28)
+`--diag` "shots by kind" showed AI headers at goal were **never** on target: the
+header aimed at a point 14 m away along the line to goal — beyond the goal — and the
+aim solver lofted a 13 m/s header to reach it, crossing the line at 2–4 m. The user's
+headers at goal used the same call. Fixed (aim at the goal line). The next trace
+("after a header at goal") showed half the corrected headers being headed away at
+once by a marker a metre from the striker; defenders now get the same reaction window
+for heading as for feet. Header on-target share 0 % → 48 %.
+
+Balance over 90 matches at all tiers, real 2×3 min: 0.61 goals/min, 2.32 shots/min,
+48 % on target, 26 % conversion, 79 % pass completion — every target met.
+
 ### A one-two, filmed (2026-11-28, AI observation of stills)
 Found by stepping an AI-v-AI match in the browser until a player received a return
 pass ≥ 4 m further on than where he gave it, then shown from the replay recording

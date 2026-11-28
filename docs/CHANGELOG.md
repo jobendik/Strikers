@@ -53,6 +53,15 @@
   to defensive roles for every pass — about a third of the time in possession).
 - Pass and move: the passer runs on past his marker and is the favoured return ball.
 - Marking: most dangerous attacker first, leading his run, touch-tight in front of goal.
+- Crosses: the two runners split to the near and far post (held a few metres short
+  until the crosser is ready), the crosser picks the one with more room and plays it
+  to where he is going.
+- **Fix:** headers at goal (AI *and* user) aimed at a point 14 m away — beyond the
+  goal — so the aim solver lofted them over the bar. They now aim at the goal line
+  (AI header on-target share 0 % → 48 %).
+- A defender cannot get his head to a ball the other side has only just struck
+  (same reaction window as for feet); touch-tight markers were heading away half of
+  all headers at goal from a metre.
 - Dev film view: `__strikers.film.show(secondsAgo)` presents the replay recording
   without re-simulating; `__strikers.skipGoalReplay()` lets frame-less scripts run past
   goals; `simtest/browser/film-one-two.cjs` finds and films a one-two. `--diag` counts

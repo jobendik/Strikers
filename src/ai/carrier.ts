@@ -145,7 +145,11 @@ export function aiCarry(p: Player, _dt: number): void {
     for (const m of team.outfield()) {
       if (m === p) continue;
       const central = Math.abs(m.position.z) < 8 && m.position.x * side > 12;
-      const d = Math.hypot(gx - m.position.x, m.position.z);
+      // the runner with the most room — a man attacking the far post unmarked beats
+      // a closer one with a defender on his shoulder
+      let marked = 9;
+      for (const o of opp.outfield()) marked = Math.min(marked, Math.hypot(o.position.x - m.position.x, o.position.z - m.position.z));
+      const d = Math.hypot(gx - m.position.x, m.position.z) - 1.2 * Math.min(marked, 4);
       if (central && d < bestD) {
         bestD = d;
         mate = m;
@@ -154,8 +158,14 @@ export function aiCarry(p: Player, _dt: number): void {
     if (mate && held > 0.3 && chance(pressured ? 0.6 : 0.22)) {
       const swing = CFG.curlCross * Math.sign(p.position.z || 1) * side; // in-swinging toward goal
       // aim in front of the runner, between him and the goal
-      const tx = clamp(mate.position.x + side * 1.5 + mate.velocity.x * 0.5, -CFG.halfL + 2, CFG.halfL - 2);
-      lobKick(p, V3(tx, 0, mate.position.z + mate.velocity.z * 0.5), rngRange(3.2, 4.6), 'pass', swing, 'cross', mate);
+      // a man attacking a post is crossed for where he is going, not where he is
+      const st = mate.supportTarget;
+      const toSpot = Math.hypot(st.x - mate.position.x, st.z - mate.position.z);
+      const useSpot = mate.role === 'SUPPORT' && toSpot > 1 && toSpot < 7;
+      const ax = useSpot ? st.x : mate.position.x + mate.velocity.x * 0.5;
+      const az = useSpot ? st.z : mate.position.z + mate.velocity.z * 0.5;
+      const tx = clamp(ax + side * 1.5, -CFG.halfL + 2, CFG.halfL - 2);
+      lobKick(p, V3(tx, 0, az), rngRange(3.2, 4.6), 'pass', swing, 'cross', mate);
       return;
     }
   }

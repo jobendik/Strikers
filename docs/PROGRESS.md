@@ -31,6 +31,8 @@ in a follow-up PR. Everything below passes all gates.
   (it used to drop into defensive positions for every pass), the passer runs on for the
   return ball, and defenders pick up the most dangerous runner first and stay touch-tight
   in front of goal. Crosses 2.6 → 8.7 a match, first-time finishes 0 → 8 % of chances.
+- Every balance target in `QUALITY_STANDARD.md` is met at the real match length (90
+  matches, all tiers): 3.7 goals, 14 shots, 48 % on target, 26 % conversion, 79 % passes.
 - AI shooters aim inside the post by how far the strike can stray (on-target share
   35 % → 47 %, keepers now make ≈ 3.5 saves a match); `npm run sim` has a balance guard.
 
@@ -51,9 +53,11 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 2. **Keep building attacking patterns (AI-02 / AI-05):** pass-and-move, the return
    ball and tight marking are in and measured; one forward one-two has been filmed and
    looks right in stills (`docs/evidence/one-two-2026-11-28.png`; ≈ 11 forward
-   one-twos per 4-minute AI match by `--diag`). Still missing: overlaps from deep,
-   near/far-post split on crosses, a held offside line, pressing traps; 29 % of chances
-   come from loose balls and rebounds. To look at a pattern: find it by stepping the
+   one-twos per 4-minute AI match by `--diag`). Crosses now find near/far-post runs
+   (headers from crosses 17 % of chances) and headers at goal are aimed properly.
+   Still missing: overlaps from deep, a held offside line, pressing traps; ≈ 24 % of
+   chances come from loose balls and rebounds. Header on-target (48 %) is fine but
+   `--diag` "after a header at goal" still shows defenders heading ≈ 1 in 5 away. To look at a pattern: find it by stepping the
    sim, then `__strikers.film.show(secondsAgo)` presents the recording (last 7 s)
    without re-simulating — see `simtest/browser/film-one-two.cjs`. Tools:
    `npm run sim -- 8 120 --diag --diff 1` (chances made by, one-twos, possession

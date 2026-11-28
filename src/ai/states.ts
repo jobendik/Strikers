@@ -5,7 +5,7 @@ import { chance } from '../core/rng';
 import { sim } from '../core/time';
 import { ball, match } from '../game/state';
 import { canHead, planarToBall } from '../game/aerial';
-import { estimateXg, headBall, shootAt, startSlide, startTackle } from '../game/control';
+import { estimateXg, headBall, makeKick, shootAt, startSlide, startTackle } from '../game/control';
 import { perceivedBallPos } from './perception';
 import { goalX, ownGoalX, pickShotTarget } from './analysis';
 import { aiCarry } from './carrier';
@@ -31,12 +31,15 @@ function aiHeader(p: Player): boolean {
   const side = team.side;
   const gx = goalX(team);
   const distGoal = Math.hypot(gx - ball.position.x, ball.position.z);
+  const opp = match.teams[0] === team ? match.teams[1] : match.teams[0];
   if (p.position.x * side > 6 && distGoal < 9.5) {
-    const tz = clamp(ball.position.z * 0.4, -(CFG.goalHalf - 0.6), CFG.goalHalf - 0.6);
+    // down and away from the keeper, inside the post by as much as a header can stray
+    const errDeg = makeKick(p, 'header', 'aim', gx, 0.6, 0, 15).err;
+    pickShotTarget(ball.position, team, opp, p.ath.composure, _aim, errDeg);
+    const tz = clamp(_aim.z, -(CFG.goalHalf - 0.5), CFG.goalHalf - 0.5);
     return headBall(p, V3(gx - ball.position.x, 0, tz - ball.position.z), 15, true);
   }
   let oppNear = Infinity;
-  const opp = match.teams[0] === team ? match.teams[1] : match.teams[0];
   for (const o of opp.players) {
     if (o.sentOff) continue;
     oppNear = Math.min(oppNear, Math.hypot(o.position.x - p.position.x, o.position.z - p.position.z));

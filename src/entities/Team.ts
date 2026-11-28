@@ -315,6 +315,35 @@ export class Team {
       for (const r of runners) r.role = 'SUPPORT';
       this.assignSupport(carrier, runners);
 
+      // Attacking the cross: with the ball wide in the final third the two runners
+      // split — one to the near post, one to the far post — timed to arrive as the
+      // ball does, instead of both drifting to the same patch of the box.
+      const cz = carrier.position.z;
+      if (holder && Math.abs(cz) > 8 && carrier.position.x * side > 6 && runners.length) {
+        const gx = side * CFG.halfL;
+        const near = Math.sign(cz);
+        const spots = [
+          { x: gx - side * 5.2, z: near * 1.6 }, // near post
+          { x: gx - side * 6.8, z: -near * 2.8 }, // far post
+        ];
+        // whoever is nearer the near-post spot takes it
+        const r0 = runners[0];
+        const r1 = runners[1];
+        const d0 = Math.hypot(r0.position.x - spots[0].x, r0.position.z - spots[0].z);
+        const d1 = r1 ? Math.hypot(r1.position.x - spots[0].x, r1.position.z - spots[0].z) : Infinity;
+        const order = d0 <= d1 ? [r0, r1] : [r1, r0];
+        for (let k = 0; k < order.length; k++) {
+          const r = order[k];
+          if (!r) continue;
+          const sp = spots[k];
+          // hold the run a few metres short until the crosser is ready, then attack it
+          const ready = sim.elapsed - carrier.gotBallT > 0.5 || Math.abs(cz) > 12;
+          const hold = ready ? 0 : 3.5;
+          r.supportTarget.set(sp.x - side * hold, 0, sp.z);
+          if (ready) r.burstT = sim.elapsed + 0.25;
+        }
+      }
+
       // Pass and move: the man who has just played it does not stand and admire it —
       // he goes past his marker for the return (the wall pass / one-two).
       const giver = ball.passer;
