@@ -229,10 +229,22 @@ function diag(n: number): void {
     }
   };
   // pass outcomes by kind / length / pressure
+  const oneTwo = { played: 0, forward: 0, prevX: 0, prevPasser: null as unknown, prevT: -9 };
   const passT: Record<string, { n: number; ok: number; cut: number; cutNear: number; cutFar: number }> = {};
   let cur: { key: string; x: number; z: number; tx: number; tz: number } | null = null;
   (globalThis as unknown as { __passDbg: unknown }).__passDbg = (ev: string, a: { position: { x: number; z: number }; team: unknown; pressure: number }, b: { kind?: string; tx?: number; tz?: number; position?: { x: number; z: number }; team?: unknown }) => {
     if (ev === 'kick') {
+      // one-two: this pass goes back to the man who passed to the passer moments ago
+      const rcv = (b as { receiver?: unknown }).receiver;
+      if (rcv && rcv === oneTwo.prevPasser && simClock.elapsed - oneTwo.prevT < 3.2) {
+        oneTwo.played++;
+        const r = rcv as { position: { x: number }; team: { side: number } };
+        // a real wall pass: he has gone forward since he gave it, and gets it back further on
+        if ((r.position.x - oneTwo.prevX) * r.team.side > 4 && ((b.tx ?? 0) - oneTwo.prevX) * r.team.side > 5) oneTwo.forward++;
+      }
+      oneTwo.prevPasser = a;
+      oneTwo.prevT = simClock.elapsed;
+      oneTwo.prevX = a.position.x;
       const d = Math.hypot((b.tx ?? 0) - ball.position.x, (b.tz ?? 0) - ball.position.z);
       const key = `${b.kind} ${d < 8 ? 'short' : d < 16 ? 'mid' : 'long'}${a.pressure > 0.5 ? ' pressed' : ''}`;
       cur = { key, x: ball.position.x, z: ball.position.z, tx: b.tx ?? 0, tz: b.tz ?? 0 };
@@ -335,6 +347,7 @@ function diag(n: number): void {
     if (r.n / n < 1) continue;
     console.log(`   ${k.padEnd(24)} ${(r.n / n).toFixed(1).padStart(5)}  ok ${((100 * r.ok) / r.n).toFixed(0).padStart(3)}%  cut ${((100 * r.cut) / r.n).toFixed(0).padStart(3)}% (${((100 * r.cutNear) / r.n).toFixed(0)}% / ${((100 * r.cutFar) / r.n).toFixed(0)}%)  other ${((100 * (r.n - r.ok - r.cut)) / r.n).toFixed(0)}%`);
   }
+  console.log(`return passes (to the man who just passed) per match: ${(oneTwo.played / n).toFixed(1)}, of which real one-twos (he went ≥ 4 m on and gets it ≥ 5 m further forward): ${(oneTwo.forward / n).toFixed(1)}`);
   console.log('chances made by:', Object.entries(shotHow).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${((100 * v) / shotHowTotal).toFixed(0)}%`).join('  '));
   console.log('headers after:', Object.entries(headPrev).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k}:${(v / n).toFixed(1)}`).join('  '));
   console.log('shots by distance (0-5,5-10,…,25+ m):', shotBins.join(' '), ' goals:', goalBins.join(' '));

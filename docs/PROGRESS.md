@@ -48,17 +48,15 @@ the graphics tier, legacy `Audio.kick()`-style calls removed from the sim.
 
 1. **Get a human to play it** (keyboard, a real gamepad, a phone) and listen to it.
    Every "feel" judgement so far is inferred. Capture findings in `PLAYTEST_REPORT.md`.
-2. **Watch it, then keep building patterns (AI-02 / AI-05):** pass-and-move runs, the
-   return ball and tight marking of runners are in and measured (see
-   `PLAYTEST_REPORT.md`), but nobody has *watched* a one-two or a marked run — capture
-   a few sequences with the lab overlay before building more. (One attempt failed: to
-   film a moment you must find it in one run and replay to just before it, and
-   re-running `startMatch(seed)` in the page — even after `resetSimClock()` — diverges
-   once frames render between ticks. The dev API needs a real "restart with seed" that
-   reproduces a match exactly; the headless harness already does.) Still missing: overlaps
-   from deep, near/far-post split on crosses, a held offside line, pressing traps.
-   29 % of chances still come from loose balls and rebounds. Tools:
-   `npm run sim -- 8 120 --diag --diff 1` (now also "chances made by", possession
+2. **Keep building attacking patterns (AI-02 / AI-05):** pass-and-move, the return
+   ball and tight marking are in and measured; one forward one-two has been filmed and
+   looks right in stills (`docs/evidence/one-two-2026-11-28.png`; ≈ 11 forward
+   one-twos per 4-minute AI match by `--diag`). Still missing: overlaps from deep,
+   near/far-post split on crosses, a held offside line, pressing traps; 29 % of chances
+   come from loose balls and rebounds. To look at a pattern: find it by stepping the
+   sim, then `__strikers.film.show(secondsAgo)` presents the recording (last 7 s)
+   without re-simulating — see `simtest/browser/film-one-two.cjs`. Tools:
+   `npm run sim -- 8 120 --diag --diff 1` (chances made by, one-twos, possession
    spells), `--close`, `--gk`. `npm run sim` fails if the balance drifts.
 3. **Settings UI (rest):** stick dead zone, key/pad remapping, master/commentary volume
    (camera, conditions, assistance, crowd/effects volume are done). _Old text:_ camera mode, assists (receive / tackle / idle), stick dead zone, audio

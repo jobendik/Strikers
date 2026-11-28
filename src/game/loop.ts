@@ -6,8 +6,9 @@ import { match } from './state';
 import { pollInput } from './input';
 import { kickOff } from './flow';
 import { stepSimulation } from './step';
-import { hasReplay, isReplaying, recordFrame, startReplay, updateReplay } from './replay';
+import { filmBall, filmCtl, hasReplay, isReplaying, presentFilm, recordFrame, startReplay, updateReplay } from './replay';
 import { captureSnapshot, presentLive } from './render';
+import { updateCamera } from './camera';
 import { updateHUD, updateToast } from '../ui/hud';
 import { updateRadar } from '../ui/radar';
 import { updateLab } from '../dev/lab';
@@ -55,6 +56,20 @@ export function stepTicks(n: number): void {
     if (match.state === 'play' || (match.state === 'celebrate' && match.celebrateBallT > 0)) recordFrame();
     if (match.state !== 'celebrate') replayDone = false;
   }
+}
+
+/**
+ * Dev/test: skip a pending goal replay and kick off at once, so a script that steps
+ * the simulation in a tight loop (no frames drawn) is not held at a celebration.
+ */
+export function skipGoalReplayNow(): boolean {
+  if (match.state !== 'celebrate' || !match.holdKickoff) return false;
+  replayDone = true;
+  match.holdKickoff = false;
+  kickOff(match.teams[1 - match.scoredBy]);
+  captureSnapshot();
+  captureSnapshot();
+  return true;
 }
 
 /** While a goal replay is (about to be) on screen the match waits for it. */
@@ -111,6 +126,10 @@ function frame(now: number): void {
       captureSnapshot();
       captureSnapshot();
     }
+  } else if (filmCtl.secondsAgo >= 0 && presentFilm(realDt)) {
+    // dev film view (window.__strikers.film): a recorded moment, camera follows its ball
+    const fb = filmBall();
+    if (fb) updateCamera(realDt, fb[0], fb[1], fb[2]);
   } else {
     presentLive(loopCtl.manual ? 1 : acc / SIM_DT, realDt);
   }

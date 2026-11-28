@@ -102,6 +102,14 @@ shots rose to 3.4 a minute (target ≤ 2.7) with 60 % of close-range shooters un
 tighter marking of runners brought it back to 2.32 shots and 0.60 goals a minute over
 90 matches. None of this has been watched as continuous play.
 
+### A one-two, filmed (2026-11-28, AI observation of stills)
+Found by stepping an AI-v-AI match in the browser until a player received a return
+pass ≥ 4 m further on than where he gave it, then shown from the replay recording
+(`__strikers.film`, broadcast camera). In the stills (`docs/evidence/one-two-2026-11-28.png`)
+an Argentina player on the far touchline, with a defender on him, plays it inside,
+runs past the defender and is found again further down the line. That is one
+sequence, judged from four still frames — not continuous playback.
+
 ### Open observations
 - **Correction:** an earlier version of this report said chances were now too scarce.
   That compared 2×2-minute runs with targets written for the game's real 2×3 minutes.

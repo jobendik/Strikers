@@ -53,6 +53,10 @@
   to defensive roles for every pass — about a third of the time in possession).
 - Pass and move: the passer runs on past his marker and is the favoured return ball.
 - Marking: most dangerous attacker first, leading his run, touch-tight in front of goal.
+- Dev film view: `__strikers.film.show(secondsAgo)` presents the replay recording
+  without re-simulating; `__strikers.skipGoalReplay()` lets frame-less scripts run past
+  goals; `simtest/browser/film-one-two.cjs` finds and films a one-two. `--diag` counts
+  one-twos.
 - `npm run sim` balance guard: fails if goals/min, shots/min, on-target share,
   conversion or pass completion leave wide bands around the targets; `--diag` also
   reports possession spells (how far they get, how they end).
